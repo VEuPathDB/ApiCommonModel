@@ -3116,6 +3116,183 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     </sql>
   </tuningTable>
 
+  <tuningTable name="GenePhenotypeCategoricalValue">
+    <comment>
+      Categorical phenotype variable values per gene and dataset, sourced from
+      EDA dynamic attributevalue tables for Phenotype-category studies only.
+    </comment>
+    <internalDependency name="DatasetPresenter"/>
+    <externalDependency name="eda.Study"/>
+    <externalDependency name="eda.EntityTypeGraph"/>
+    <externalDependency name="eda.StudyExternalDatabaseRelease"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE GenePhenotypeCategoricalValue&1 (
+            gene_source_id        varchar(200),
+            dataset_id            varchar(200),
+            variable_source_id    varchar(255),
+            variable_display_name varchar(200),
+            value                 varchar(4000)
+        )
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        DO $$
+        DECLARE
+            rec         RECORD;
+            av_table    TEXT;
+            ag_table    TEXT;
+            entity_col  TEXT;
+            has_gene_id INTEGER;
+        BEGIN
+            FOR rec IN
+                SELECT DISTINCT
+                    dds.dataset_presenter_id           AS dataset_id,
+                    s.internal_abbrev                  AS study_abbrev,
+                    e.internal_abbrev                  AS entity_abbrev
+                FROM eda.study s
+                JOIN eda.entitytypegraph e ON s.study_id = e.study_id
+                JOIN eda.studyexternaldatabaserelease sedr ON s.study_id = sedr.study_id
+                JOIN sres.externaldatabaserelease edr ON sedr.external_database_release_id = edr.external_database_release_id
+                JOIN sres.externaldatabase ed ON edr.external_database_id = ed.external_database_id
+                JOIN apidbtuning.datasetdatasource dds ON ed.name = dds.name
+                WHERE dds.category = 'Phenotype'
+                  AND s.internal_abbrev IS NOT NULL
+            LOOP
+                av_table   := 'eda.attributevalue_' || rec.study_abbrev || '_' || lower(rec.entity_abbrev);
+                ag_table   := 'eda.attributegraph_' || rec.study_abbrev || '_' || lower(rec.entity_abbrev);
+                entity_col := lower(rec.entity_abbrev) || '_stable_id';
 
-  
+                -- Skip if either dynamic table does not exist
+                IF to_regclass(av_table) IS NULL OR to_regclass(ag_table) IS NULL THEN
+                    CONTINUE;
+                END IF;
+
+                -- Skip entity types that have no VEUPATHDB_GENE_ID attribute
+                EXECUTE format(
+                    'SELECT count(*) FROM %s WHERE stable_id = %L',
+                    ag_table, 'VEUPATHDB_GENE_ID'
+                ) INTO has_gene_id;
+
+                IF has_gene_id = 0 THEN
+                    CONTINUE;
+                END IF;
+
+                -- Insert one row per (gene, categorical variable, value) combination
+                EXECUTE format(
+                    'INSERT INTO GenePhenotypeCategoricalValue&1 (gene_source_id, dataset_id, variable_source_id, variable_display_name, value)
+                     WITH gene_ids AS (
+                         SELECT %I AS entity_id, string_value AS gene_source_id
+                         FROM %s
+                         WHERE attribute_stable_id = %L
+                     ),
+                     cat_vars AS (
+                         SELECT stable_id, display_name
+                         FROM %s
+                         WHERE data_shape = %L
+                           AND stable_id != %L
+                     )
+                     SELECT g.gene_source_id, %L, av.attribute_stable_id, cv.display_name, av.string_value
+                     FROM %s av
+                     JOIN gene_ids g ON av.%I = g.entity_id
+                     JOIN cat_vars cv ON av.attribute_stable_id = cv.stable_id
+                     WHERE av.string_value IS NOT NULL',
+                    entity_col,           -- %I: entity row id column in gene_ids CTE
+                    av_table,             -- %s: attributevalue table in gene_ids CTE
+                    'VEUPATHDB_GENE_ID',  -- %L: gene id attribute filter
+                    ag_table,             -- %s: attributegraph table in cat_vars CTE
+                    'categorical',        -- %L: data_shape filter
+                    'VEUPATHDB_GENE_ID',  -- %L: exclude gene id variable itself
+                    rec.dataset_id,       -- %L: literal dataset_presenter_id value
+                    av_table,             -- %s: attributevalue table in main query
+                    entity_col            -- %I: join column for entity row id
+                );
+            END LOOP;
+        END $$;
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX GenePhenoCatVal_gene&1
+        ON GenePhenotypeCategoricalValue&1 (gene_source_id)
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="DatasetCategoricalValue">
+    <comment>
+      Distinct categorical variable values per dataset across all EDA studies,
+      sourced from the vocabulary column in EDA dynamic attributegraph tables.
+    </comment>
+    <internalDependency name="DatasetPresenter"/>
+    <externalDependency name="eda.Study"/>
+    <externalDependency name="eda.EntityTypeGraph"/>
+    <externalDependency name="eda.StudyExternalDatabaseRelease"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE DatasetCategoricalValue&1 (
+            dataset_id            varchar(200),
+            variable_source_id    varchar(255),
+            variable_display_name varchar(200),
+            value                 varchar(4000)
+        )
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        DO $$
+        DECLARE
+            rec      RECORD;
+            ag_table TEXT;
+        BEGIN
+            FOR rec IN
+                SELECT DISTINCT
+                    COALESCE(dds.dataset_presenter_id, s.stable_id) AS dataset_id,
+                    s.internal_abbrev                               AS study_abbrev,
+                    e.internal_abbrev                               AS entity_abbrev
+                FROM eda.study s
+                JOIN eda.entitytypegraph e ON s.study_id = e.study_id
+                LEFT JOIN eda.studyexternaldatabaserelease sedr ON s.study_id = sedr.study_id
+                LEFT JOIN sres.externaldatabaserelease edr ON sedr.external_database_release_id = edr.external_database_release_id
+                LEFT JOIN sres.externaldatabase ed ON edr.external_database_id = ed.external_database_id
+                LEFT JOIN datasetdatasource dds ON ed.name = dds.name
+                WHERE s.internal_abbrev IS NOT NULL
+            LOOP
+                ag_table := 'eda.attributegraph_' || rec.study_abbrev || '_' || lower(rec.entity_abbrev);
+
+                IF to_regclass(ag_table) IS NULL THEN
+                    CONTINUE;
+                END IF;
+
+                EXECUTE format(
+                    'INSERT INTO DatasetCategoricalValue&1 (dataset_id, variable_source_id, variable_display_name, value)
+                     SELECT %L, ag.stable_id, ag.display_name, v.value
+                     FROM %s ag
+                     CROSS JOIN LATERAL jsonb_array_elements_text(ag.vocabulary::jsonb) AS v(value)
+                     WHERE ag.data_shape = %L
+                       AND ag.vocabulary IS NOT NULL
+                       AND ag.stable_id != %L',
+                    rec.dataset_id,  -- %L: literal dataset_id value
+                    ag_table,        -- %s: attributegraph table
+                    'categorical',   -- %L: data_shape filter
+                    'VEUPATHDB_GENE_ID'  -- %L: exclude gene id variable
+                );
+            END LOOP;
+        END $$;
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX DatasetCatVal_dataset&1
+        ON DatasetCategoricalValue&1 (dataset_id)
+      ]]>
+    </sql>
+  </tuningTable>
+
+
 </tuningConfig>
