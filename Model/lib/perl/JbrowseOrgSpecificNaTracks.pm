@@ -64,7 +64,7 @@ sub processOrganism {
   # TODO: get these from buildProps
   my $datasetProperties = $datasetProps;
 
-  &addSynteny($applicationType, $dbh, $result, $organismAbbrev);
+  &addSynteny($applicationType, $dbh, $result, $organismAbbrev, $projectName);
   &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
   &addChipChipTracks($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber,$nameForFileNames, $applicationType);
   &addSmallNcRnaSeq($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result);
@@ -564,7 +564,7 @@ sub addGeneDensity {
 }
 
 sub addSynteny {
-  my ($applicationType, $dbh, $result, $organismAbbrev) = @_;
+  my ($applicationType, $dbh, $result, $organismAbbrev, $projectName) = @_;
 
   return unless ($applicationType eq 'jbrowse' );
   # Requires public_abbrev here!
@@ -657,7 +657,8 @@ sub addSynteny {
                           subcategory => "Orthology and Synteny",
                           trackType => 'Segments',
                         },
-                        query => {'feature' => "gene:syntenyJBrowseScaled"
+                        query => {'feature' => "gene:syntenyJBrowseScaled",
+				  'projectName' => $projectName,
                         },
                         subtracks => $subtracksAr,
                         onClick => {
