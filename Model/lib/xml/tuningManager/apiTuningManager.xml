@@ -3299,5 +3299,72 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     </sql>
   </tuningTable>
 
+  <tuningTable name="DatasetNonCategoricalVariable">
+    <comment>
+      Non-categorical variable names per dataset across all EDA studies
+    </comment>
+    <internalDependency name="DatasetPresenter"/>
+    <externalDependency name="eda.Study"/>
+    <externalDependency name="eda.EntityTypeGraph"/>
+    <externalDependency name="eda.StudyExternalDatabaseRelease"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE DatasetNonCategoricalVariable&1 (
+            dataset_id            varchar(200),
+            variable_source_id    varchar(255),
+            variable_display_name varchar(200)
+        )
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        DO $$
+        DECLARE
+            rec      RECORD;
+            ag_table TEXT;
+        BEGIN
+            FOR rec IN
+                SELECT DISTINCT
+                    COALESCE(dds.dataset_presenter_id, s.stable_id) AS dataset_id,
+                    s.internal_abbrev                               AS study_abbrev,
+                    e.internal_abbrev                               AS entity_abbrev
+                FROM eda.study s
+                JOIN eda.entitytypegraph e ON s.study_id = e.study_id
+                LEFT JOIN eda.studyexternaldatabaserelease sedr ON s.study_id = sedr.study_id
+                LEFT JOIN sres.externaldatabaserelease edr ON sedr.external_database_release_id = edr.external_database_release_id
+                LEFT JOIN sres.externaldatabase ed ON edr.external_database_id = ed.external_database_id
+                LEFT JOIN datasetdatasource dds ON ed.name = dds.name
+                WHERE s.internal_abbrev IS NOT NULL
+            LOOP
+                ag_table := 'eda.attributegraph_' || rec.study_abbrev || '_' || lower(rec.entity_abbrev);
+
+                IF to_regclass(ag_table) IS NULL THEN
+                    CONTINUE;
+                END IF;
+
+                EXECUTE format(
+                    'INSERT INTO DatasetNonCategoricalVariable&1 (dataset_id, variable_source_id, variable_display_name)
+                     SELECT %L, ag.stable_id, ag.display_name
+                     FROM %s ag
+                     WHERE ag.data_shape != %L
+                       AND ag.stable_id != %L',
+                    rec.dataset_id,  -- %L: literal dataset_id value
+                    ag_table,        -- %s: attributegraph table
+                    'categorical',   -- %L: data_shape filter
+                    'VEUPATHDB_GENE_ID'  -- %L: exclude gene id variable
+                );
+            END LOOP;
+        END $$;
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX DatasetNonCat_dataset&1
+        ON DatasetNonCategoricalVariable&1 (dataset_id)
+      ]]>
+    </sql>
+  </tuningTable>  
 
 </tuningConfig>
