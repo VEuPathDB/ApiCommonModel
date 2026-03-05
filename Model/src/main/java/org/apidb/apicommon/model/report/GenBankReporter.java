@@ -70,7 +70,7 @@ public class GenBankReporter extends PagedAnswerReporter {
 
             params.put(_properties.get(PROPERTY_SEQUENCE_ID_PARAM), sequenceId);
 
-            Map<String, Boolean> sorting = new LinkedHashMap<String, Boolean>();
+            LinkedHashMap<String, Boolean> sorting = new LinkedHashMap<>();
             sorting.put(_properties.get(PROPERTY_SEQUENCE_ID_COLUMN), true);
 
             String geneQuestionName = _properties.get(PROPERTY_GENE_QUESTION);
