@@ -25,7 +25,9 @@ sub processOrganism {
   ### Get organism properties
   my $orgHash = ($datasetProps->{'organism'});
   my $ranExportPred = ($orgHash->{runExportPred});
-  
+  my $isReference = ($orgHash->{isReferenceStrain});
+  my $isHugeGenome = ($orgHash->{isHugeGenome});
+
   my $nameForFileName = ($orgHash->{organismNameForFiles});
   my $projectName = ($orgHash->{projectName});
 
@@ -42,7 +44,10 @@ sub processOrganism {
   if ($ranExportPred eq 'true'){
     &addExportPred($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   }
-  &addIedb($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+
+  if ($isReference eq 'true' && $isHugeGenome eq 'false'){
+    &addIedb($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+  }
 
   &addProteinExpressionMassSpec($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addUnifiedPTMassSpec($datasetProps, $applicationType, $result, $nameForFileName, $projectName, $buildNumber);
