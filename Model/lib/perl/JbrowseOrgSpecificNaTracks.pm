@@ -632,7 +632,7 @@ sub addSynteny {
                         transcriptType => "processed_transcript",
                         noncodingType => ["nc_transcript"],
                         glyph => "function(f){return f.get('syntype') === 'span' ? 'JBrowse/View/FeatureGlyph/Box' : 'JBrowse/View/FeatureGlyph/Gene'; }",
-                        subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon,pseudogenic_exon,aamRNA",
+                        subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon,pseudogenic_exon,RNA",
                         key => "Syntenic Sequences and Genes (Shaded by Orthology)",
                         label => "Syntenic Sequences and Genes (Shaded by Orthology)",
                         region_feature_densities => "function(){return false}",
