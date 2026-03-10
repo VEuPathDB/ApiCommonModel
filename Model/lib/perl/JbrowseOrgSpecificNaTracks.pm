@@ -524,23 +524,15 @@ sub addGenes {
 			    trackType => "Processed Transcript"
 			   },
  	       onClick => {
- 			   content => "function(track, feature) { track.project ='$projectName'; track.orgabbrev='$orgPublicAbbrev'; return track.browser.config.geneDetailsNew(track, feature)}"
- 			  },
-   	       menuTemplate => [
-  				{
-				 title=> "{id} details",
-				 content => "function(track, feature) { track.project ='$projectName'; track.orgabbrev='$orgPublicAbbrev'; return track.browser.config.geneDetailsNew(track, feature)}",
-				},
-				{
-				 label=> "View Gene Page",
-				 iconClass => "dijitIconDatabase",
-				 action => "newWindow",
-				 url => "function(track,f) { return '/a/app/record/gene/' + f.get('id') }"
-				}
- 			       ]
-	      };
+		   action => "iframeDialog",
+		   hideIframeDialogUrl => JSON::true,
+		   url => "/a/app/embed-record/gene/{id}?tables=GeneTranscripts,GOTerms,PubMed",
+	       },
+  };
   push (@{$result->{tracks}}, $track);
 }
+
+
 
 sub addGeneDensity {
   my ($result, $orgPublicAbbrev, $projectName, $nameForFileNames) = @_;
