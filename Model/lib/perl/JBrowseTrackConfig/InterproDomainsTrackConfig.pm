@@ -29,7 +29,6 @@ sub new {
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
-	$store->setQueryParamsHash($args->{query_params});
         #$self->setDisplayType("EbrcTracks/View/Track/CanvasSubtracks");
         $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");	
 	$self->setDisplayMode("stacked");
