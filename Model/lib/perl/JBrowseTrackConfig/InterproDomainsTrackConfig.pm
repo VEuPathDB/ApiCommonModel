@@ -29,10 +29,8 @@ sub new {
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
-	$store->setQueryParamsHash($args->{query_params});
-        #$self->setDisplayType("EbrcTracks/View/Track/CanvasSubtracks");
-        $self->setDisplayType("JBrowse/View/Track/CanvasFeatures");	
-	$self->setDisplayMode("stacked");
+        $self->setDisplayType("EbrcTracks/View/Track/CanvasSubtracks");
+        $self->setDisplayMode("normal");
     }
     else {
         # TODO
@@ -70,6 +68,25 @@ sub getJBrowseObject{
     $jbrowseObject->{featureTooltips} = JSON::true;
     $jbrowseObject->{showTooltips} = JSON::true;
     $jbrowseObject->{topLevelFeatures} = "protein_match";
+    $jbrowseObject->{subtracks} = [
+        {featureFilters => {source => "CDD"},              visible => 1, label => "CDD",              metadata => {}},
+        {featureFilters => {source => "Coils"},            visible => 1, label => "Coils",            metadata => {}},
+        {featureFilters => {source => "FunFam"},           visible => 1, label => "FunFam",           metadata => {}},
+        {featureFilters => {source => "Gene3D"},           visible => 1, label => "Gene3D",           metadata => {}},
+        {featureFilters => {source => "Hamap"},            visible => 1, label => "Hamap",            metadata => {}},
+        {featureFilters => {source => "MobiDBLite"},       visible => 1, label => "MobiDBLite",       metadata => {}},
+        {featureFilters => {source => "NCBIfam"},          visible => 1, label => "NCBIfam",          metadata => {}},
+        {featureFilters => {source => "PANTHER"},          visible => 1, label => "PANTHER",          metadata => {}},
+        {featureFilters => {source => "Pfam"},             visible => 1, label => "Pfam",             metadata => {}},
+        {featureFilters => {source => "PIRSF"},            visible => 1, label => "PIRSF",            metadata => {}},
+        {featureFilters => {source => "PIRSR"},            visible => 1, label => "PIRSR",            metadata => {}},
+        {featureFilters => {source => "PRINTS"},           visible => 1, label => "PRINTS",           metadata => {}},
+        {featureFilters => {source => "ProSitePatterns"},  visible => 1, label => "ProSitePatterns",  metadata => {}},
+        {featureFilters => {source => "ProSiteProfiles"},  visible => 1, label => "ProSiteProfiles",  metadata => {}},
+        {featureFilters => {source => "SFLD"},             visible => 1, label => "SFLD",             metadata => {}},
+        {featureFilters => {source => "SMART"},            visible => 1, label => "SMART",            metadata => {}},
+        {featureFilters => {source => "SUPERFAMILY"},      visible => 1, label => "SUPERFAMILY",      metadata => {}},
+    ];
     return $jbrowseObject;
   }
 

@@ -89,11 +89,6 @@ sub addInterproDomains {
     my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/iprscan_out.gff.gz";
     my $summary = "Interpro: PFam, PIR, Prints, Prodom, Smart, Superfamily, TIGRFAM, Prosite";
 
-    my $queryParams = {
-                            'seqType' => "protein",
-                            'feature' => "domain:interpro",
-                                           };
-
     $interproDomainsTrack = ApiCommonModel::Model::JBrowseTrackConfig::InterproDomainsTrackConfig->new({
                                                                                                 project_name => $projectName,
                                                                                                 build_number => $buildNumber,
@@ -102,7 +97,6 @@ sub addInterproDomains {
                                                                                                 summary => $summary,
                                                                                                 key => "InterPro Domains",
                                                                                                 label => "InterPro Domains",
-                                                                                                query_params => $queryParams,
                                                                                                 })->getConfigurationObject();
 
    push @{$result->{tracks}}, $interproDomainsTrack if($interproDomainsTrack);
