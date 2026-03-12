@@ -55,6 +55,7 @@ sub getJBrowseStyle {
 
     $jbrowseStyle->{color} = "{interproColorFxn}";
     $jbrowseStyle->{showLabels} = JSON::false;
+    $jbrowseStyle->{strandArrow} = JSON::false;
     $jbrowseStyle->{subParts} = JSON::true;
     $jbrowseStyle->{label} = "{source} {name}";
     return $jbrowseStyle;
@@ -87,6 +88,7 @@ sub getJBrowseObject{
         {featureFilters => {source => "SMART"},            visible => 1, label => "SMART",            metadata => {}},
         {featureFilters => {source => "SUPERFAMILY"},      visible => 1, label => "SUPERFAMILY",      metadata => {}},
     ];
+    $jbrowseObject->{displayMode} = "compact";
     return $jbrowseObject;
   }
 
