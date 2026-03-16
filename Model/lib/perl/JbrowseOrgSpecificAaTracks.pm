@@ -32,7 +32,7 @@ sub processOrganism {
   my $projectName = ($orgHash->{projectName});
 
 
-#  &addProteinRefSeq($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+  &addProteinRefSeq($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addInterproDomains($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addSignalPeptide($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addTmhmm($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
@@ -57,25 +57,18 @@ sub addProteinRefSeq {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
 
     my $refSeqTrack;
-    my $relativePathToGffFile = "${webservicesDir}/UniDB/build-$buildNumber/${nameForFileNames}/genomeAndProteome/fasta/AnnotatedProteins.fasta";
-#    my $relativePathToGffFile = "${webservicesDir}/PlasmoDB/build-68/Pfalciparum3D7/fasta/AnnotatedProteins.fasta";
+    my $relativePathToFastaFile = "/a/service/jbrowse/store?data=" . $nameForFileNames . "/genomeAndProteome/fasta/AnnotatedProteins.fasta";
 
     my $summary = "Individual amino acids are colored based on their<br>physical properties:</p><img src='/a/images/pbrowse_legend.png'  height='150' width='248' align=left/><p><table><tr><td>A - Alanine</td><td>C - Cysteine</td></tr><tr><td>D - Aspartic Acid&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td><td>E - Glutamic Acid</td></tr><tr><td>F - Phenyalanine</td><td>G - Glycine</td></tr><tr><td>H - Histidine</td><td>I - Isoleucine</td></tr><tr><td>K - Lysine</td><td>L - Leucine</td></tr><tr><td>M - Methionine</td><td>N - Asparagine</td></tr><tr><td>P - Proline</td><td>Q - Glutamine</td></tr><tr><td>R - Arginine</td><td>S - Serine</td></tr><tr><td>T - Threonine</td><td>V - Valine</td></tr><tr><td>W - Tryptophan</td><td>Y - Tyrosine</td></tr></table</p><br><b>Note:</b>The color palette for the amino acid reference<br>track can be changed by clicking on<br>Reference Sequence -> Edit config<br>and editing the proteinColorScheme to an<br>alternative palette.<br>Available palettes are:<br>buried<br>cinema<br>clustal<br>clustal2<br>helix<br>hydrophobicity<br>lesk<br>mae<br>purine<br>strand<br>taylor<br>turn<br>zappo<br><br>";
-
-    my $queryParams = {
-                            'seqType' => "protein",
-                            'feature' => "ReferenceSequenceAa",
-                                           };
 
     $refSeqTrack = ApiCommonModel::Model::JBrowseTrackConfig::ProteinRefSeqTrackConfig->new({
                                                                                                 project_name => $projectName,
                                                                                                 build_number => $buildNumber,
-                                                                                                relative_path_to_file => $relativePathToGffFile,
+                                                                                                relative_path_to_file => $relativePathToFastaFile,
                                                                                                 application_type => $applicationType,
 												summary => $summary,
                                                                                                 key => "Reference Sequence",
                                                                                                 label => "NA",
-                                                                                                query_params => $queryParams,
                                                                                                 })->getConfigurationObject();
 
    push @{$result->{tracks}}, $refSeqTrack if($refSeqTrack);
