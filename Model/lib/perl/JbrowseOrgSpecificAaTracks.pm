@@ -68,7 +68,7 @@ sub addProteinRefSeq {
                                                                                                 application_type => $applicationType,
 												summary => $summary,
                                                                                                 key => "Reference Sequence",
-                                                                                                label => "NA",
+                                                                                                label => "refseq",
                                                                                                 })->getConfigurationObject();
 
    push @{$result->{tracks}}, $refSeqTrack if($refSeqTrack);
