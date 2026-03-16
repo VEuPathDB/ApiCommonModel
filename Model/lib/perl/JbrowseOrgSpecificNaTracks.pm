@@ -3,6 +3,7 @@ package ApiCommonModel::Model::JbrowseOrgSpecificNaTracks;
 use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 
+use ApiCommonModel::Model::JBrowseTrackConfig::ReferenceSequenceTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedMassSpecTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedSnpTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig;
@@ -52,6 +53,7 @@ sub processOrganism {
   my $isAnnotated = ($orgHash->{isAnnotatedGenome});
   my $isReference = ($orgHash->{isReferenceStrain});
 
+  &addReferenceSequence($applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addScaffolds($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addCentromere($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedMassSpec($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
@@ -461,6 +463,23 @@ sub addESTs {
         })->getConfigurationObject();
 
    push @{$result->{tracks}}, $track if($track);
+}
+
+sub addReferenceSequence {
+  my ($applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+
+  my $relativePathToFastaFile = "/a/service/jbrowse/store?data=" . $nameForFileNames . "/genomeAndProteome/fasta/genome.fasta";
+
+  my $track = ApiCommonModel::Model::JBrowseTrackConfig::ReferenceSequenceTrackConfig->new({
+    application_type      => $applicationType,
+    project_name          => $projectName,
+    build_number          => $buildNumber,
+    relative_path_to_file => $relativePathToFastaFile,
+    key                   => "Reference Sequence",
+    label                 => "refseqs",
+  })->getConfigurationObject();
+
+  push @{$result->{tracks}}, $track if($track);
 }
 
 sub addCentromere {
