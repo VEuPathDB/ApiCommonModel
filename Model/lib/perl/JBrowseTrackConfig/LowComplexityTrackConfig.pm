@@ -29,7 +29,6 @@ sub new {
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::BedStore->new($args);
-	$store->setQueryParamsHash($args->{query_params});
     }
     else {
         # TODO

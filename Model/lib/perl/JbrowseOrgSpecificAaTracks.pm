@@ -32,7 +32,7 @@ sub processOrganism {
   my $projectName = ($orgHash->{projectName});
 
 
-#  &addProteinRefSeq($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+  &addProteinRefSeq($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addInterproDomains($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addSignalPeptide($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
   &addTmhmm($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
@@ -57,25 +57,18 @@ sub addProteinRefSeq {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
 
     my $refSeqTrack;
-    my $relativePathToGffFile = "${webservicesDir}/UniDB/build-$buildNumber/${nameForFileNames}/genomeAndProteome/fasta/AnnotatedProteins.fasta";
-#    my $relativePathToGffFile = "${webservicesDir}/PlasmoDB/build-68/Pfalciparum3D7/fasta/AnnotatedProteins.fasta";
+    my $relativePathToFastaFile = "/a/service/jbrowse/store?data=" . $nameForFileNames . "/genomeAndProteome/fasta/AnnotatedProteins.fasta";
 
     my $summary = "Individual amino acids are colored based on their<br>physical properties:</p><img src='/a/images/pbrowse_legend.png'  height='150' width='248' align=left/><p><table><tr><td>A - Alanine</td><td>C - Cysteine</td></tr><tr><td>D - Aspartic Acid&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td><td>E - Glutamic Acid</td></tr><tr><td>F - Phenyalanine</td><td>G - Glycine</td></tr><tr><td>H - Histidine</td><td>I - Isoleucine</td></tr><tr><td>K - Lysine</td><td>L - Leucine</td></tr><tr><td>M - Methionine</td><td>N - Asparagine</td></tr><tr><td>P - Proline</td><td>Q - Glutamine</td></tr><tr><td>R - Arginine</td><td>S - Serine</td></tr><tr><td>T - Threonine</td><td>V - Valine</td></tr><tr><td>W - Tryptophan</td><td>Y - Tyrosine</td></tr></table</p><br><b>Note:</b>The color palette for the amino acid reference<br>track can be changed by clicking on<br>Reference Sequence -> Edit config<br>and editing the proteinColorScheme to an<br>alternative palette.<br>Available palettes are:<br>buried<br>cinema<br>clustal<br>clustal2<br>helix<br>hydrophobicity<br>lesk<br>mae<br>purine<br>strand<br>taylor<br>turn<br>zappo<br><br>";
-
-    my $queryParams = {
-                            'seqType' => "protein",
-                            'feature' => "ReferenceSequenceAa",
-                                           };
 
     $refSeqTrack = ApiCommonModel::Model::JBrowseTrackConfig::ProteinRefSeqTrackConfig->new({
                                                                                                 project_name => $projectName,
                                                                                                 build_number => $buildNumber,
-                                                                                                relative_path_to_file => $relativePathToGffFile,
+                                                                                                relative_path_to_file => $relativePathToFastaFile,
                                                                                                 application_type => $applicationType,
 												summary => $summary,
                                                                                                 key => "Reference Sequence",
-                                                                                                label => "NA",
-                                                                                                query_params => $queryParams,
+                                                                                                label => "refseq",
                                                                                                 })->getConfigurationObject();
 
    push @{$result->{tracks}}, $refSeqTrack if($refSeqTrack);
@@ -96,7 +89,7 @@ sub addInterproDomains {
                                                                                                 application_type => $applicationType,
                                                                                                 summary => $summary,
                                                                                                 key => "InterPro Domains",
-                                                                                                label => "InterPro Domains",
+                                                                                                label => "InterproDomains",
                                                                                                 })->getConfigurationObject();
 
    push @{$result->{tracks}}, $interproDomainsTrack if($interproDomainsTrack);
@@ -111,11 +104,6 @@ sub addSignalPeptide {
 
     my $summary = "Signal peptide predictions by SP-HMM/SP-NN";
 
-#    my $queryParams = {
-#                            'seqType' => "protein",
-#                            'feature' => "domain:SignalP",
-#                                           };
-
     $signalPeptideTrack = ApiCommonModel::Model::JBrowseTrackConfig::SignalPeptideTrackConfig->new({
                                                                                                 project_name => $projectName,
                                                                                                 build_number => $buildNumber,
@@ -123,8 +111,7 @@ sub addSignalPeptide {
                                                                                                 application_type => $applicationType,
 												summary => $summary,
 												key => "Signal Peptide",
-												label => "Signal Peptide",
-#												query_params => $queryParams,
+												label => "SignalP",
                                                                                                 })->getConfigurationObject();
 
    push @{$result->{tracks}}, $signalPeptideTrack if($signalPeptideTrack);
@@ -138,10 +125,6 @@ sub addTmhmm {
     my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/tmhmm.gff.gz";
     my $summary = "Transmembrane domains detected by TMHMM";
 
-    my $queryParams = {
-                            'seqType' => "protein",
-                            'feature' => "domain:TMHMM",
-                                           };
 
     $tmhmmTrack = ApiCommonModel::Model::JBrowseTrackConfig::TmhmmTrackConfig->new({
                                                                                                 project_name => $projectName,
@@ -150,8 +133,7 @@ sub addTmhmm {
                                                                                                 application_type => $applicationType,
 												summary => $summary,
 												key => "Transmembrane Domains (TMHMM)",
-                                                                                                label => "NA",
-                                                                                                query_params => $queryParams,
+                                                                                                label => "TMHMM",
                                                                                                 })->getConfigurationObject();
 
    push @{$result->{tracks}}, $tmhmmTrack if($tmhmmTrack);
@@ -165,20 +147,14 @@ sub addLowComplexity {
     my $relativePathToBedFile = "${nameForFileNames}/genomeAndProteome/bed/proteinLowComplexity.bed.gz";
     my $summary = "Regions of low sequence complexity, as defined by the SEG algorithm of Wooton and Federhen. A description of the SEG algorithm can be found in Wootton, J.C. and Federhen, S. 1993 Statistics of local complexity in amino acid sequence and sequence database. Comput. Chem. 17149–163.";
 
-    my $queryParams = {
-                            'seqType' => "protein",
-                            'feature' => "lowcomplexity:seg",
-                                           };
-
     $lowComplexityTrack = ApiCommonModel::Model::JBrowseTrackConfig::LowComplexityTrackConfig->new({
                                                                                                 project_name => $projectName,
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToBedFile,
                                                                                                 application_type => $applicationType,
                                                                                                 summary => $summary,
-                                                                                                key => "Low Complexity Regions",
+                                                                                                key => "LowComplexity",
                                                                                                 label => "Low Complexity Regions",
-                                                                                                query_params => $queryParams,
                                                                                                 })->getConfigurationObject();
 
    push @{$result->{tracks}}, $lowComplexityTrack if($lowComplexityTrack);
@@ -192,10 +168,6 @@ sub addHydropathy {
     my $relativePathToBigWigFile = "${nameForFileNames}/genomeAndProteome/bigwig/hydropathy.bw";
     my $summary = "Kyte-Doolittle hydropathy plot";
 
-    my $queryParams = {
-                            'seqType' => "protein",
-                            'feature' => "hydropathy_jbrowse",
-                                           };
 
     $hydropathyTrack = ApiCommonModel::Model::JBrowseTrackConfig::HydropathyTrackConfig->new({
                                                                                                 project_name => $projectName,
@@ -204,8 +176,7 @@ sub addHydropathy {
                                                                                                 application_type => $applicationType,
                                                                                                 summary => $summary,
                                                                                                 key => "Kyte-Doolittle hydropathy plot",
-                                                                                                label => "Kyte-Doolittle hydropathy plot",
-                                                                                                query_params => $queryParams,
+                                                                                                label => "Hydropathy",
 												pos_color => "orange",
                                                                                                 })->getConfigurationObject();
 
@@ -220,11 +191,6 @@ sub addSecondaryStructureHelix {
     my $relativePathToBigWigFile = "${nameForFileNames}/genomeAndProteome/bigwig/psipred_helix.bw";
     my $summary = "PSIPRED secondary structure prediction";
 
-    my $queryParams = {
-                            'seqType' => "protein",
-                            'feature' => "get_2d_struc_jbrowse",
-                                           };
-
     $secondaryStructureHelixTrack = ApiCommonModel::Model::JBrowseTrackConfig::SecondaryStructureTrackConfig->new({
                                                                                                 project_name => $projectName,
                                                                                                 build_number => $buildNumber,
@@ -232,8 +198,7 @@ sub addSecondaryStructureHelix {
                                                                                                 application_type => $applicationType,
                                                                                                 summary => $summary,
                                                                                                 key => "PSIPRED Helix",
-                                                                                                label => "PSIPRED Helix",
-                                                                                                query_params => $queryParams,
+                                                                                                label => "SecondaryStructureHelix",
 												pos_color => "red",
                                                                                                 })->getConfigurationObject();
 
@@ -248,10 +213,6 @@ sub addSecondaryStructureCoil {
     my $relativePathToBigWigFile = "${nameForFileNames}/genomeAndProteome/bigwig/psipred_coil.bw";
     my $summary = "PSIPRED secondary structure prediction";
 
-    my $queryParams = {
-                            'seqType' => "protein",
-                            'feature' => "get_2d_struc_jbrowse",
-                                           };
 
     $secondaryStructureCoilTrack = ApiCommonModel::Model::JBrowseTrackConfig::SecondaryStructureTrackConfig->new({
                                                                                                 project_name => $projectName,
@@ -260,8 +221,7 @@ sub addSecondaryStructureCoil {
                                                                                                 application_type => $applicationType,
                                                                                                 summary => $summary,
                                                                                                 key => "PSIPRED Coil",
-                                                                                                label => "PSIPRED Coil",
-                                                                                                query_params => $queryParams,
+                                                                                                label => "SecondaryStructureCoil",
 												pos_color => "green",
                                                                                                 })->getConfigurationObject();
 
@@ -276,11 +236,6 @@ sub addSecondaryStructureStrand {
     my $relativePathToBigWigFile = "${nameForFileNames}/genomeAndProteome/bigwig/psipred_extended.bw";
     my $summary = "PSIPRED secondary structure prediction";
 
-    my $queryParams = {
-                            'seqType' => "protein",
-                            'feature' => "get_2d_struc_jbrowse",
-                                           };
-
     $secondaryStructureStrandTrack = ApiCommonModel::Model::JBrowseTrackConfig::SecondaryStructureTrackConfig->new({
                                                                                                 project_name => $projectName,
                                                                                                 build_number => $buildNumber,
@@ -288,8 +243,7 @@ sub addSecondaryStructureStrand {
                                                                                                 application_type => $applicationType,
                                                                                                 summary => $summary,
                                                                                                 key => "PSIPRED Strand",
-                                                                                                label => "PSIPRED Strand",
-                                                                                                query_params => $queryParams,
+                                                                                                label => "SecondaryStructureStrand",
 												pos_color => "blue",
                                                                                                 })->getConfigurationObject();
 

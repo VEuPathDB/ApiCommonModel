@@ -3,6 +3,7 @@ package ApiCommonModel::Model::JbrowseOrgSpecificNaTracks;
 use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 
+use ApiCommonModel::Model::JBrowseTrackConfig::ReferenceSequenceTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedMassSpecTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedSnpTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig;
@@ -52,6 +53,7 @@ sub processOrganism {
   my $isAnnotated = ($orgHash->{isAnnotatedGenome});
   my $isReference = ($orgHash->{isReferenceStrain});
 
+  &addReferenceSequence($applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addScaffolds($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addCentromere($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedMassSpec($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
@@ -463,6 +465,23 @@ sub addESTs {
    push @{$result->{tracks}}, $track if($track);
 }
 
+sub addReferenceSequence {
+  my ($applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+
+  my $relativePathToFastaFile = "/a/service/jbrowse/store?data=" . $nameForFileNames . "/genomeAndProteome/fasta/genome.fasta";
+
+  my $track = ApiCommonModel::Model::JBrowseTrackConfig::ReferenceSequenceTrackConfig->new({
+    application_type      => $applicationType,
+    project_name          => $projectName,
+    build_number          => $buildNumber,
+    relative_path_to_file => $relativePathToFastaFile,
+    key                   => "Reference Sequence",
+    label                 => "refseqs",
+  })->getConfigurationObject();
+
+  push @{$result->{tracks}}, $track if($track);
+}
+
 sub addCentromere {
   my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
   my $hasCentromere = $datasetProps->{hasCentromere} ? $datasetProps->{hasCentromere} : {};
@@ -512,7 +531,7 @@ sub addGenes {
 	       maxheight => 4000,
 	       style => {
                          label => "id",
-                         description => "note, description",
+                         description => "description",
                          showLabels => JSON::true,
 			 color => "{processedTranscriptColor}",
 			 borderColor=> "{processedTranscriptBorderColor}",
@@ -1039,7 +1058,7 @@ sub addAntismash {
 											     relative_path_to_file => $relativePathToGffFile,
 											     application_type => $applicationType,
 											     summary => $summary,
-											     gene_legend => "<img src='https://microscope.readthedocs.io/en/stable/_images/antiSMASH6_colorcode_features.png'/>",
+											     gene_legend => "<img src='https://microscope.readthedocs.io/en/stable/_images/antiSMASH7_colorcode_features.png'/>",
 											     region_legend => "<img src='/a/images/antismash_cluster_colors.png'  height='250' width='250' align=left/>",
 											    })->getConfigurationObject();
 
