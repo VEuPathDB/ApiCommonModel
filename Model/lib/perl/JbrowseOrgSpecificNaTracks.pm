@@ -531,7 +531,7 @@ sub addGenes {
 	       maxheight => 4000,
 	       style => {
                          label => "id",
-                         description => "note, description",
+                         description => "description",
                          showLabels => JSON::true,
 			 color => "{processedTranscriptColor}",
 			 borderColor=> "{processedTranscriptBorderColor}",
@@ -1057,7 +1057,7 @@ sub addAntismash {
 											     relative_path_to_file => $relativePathToGffFile,
 											     application_type => $applicationType,
 											     summary => $summary,
-											     gene_legend => "<img src='https://microscope.readthedocs.io/en/stable/_images/antiSMASH6_colorcode_features.png'/>",
+											     gene_legend => "<img src='https://microscope.readthedocs.io/en/stable/_images/antiSMASH7_colorcode_features.png'/>",
 											     region_legend => "<img src='/a/images/antismash_cluster_colors.png'  height='250' width='250' align=left/>",
 											    })->getConfigurationObject();
 

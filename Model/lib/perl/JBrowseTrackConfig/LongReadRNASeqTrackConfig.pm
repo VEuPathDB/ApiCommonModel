@@ -72,7 +72,7 @@ sub getJBrowseObject{
         $jbrowseObject->{subParts} = "exon"; 
         $jbrowseObject->{impliedUTRs} = "JSON::true";
         $jbrowseObject->{topLevelFeaturesPercent} =  33;       
-	$jbrowseObject->{onClick} = {action => "iframeDialog", hideIframeDialogUrl =>  "JSON::true", url => $url};        
+#	$jbrowseObject->{onClick} = {action => "iframeDialog", hideIframeDialogUrl =>  "JSON::true", url => $url};        
         $jbrowseObject->{menuTemplate} = [{label =>  "View Details", content => "{longReadRnaSeqGffDetails}"},];
         $jbrowseObject->{fmtMetaValue_Description} =  "function(){return datasetDescription(\"$summary\", \"\");}";
 
