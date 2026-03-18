@@ -46,6 +46,7 @@ sub getJBrowseStyle {
    $jbrowseStyle->{borderColor} = "black";
    $jbrowseStyle->{utrColor} = "white";
    $jbrowseStyle->{label} = "{antismashLabel}";
+   $jbrowseStyle->{description} = "description";
 
 
    return $jbrowseStyle;
