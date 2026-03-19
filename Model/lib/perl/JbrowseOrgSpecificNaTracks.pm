@@ -61,13 +61,13 @@ sub processOrganism {
 
   #  &addSynteny($applicationType, $dbh, $result);
 
-  &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
+  &addDatasets($dbh, \%datasets, \%strain, $projectName) unless($isApollo);
 
   # TODO: get these from buildProps
   my $datasetProperties = $datasetProps;
 
   &addSynteny($applicationType, $dbh, $result, $organismAbbrev, $projectName);
-  &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
+
   &addChipChipTracks($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber,$nameForFileNames, $applicationType);
   &addSmallNcRnaSeq($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result);
 
@@ -136,9 +136,9 @@ sub processOrganism {
 }
 
 sub addDatasets {
-  my ($dbh, $datasets, $strain) = @_;
+  my ($dbh, $datasets, $strain, $projectName) = @_;
   #Public facing track requires public_abbrev here!
-  my $sql = "select public_abbrev, internal_abbrev, organism_name FROM Apidbtuning.organismattributes order by organism_name";
+  my $sql = "select public_abbrev, internal_abbrev, organism_name FROM Apidbtuning.organismattributes where project_id = '$projectName' order by organism_name";
 
   my $sh = $dbh->prepare($sql);
   $sh->execute();
