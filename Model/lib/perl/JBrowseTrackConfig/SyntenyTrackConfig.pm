@@ -32,6 +32,7 @@ sub new {
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::SyntenyStore->new($args);
         $store->setQuery("gene:syntenyJBrowseScaled");
+        $store->setQueryParamsHash({orgAbbrev => });
     }
     else {
         # TODO

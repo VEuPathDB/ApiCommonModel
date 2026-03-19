@@ -65,8 +65,9 @@ FROM   orgTaxRank ostr,
 WHERE gattr.na_sequence_id = $srcfeature_id
   AND start_min <= $rend
   AND end_max >= $base_start
+  AND gattr.org_abbrev = '$$orgAbbrev$$'
   AND gattr.org_abbrev = ostr.public_abbrev
-UNION
+UNION ALL
 -- for: reference organism - span
 SELECT
         'refseq_' || na_sequence_id feature_id,
@@ -101,13 +102,15 @@ SELECT
        orgTaxRank ostr
  WHERE na_sequence_id = $srcfeature_id 
    AND sa.org_abbrev = ostr.public_abbrev
-UNION
+   AND sa.org_abbrev = '$$orgAbbrev$$'
+UNION ALL
 -- for syntenic genes
 select * from (
--- first get all genes in the visible region
+-- first get all genes in the visible region, fetching all display columns
+-- to avoid re-joining GeneAttributes later
 with syn_genes as (
 select sg.synteny_id
-     , ga.start_min syn_gene_start 
+     , ga.start_min syn_gene_start
      , ga.end_max syn_gene_end
      , ga.na_sequence_id as syn_na_sequence_id
      , ga.na_feature_id as syn_na_feature_id
@@ -116,13 +119,22 @@ select sg.synteny_id
      , sg.start_min ref_gene_start
      , sg.end_max ref_gene_end
      , sg.na_sequence_id ref_na_sequence_id
-from apidb.syntenicgene sg, 
-     webready.GeneAttributes_p ga
+     , ga.source_id
+     , ga.product
+     , ga.so_term_name
+     , ga.sequence_id
+     , ga.is_pseudo
+     , ga.is_deprecated
+     , ga.is_reversed ga_is_reversed
+     , ga.organism
+     , ga.org_abbrev
+from apidb.syntenicgene sg
+     join apidbtuning.GeneAttributes ga
+       on sg.syn_na_feature_id = ga.na_feature_id
+      and ga.org_abbrev = sg.syn_organism_abbrev
 where sg.na_sequence_id = $srcfeature_id
   AND sg.start_min <=  $$visibleRegionEnd$$
   AND sg.end_max >=  $$visibleRegionStart$$
-  AND ga.org_abbrev = sg.syn_organism_abbrev
-  AND sg.syn_na_feature_id = ga.na_feature_id
 ),
 -- calc stats for scaling
 sscale as (
@@ -141,16 +153,27 @@ select sg.syn_na_sequence_id
      , sg.syn_na_feature_id
      , sg.syn_organism_abbrev
      , sg.synteny_id
-     , CASE WHEN s.is_reversed = 1 
+     , CASE WHEN s.is_reversed = 1
             THEN round(ref_max - (((syn_gene_end - syn_min + 1) / syn_length) * ref_length))
-            ELSE round(ref_min + (((syn_gene_start - syn_min + 1) / syn_length) * ref_length)) 
+            ELSE round(ref_min + (((syn_gene_start - syn_min + 1) / syn_length) * ref_length))
         END as s
-     , CASE WHEN s.is_reversed = 1 
+     , CASE WHEN s.is_reversed = 1
             THEN round(ref_max - (((syn_gene_start - syn_min + 1) / syn_length) * ref_length))
             ELSE round(ref_min + (((syn_gene_end - syn_min + 1) / syn_length) * ref_length))
         END as e
      , sg.syn_gene_is_reversed
      , ref_na_sequence_id
+     , sg.source_id
+     , sg.product
+     , sg.so_term_name
+     , sg.sequence_id
+     , sg.is_pseudo
+     , sg.is_deprecated
+     , sg.ga_is_reversed
+     , sg.organism
+     , sg.org_abbrev
+     , sg.syn_gene_start
+     , sg.syn_gene_end
 from syn_genes sg,
      sscale ss,
      apidb.synteny s
@@ -158,25 +181,25 @@ where sg.synteny_id = s.synteny_id
  and ss.synteny_id = s.synteny_id
 )
 SELECT
-       sg.synteny_id || '_syngene_' || gattr.na_feature_id feature_id,
+       sg.synteny_id || '_syngene_' || sg.syn_na_feature_id feature_id,
        'gene' type,
        'syntenyJBrowseScaled' source,
-       gattr.source_id name,
+       sg.source_id name,
        '.' score,
        sg.ref_na_sequence_id parent_id,
-       sg.s startm, 
+       sg.s startm,
        sg.e end,
        CASE WHEN sg.syn_gene_is_reversed = 0 THEN '+1'
             WHEN sg.syn_gene_is_reversed = 1 THEN '-1'
             ELSE '+1' END  strand,
-       'Note=' || substr(gattr.product,0,400) || CASE WHEN gattr.is_deprecated = 1 THEN ' (deprecated)' ELSE '' END || '$dlm' ||
-       'SOTerm=' || gattr.so_term_name || '$dlm' ||
-       'Contig=' || gattr.sequence_id || '$dlm' ||
-       'IsPseudo=' || gattr.is_pseudo || '$dlm' ||
-       'isDeprecated=' || gattr.is_deprecated || '$dlm' ||
-       'GeneStart=' || gattr.start_min || '$dlm' ||
-       'GeneEnd=' || gattr.end_max || '$dlm' ||
-       'IsReversed=' || gattr.is_reversed || '$dlm' ||
+       'Note=' || substr(sg.product,0,400) || CASE WHEN sg.is_deprecated = 1 THEN ' (deprecated)' ELSE '' END || '$dlm' ||
+       'SOTerm=' || sg.so_term_name || '$dlm' ||
+       'Contig=' || sg.sequence_id || '$dlm' ||
+       'IsPseudo=' || sg.is_pseudo || '$dlm' ||
+       'isDeprecated=' || sg.is_deprecated || '$dlm' ||
+       'GeneStart=' || sg.syn_gene_start || '$dlm' ||
+       'GeneEnd=' || sg.syn_gene_end || '$dlm' ||
+       'IsReversed=' || sg.ga_is_reversed || '$dlm' ||
        'SynType=' || 'gene' ||  '$dlm' ||
        'orthomcl_name=' || gog.group_id || '$dlm' ||
        'Kingdom=' || ostr.kingdom ||  '$dlm' ||
@@ -184,19 +207,16 @@ SELECT
        'Phylum=' || ostr.phylum ||  '$dlm' ||
        'Genus=' || ostr.genus ||  '$dlm' ||
        'Species=' || ostr.species ||  '$dlm' ||
-       'Taxon=' || gattr.organism  ||  '$dlm' ||
+       'Taxon=' || sg.organism  ||  '$dlm' ||
        'OrgAbbrev=' || ostr.public_abbrev atts
-FROM   scaled_syngenes sg,
-       orgTaxRank ostr,
-       webready.GeneAttributes_p gattr
-      LEFT JOIN webready.GeneOrthologGroup gog on gattr.source_id = gog.gene_id 
+FROM   scaled_syngenes sg
+       JOIN orgTaxRank ostr ON sg.org_abbrev = ostr.public_abbrev
+       LEFT JOIN webready.GeneOrthologGroup gog ON sg.source_id = gog.gene_id
 WHERE sg.ref_na_sequence_id = $srcfeature_id
   AND sg.s <= $rend
   AND sg.e >= $base_start
-  AND sg.syn_na_feature_id = gattr.na_feature_id
-  AND gattr.org_abbrev = ostr.public_abbrev
 )
-UNION
+UNION ALL
 -- for syntenic spans
 SELECT
         s.synteny_id || '_synseq_' || sa.na_sequence_id feature_id,
@@ -230,7 +250,7 @@ SELECT
        'OrgAbbrev=' || ostr.public_abbrev atts
  FROM
        Apidb.Synteny s,
-       webready.GenomicSeqAttributes_p sa,
+       apidbtuning.GenomicSeqAttributes sa,
        orgTaxRank ostr
  WHERE s.a_na_sequence_id = $srcfeature_id
  AND s.a_start <= $rend
@@ -246,49 +266,64 @@ SELECT
 -- for syntenic genes
 select * from (
 select * from (
--- first get all exons in the visible region
-with syn_genes as (
+-- scan syntenicgene once for the visible region, then join to features
+with syn_region as (
 select sg.synteny_id
-     , fl.start_min syn_exon_start 
-     , fl.end_max syn_exon_end
-     , fl.na_sequence_id as syn_na_sequence_id
-     , fl.na_feature_id as syn_na_feature_id
      , sg.syn_organism_abbrev
      , sg.is_reversed as syn_gene_is_reversed
      , sg.start_min ref_gene_start
      , sg.end_max ref_gene_end
      , sg.na_sequence_id ref_na_sequence_id
-     , fl.parent_id
-     , fl.feature_type
-from apidb.syntenicgene sg, 
-     apidb.featurelocation fl
+     , sg.syn_na_feature_id
+     , ga.so_term_name
+from apidb.syntenicgene sg
+     join apidbtuning.GeneAttributes ga
+       on ga.na_feature_id = sg.syn_na_feature_id
+      and ga.org_abbrev = sg.syn_organism_abbrev
 where sg.na_sequence_id = $srcfeature_id
   AND sg.start_min <=  $$visibleRegionEnd$$
   AND sg.end_max >=  $$visibleRegionStart$$
-  AND sg.syn_na_feature_id = fl.parent_id
-  and fl.feature_type in ('Transcript')
+),
+syn_genes as (
+-- transcripts: direct children of genes
+select sr.synteny_id
+     , fl.start_min syn_exon_start
+     , fl.end_max syn_exon_end
+     , fl.na_sequence_id as syn_na_sequence_id
+     , fl.na_feature_id as syn_na_feature_id
+     , sr.syn_organism_abbrev
+     , sr.syn_gene_is_reversed
+     , sr.ref_gene_start
+     , sr.ref_gene_end
+     , sr.ref_na_sequence_id
+     , fl.parent_id
+     , fl.feature_type
+     , sr.so_term_name
+from syn_region sr
+     join apidb.featurelocation fl
+       on sr.syn_na_feature_id = fl.parent_id
+      and fl.feature_type = 'Transcript'
 UNION ALL
-select sg.synteny_id
-     , fl.start_min syn_exon_start 
+-- CDS/UTR: grandchildren of genes, via transcript
+select sr.synteny_id
+     , fl.start_min syn_exon_start
      , fl.end_max syn_exon_end
      , fl.na_sequence_id as syn_na_sequence_id
      , fl.na_feature_id as syn_na_feature_id
-     , sg.syn_organism_abbrev
-     , sg.is_reversed as syn_gene_is_reversed
-     , sg.start_min ref_gene_start
-     , sg.end_max ref_gene_end
-     , sg.na_sequence_id ref_na_sequence_id
+     , sr.syn_organism_abbrev
+     , sr.syn_gene_is_reversed
+     , sr.ref_gene_start
+     , sr.ref_gene_end
+     , sr.ref_na_sequence_id
      , fl.parent_id
      , fl.feature_type
-from apidb.syntenicgene sg, 
-     apidb.featurelocation fl, 
-     webready.TranscriptAttributes_p ta
-where sg.na_sequence_id = $srcfeature_id
-  AND sg.start_min <=  $$visibleRegionEnd$$
-  AND sg.end_max >=  $$visibleRegionStart$$
-  AND sg.syn_na_feature_id = ta.gene_na_feature_id
-  and fl.feature_type in ('CDS', 'five_prime_UTR', 'three_prime_UTR')
-  and ta.na_feature_id = fl.parent_id
+     , sr.so_term_name
+from syn_region sr
+     join apidbtuning.TranscriptAttributes ta
+       on ta.gene_na_feature_id = sr.syn_na_feature_id
+     join apidb.featurelocation fl
+       on fl.parent_id = ta.na_feature_id
+      and fl.feature_type in ('CDS', 'five_prime_UTR', 'three_prime_UTR')
 ),
 -- calc stats for scaling
 sscale as (
@@ -319,6 +354,7 @@ select sg.syn_na_sequence_id
      , ref_na_sequence_id
      , sg.parent_id
      , sg.feature_type
+     , sg.so_term_name
 from syn_genes sg,
      sscale ss,
      apidb.synteny s
@@ -327,7 +363,7 @@ where sg.synteny_id = s.synteny_id
 )
 -- SynTranscripts
 SELECT sg.synteny_id || '_syntranscript_' || sg.syn_na_feature_id as feature_id,
-       case when so_term_name in ('protein_coding_gene', 'transposable_element_gene') then 'processed_transcript' else 'nc_transcript' end as type,
+       case when sg.so_term_name in ('protein_coding_gene', 'transposable_element_gene') then 'processed_transcript' else 'nc_transcript' end as type,
        'syntenyJBrowseScaled' source,
        sg.syn_na_feature_id name,
        '.' score,
@@ -339,13 +375,11 @@ SELECT sg.synteny_id || '_syntranscript_' || sg.syn_na_feature_id as feature_id,
             ELSE '+1' END  strand,
        ' ' atts,
        1 as has_children
-FROM   scaled_syngenes sg,
-       webready.TranscriptAttributes_p gattr
+FROM   scaled_syngenes sg
 WHERE sg.feature_type = 'Transcript'
   AND sg.ref_na_sequence_id = $srcfeature_id
   AND sg.s <= $rend
   AND sg.e >= $base_start
-  AND sg.syn_na_feature_id = gattr.na_feature_id
 UNION ALL
 -- Syn UTR/CDS
 SELECT sg.syn_na_feature_id || '_syncdsorutr' as feature_id,
@@ -388,6 +422,7 @@ WHERE  loc.na_sequence_id = $srcfeature_id
   AND  loc.feature_type = 'Transcript'
   AND  loc.start_min <= $$visibleRegionEnd$$
   AND  loc.end_max >= $$visibleRegionStart$$
+  AND  ta.org_abbrev = '$$orgAbbrev$$'
   AND loc.na_feature_id = ta.na_feature_id
 UNION ALL
 -- UTR / CDS
@@ -411,27 +446,8 @@ WHERE  loc.na_sequence_id = $srcfeature_id
   AND  loc.start_min <= $$visibleRegionEnd$$
   AND  loc.end_max >= $$visibleRegionStart$$
   AND  ta.na_feature_id = loc.parent_id
+  AND  ta.org_abbrev = '$$orgAbbrev$$'
 ) order by has_children desc
---SELECT distinct exon_loc.na_feature_id || '_refexon' feature_id, 
---       'exon' type, 
---       'annotation' source, 
---       exon_loc.na_feature_id name,
---       '.' score,
---       'refgene_' || exon_loc.parent_id,
---       exon_loc.start_min as startm,
---       exon_loc.end_max as end,
---       CASE WHEN exon_loc.is_reversed = 0 THEN '+1'
---            WHEN exon_loc.is_reversed = 1 THEN '-1'
---            ELSE '+1' END  strand,
---       ' ' atts 
---FROM   
---       apidb.FeatureLocation loc, webready.TranscriptAttributes_p ta, dots.rnafeatureexon rfe
---WHERE  exon_loc.na_sequence_id = $srcfeature_id
---  AND  exon_loc.feature_type = 'ExonFeature'
---  AND  exon_loc.start_min <= $rend
---  AND  exon_loc.end_max >= $base_start
---  AND rfe.exon_feature_id = exon_loc.na_feature_id
---  AND ta.na_feature_id = rfe.rna_feature_id
 ]]>
   </query>
 

@@ -669,7 +669,8 @@ sub addSynteny {
                           trackType => 'Segments',
                         },
                         query => {'feature' => "gene:syntenyJBrowseScaled",
-				  'projectName' => $projectName,
+                                  'projectName' => $projectName,
+                                  'orgAbbrev' => $organismAbbrev,
                         },
                         subtracks => $subtracksAr,
                         onClick => {
