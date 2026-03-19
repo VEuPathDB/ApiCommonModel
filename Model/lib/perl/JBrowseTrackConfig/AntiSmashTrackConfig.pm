@@ -46,7 +46,8 @@ sub getJBrowseStyle {
    $jbrowseStyle->{borderColor} = "black";
    $jbrowseStyle->{utrColor} = "white";
    $jbrowseStyle->{label} = "{antismashLabel}";
-   $jbrowseStyle->{description} = "description";
+   # hides empty description string from popup and mouseover
+   $jbrowseStyle->{description} = undef;
 
 
    return $jbrowseStyle;
@@ -57,8 +58,19 @@ sub getJBrowseObject{
 	my $self = shift;
 
 	my $jbrowseObject = $self->SUPER::getJBrowseObject();
-        $jbrowseObject->{unsafePopup} = "JSON::true";
-        $jbrowseObject->{transcriptType} = "function(f) { return f.children()[0].get(\"type\")}";
+    $jbrowseObject->{unsafePopup} = \1;
+    $jbrowseObject->{transcriptType} = "function(f) { return f.children()[0].get(\"type\")}";
+
+    # Hides the description from the body of the popup if the string is empty. 
+    # Shows the description if it contains something.
+    # In the JS layer, the empty string from the GFF becomes a string containing two quotes
+    # Horrible escaping to handle this!
+    $jbrowseObject->{fmtDetailField_description} = "function(fieldname, feature) { var value = feature.get(\"description\"); return (value === \"\\\"\\\"\" || value === null || value === undefined) ? null : fieldname; }";
+
+    # repurpose the Type tag as a link to the gene page for gene features
+    # show the Type for other types of feature
+    $jbrowseObject->{fmtDetailField_Type} = "function(fieldname, feature) { if (feature.get(\"type\") !== \"gene\") { return fieldname; } return \"Gene Page\"; }";
+    $jbrowseObject->{fmtDetailValue_Type} = "function(value, feature) { if (feature.get(\"type\") !== \"gene\") { return value; } var id = feature.get(\"id\"); return \"<a href='/a/app/record/gene/\" + id + \"' target='_blank'>\" + id + \"</a>\"; }";
 
     return $jbrowseObject;
 }
@@ -70,10 +82,9 @@ sub getJBrowse2Object{
 	my $uri = $self->getStore()->getUrlTemplate();
 	my $indexLocation = $uri . "\.tbi";
 
-        $jbrowse2Object->{adapter}->{gffGzLocation} = {uri => $uri, locationType => "UriLocation"};
-        $jbrowse2Object->{adapter}->{index}->{location} = {uri => $indexLocation, locationType => "UriLocation"};
-        #$jbrowse2Object->{adapter}->{type} = "Gff3TabixAdapter";
-        $jbrowse2Object->{displays}->[0]->{displayId} = "gff_" . scalar($self);
+    $jbrowse2Object->{adapter}->{gffGzLocation} = {uri => $uri, locationType => "UriLocation"};
+    $jbrowse2Object->{adapter}->{index}->{location} = {uri => $indexLocation, locationType => "UriLocation"};
+    $jbrowse2Object->{displays}->[0]->{displayId} = "gff_" . scalar($self);
 
 	return $jbrowse2Object;
 }
