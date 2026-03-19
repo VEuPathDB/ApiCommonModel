@@ -138,7 +138,7 @@ sub processOrganism {
 sub addDatasets {
   my ($dbh, $datasets, $strain, $projectName) = @_;
   #Public facing track requires public_abbrev here!
-  my $sql = "select public_abbrev, internal_abbrev, organism_name FROM Apidbtuning.organismattributes where project_name = '$projectName' order by organism_name";
+  my $sql = "select public_abbrev, internal_abbrev, organism_name FROM Apidbtuning.organismattributes where project_id = '$projectName' order by organism_name";
 
   my $sh = $dbh->prepare($sql);
   $sh->execute();
