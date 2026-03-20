@@ -2225,13 +2225,17 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
   <tuningTable name="Profile">
     <comment> One profile per gene per dataset. Used for graphs.</comment>
     <externalDependency name="apidb.Datasource"/>
+    <externalDependency name="apidb.OntologyTermResult"/>
+    <externalDependency name="apidb.SubjectResult"/>
+    <externalDependency name="results.CompoundMassSpec"/>
+    <externalDependency name="apidb.CompoundMassSpecResult"/>
+    <externalDependency name="apidb.CompoundPeaks"/>
+    <externalDependency name="apidb.CompoundPeaksChebi"/>
 <!--
     NOTE: if we revive these datasets, hard code 'no_org_abbrev' for their org_abbrev value.  for dataplotter.
-    <externalDependency name="apidb.OntologyTermResult"/>
     <externalDependency name="apidb.NaFeatureMetacycle"/>
     <externalDependency name="apidb.LopitResults"/>
     <externalDependency name="apidb.EigenGeneWgcnaResults"/>
-    <externalDependency name="results.CompoundMassSpec"/>
     <externalDependency name="results.NaFeatureHostResponse"/>
 -->
     <externalDependency name="results.NaFeatureExpression"/>
@@ -2239,6 +2243,8 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     <externalDependency name="sres.ExternalDatabaseRelease"/>
     <externalDependency name="study.ProtocolAppNode"/>
     <externalDependency name="study.NodeSet"/>
+    <externalDependency name="sres.OntologyTerm"/>
+    <externalDependency name="webready.CompoundAttributes"/>
     <internalDependency name="NodeSetOutputNode"/>
     <internalDependency name="GeneAttributes"/>
     <intermediateTable name="profile_nafeatureexp_summary"/>
@@ -2464,6 +2470,146 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
               AND d.external_database_id = r.external_database_id
               AND profile.node_set_id = ps.node_set_id
               AND ps.external_database_release_id = r.external_database_release_id
+            UNION ALL
+            -- SubjectResult profiles
+            SELECT
+               ds.name as dataset_name, ds.type as dataset_type, coalesce(o.abbrev, 'no_org_abbrev') as org_abbrev,
+               ds.subtype as dataset_subtype, 'values' AS profile_type, ps.node_type,
+               sr.subject as source_id, sr.node_set_id as profile_study_id,
+               ps.name as profile_set_name,
+               null as profile_set_suffix,
+               CASE WHEN replace(sr.profile_as_string, 'NA' || CHR(9), '') = 'NA' THEN null ELSE sr.profile_as_string END as profile_as_string,
+               '-1' as max_value, '1' as min_value, '-1' as max_timepoint, '-1' as min_timepoint
+            FROM apidb.DataSource ds
+              JOIN sres.ExternalDatabase d ON ds.name = d.name
+              JOIN sres.ExternalDatabaseRelease r ON ds.version = r.version
+                AND d.external_database_id = r.external_database_id
+              LEFT JOIN apidb.organism o ON ds.taxon_id = o.taxon_id
+              JOIN study.NodeSet ps ON ps.external_database_release_id = r.external_database_release_id
+              JOIN (SELECT sl.node_set_id, result.subject,
+                      string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string
+                    FROM study.ProtocolAppNode pan, NodeSetOutputNode sl, apidb.SubjectResult result
+                    WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                      AND result.protocol_app_node_id = pan.protocol_app_node_id
+                    GROUP BY sl.node_set_id, result.subject
+                   ) sr ON sr.node_set_id = ps.node_set_id
+            UNION ALL
+            -- OntologyTermResult profiles
+            SELECT
+               ds.name as dataset_name, ds.type as dataset_type, coalesce(o.abbrev, 'no_org_abbrev') as org_abbrev,
+               ds.subtype as dataset_subtype, 'value' AS profile_type, ps.node_type,
+               otr.term_name as source_id, otr.node_set_id as profile_study_id,
+               ps.name as profile_set_name,
+               null as profile_set_suffix,
+               CASE WHEN replace(otr.profile_as_string, 'NA' || CHR(9), '') = 'NA' THEN null ELSE otr.profile_as_string END as profile_as_string,
+               '-1' as max_value, '1' as min_value, '-1' as max_timepoint, '-1' as min_timepoint
+            FROM apidb.DataSource ds
+              JOIN sres.ExternalDatabase d ON ds.name = d.name
+              JOIN sres.ExternalDatabaseRelease r ON ds.version = r.version
+                AND d.external_database_id = r.external_database_id
+              LEFT JOIN apidb.organism o ON ds.taxon_id = o.taxon_id
+              JOIN study.NodeSet ps ON ps.external_database_release_id = r.external_database_release_id
+              JOIN (SELECT sl.node_set_id, ot.name as term_name,
+                      string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string
+                    FROM study.ProtocolAppNode pan, NodeSetOutputNode sl,
+                      apidb.OntologyTermResult result, sres.OntologyTerm ot
+                    WHERE ot.ontology_term_id = result.ontology_term_id
+                      AND result.protocol_app_node_id = sl.protocol_app_node_id
+                      AND result.protocol_app_node_id = pan.protocol_app_node_id
+                    GROUP BY sl.node_set_id, ot.name
+                   ) otr ON otr.node_set_id = ps.node_set_id
+            UNION ALL
+            -- Compound profiles from results.CompoundMassSpec (values with isotopomers)
+            SELECT
+               ds.name as dataset_name, ds.type as dataset_type, coalesce(o.abbrev, 'no_org_abbrev') as org_abbrev,
+               ds.subtype as dataset_subtype, 'values' AS profile_type, ps.node_type,
+               CASE WHEN cp.isotopomer IS NOT NULL THEN ca.source_id || '|' || cp.isotopomer
+                    ELSE ca.source_id
+               END as source_id,
+               cp.node_set_id as profile_study_id,
+               ps.name as profile_set_name,
+               null as profile_set_suffix,
+               CASE WHEN replace(cp.profile_as_string, 'NA' || CHR(9), '') = 'NA' THEN null ELSE cp.profile_as_string END as profile_as_string,
+               '-1' as max_value, '1' as min_value, '-1' as max_timepoint, '-1' as min_timepoint
+            FROM apidb.DataSource ds
+              JOIN sres.ExternalDatabase d ON ds.name = d.name
+              JOIN sres.ExternalDatabaseRelease r ON ds.version = r.version
+                AND d.external_database_id = r.external_database_id
+              LEFT JOIN apidb.organism o ON ds.taxon_id = o.taxon_id
+              JOIN study.NodeSet ps ON ps.external_database_release_id = r.external_database_release_id
+              JOIN (SELECT sl.node_set_id, result.compound_id, result.isotopomer,
+                      string_agg(coalesce(round(result.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string
+                    FROM study.ProtocolAppNode pan, NodeSetOutputNode sl,
+                      (SELECT max(value) as value, compound_id, protocol_app_node_id, isotopomer
+                       FROM results.CompoundMassSpec
+                       GROUP BY compound_id, protocol_app_node_id, isotopomer) result
+                    WHERE result.protocol_app_node_id = sl.protocol_app_node_id
+                      AND result.protocol_app_node_id = pan.protocol_app_node_id
+                    GROUP BY sl.node_set_id, result.compound_id, result.isotopomer
+                   ) cp ON cp.node_set_id = ps.node_set_id
+              JOIN webready.CompoundAttributes ca ON ca.id = cp.compound_id
+            UNION ALL
+            -- Compound profiles from apidb.CompoundMassSpecResult (values)
+            SELECT
+               ds.name as dataset_name, ds.type as dataset_type, coalesce(o.abbrev, 'no_org_abbrev') as org_abbrev,
+               ds.subtype as dataset_subtype, 'values' AS profile_type, ps.node_type,
+               CASE WHEN cpc.isotopomer IS NOT NULL THEN ca.source_id || '|' || cpc.isotopomer
+                    WHEN cph.mass IS NOT NULL THEN ca.source_id || '|' || cph.mass || '|' || cph.retention_time
+                    ELSE ca.source_id
+               END as source_id,
+               cmsr_agg.node_set_id as profile_study_id,
+               ps.name as profile_set_name,
+               null as profile_set_suffix,
+               CASE WHEN replace(cmsr_agg.profile_as_string, 'NA' || CHR(9), '') = 'NA' THEN null ELSE cmsr_agg.profile_as_string END as profile_as_string,
+               '-1' as max_value, '1' as min_value, '-1' as max_timepoint, '-1' as min_timepoint
+            FROM apidb.DataSource ds
+              JOIN sres.ExternalDatabase d ON ds.name = d.name
+              JOIN sres.ExternalDatabaseRelease r ON ds.version = r.version
+                AND d.external_database_id = r.external_database_id
+              LEFT JOIN apidb.organism o ON ds.taxon_id = o.taxon_id
+              JOIN study.NodeSet ps ON ps.external_database_release_id = r.external_database_release_id
+              JOIN (SELECT sl.node_set_id, cmsr.compound_peaks_id,
+                      string_agg(coalesce(round(cmsr.value::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string
+                    FROM study.ProtocolAppNode pan, NodeSetOutputNode sl, apidb.CompoundMassSpecResult cmsr
+                    WHERE cmsr.protocol_app_node_id = sl.protocol_app_node_id
+                      AND cmsr.protocol_app_node_id = pan.protocol_app_node_id
+                      AND pan.name like '%mean%'
+                    GROUP BY sl.node_set_id, cmsr.compound_peaks_id
+                   ) cmsr_agg ON cmsr_agg.node_set_id = ps.node_set_id
+              JOIN apidb.CompoundPeaksChebi cpc ON cpc.compound_peaks_id = cmsr_agg.compound_peaks_id
+              JOIN apidb.CompoundPeaks cph ON cph.compound_peaks_id = cpc.compound_peaks_id
+              JOIN webready.CompoundAttributes ca ON ca.id = cpc.compound_id
+            UNION ALL
+            -- Compound profiles from apidb.CompoundMassSpecResult (percentiles)
+            SELECT
+               ds.name as dataset_name, ds.type as dataset_type, coalesce(o.abbrev, 'no_org_abbrev') as org_abbrev,
+               ds.subtype as dataset_subtype, 'percentiles' AS profile_type, ps.node_type,
+               CASE WHEN cpc.isotopomer IS NOT NULL THEN ca.source_id || '|' || cpc.isotopomer
+                    WHEN cph.mass IS NOT NULL THEN ca.source_id || '|' || cph.mass || '|' || cph.retention_time
+                    ELSE ca.source_id
+               END as source_id,
+               cmsr_agg.node_set_id as profile_study_id,
+               ps.name as profile_set_name,
+               null as profile_set_suffix,
+               CASE WHEN replace(cmsr_agg.profile_as_string, 'NA' || CHR(9), '') = 'NA' THEN null ELSE cmsr_agg.profile_as_string END as profile_as_string,
+               '-1' as max_value, '1' as min_value, '-1' as max_timepoint, '-1' as min_timepoint
+            FROM apidb.DataSource ds
+              JOIN sres.ExternalDatabase d ON ds.name = d.name
+              JOIN sres.ExternalDatabaseRelease r ON ds.version = r.version
+                AND d.external_database_id = r.external_database_id
+              LEFT JOIN apidb.organism o ON ds.taxon_id = o.taxon_id
+              JOIN study.NodeSet ps ON ps.external_database_release_id = r.external_database_release_id
+              JOIN (SELECT sl.node_set_id, cmsr.compound_peaks_id,
+                      string_agg(coalesce(round(cmsr.percentile::numeric, 2)::varchar, 'NA'), chr(9) order by pan.node_order_num) as profile_as_string
+                    FROM study.ProtocolAppNode pan, NodeSetOutputNode sl, apidb.CompoundMassSpecResult cmsr
+                    WHERE cmsr.protocol_app_node_id = sl.protocol_app_node_id
+                      AND cmsr.protocol_app_node_id = pan.protocol_app_node_id
+                      AND pan.name like '%mean%'
+                    GROUP BY sl.node_set_id, cmsr.compound_peaks_id
+                   ) cmsr_agg ON cmsr_agg.node_set_id = ps.node_set_id
+              JOIN apidb.CompoundPeaksChebi cpc ON cpc.compound_peaks_id = cmsr_agg.compound_peaks_id
+              JOIN apidb.CompoundPeaks cph ON cph.compound_peaks_id = cpc.compound_peaks_id
+              JOIN webready.CompoundAttributes ca ON ca.id = cpc.compound_id
 
      ]]>
     </sql>
