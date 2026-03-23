@@ -323,19 +323,22 @@
       <column name="source_id"/>
       <column name="project_id"/>
       <column name="ec_number"/>
-      <column name="length_score"/>
-      <column name="blast_score"/>
       <column name="domain_score"/>
-      <column name="num_protein_with_ec"/>
-      <column name="num_protein_in_group"/>
-      <column name="num_genera_with_ec"/>
-      <column name="num_genera_in_group"/>
+      <column name="length_score"/>
+      <column name="length_mean"/>
+      <column name="num_supporting_cluster"/>
+      <column name="num_protein_cluster"/>
+      <column name="num_any_ec_cluster"/>
+      <column name="num_supporting_group"/>
+      <column name="num_protein_group"/>
+      <column name="num_any_ec_group"/>
 
       <sql>
         <![CDATA[
           SELECT ta.gene_source_id AS source_id, ta.project_id, ec.ec_number,
-              asec.length_score, asec.blast_score, asec.domain_score, asec.num_protein_with_ec,
-              asec.num_protein_in_group, asec.num_genera_with_ec,asec.num_genera_in_group
+              asec.domain_score, asec.length_score, asec.length_mean,
+              asec.num_supporting_cluster, asec.num_protein_cluster, asec.num_any_ec_cluster,
+              asec.num_supporting_group, asec.num_protein_group, asec.num_any_ec_group
           FROM webready.TranscriptAttributes_p ta, sres.enzymeclass ec, dots.aasequenceenzymeclass asec
           WHERE ta.aa_sequence_id = asec.aa_sequence_id AND asec.enzyme_class_id = ec.enzyme_class_id
             AND asec.evidence_code = 'OrthoMCLDerived'
@@ -487,7 +490,7 @@
                 apidbtuning.datasetPresenter dp
                   LEFT JOIN apidbtuning.datasetPublication pub ON dp.dataset_presenter_id = pub.dataset_presenter_id,
                 sres.taxonname tn,
-                webready.TaxonSpecies_p ts,
+                apidbtuning.TaxonSpecies ts,
                 sres.taxonname sn,
                 (select distinct rso.ref_source_id as profile_graph_id, p.dataset_name, rso.source_id
                  from webready.RefSynOrthologousGenes_p rso
@@ -514,7 +517,6 @@
                 AND ga.genus_species = sn.name
                 AND dds.category in ('RNASeq','DNA Microarray Assay', 'SAGE', 'RT PCR')
                 AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
-                AND ts.org_abbrev IN (%%PARTITION_KEYS%%)
               GROUP BY ga.source_id, ga.project_id, ga.organism, ga.genus_species, graph_descrip.dataset,
                 tn.name, dp.dataset_presenter_id, module,x_axis,y_axis, is_graph_custom,order_num,
                 dds.category,dp.short_attribution,paralog_number
@@ -952,7 +954,7 @@
     </sqlQuery>
 
 
-       <sqlQuery name="EdaPhenotypeGraphs" includeProjects="ToxoDB,UniDB,PlasmoDB">
+       <sqlQuery name="EdaPhenotypeDatasets" includeProjects="ToxoDB,UniDB,PlasmoDB">
             <column name="source_id" />
             <column name="project_id" />
             <column name="project_id_url" />
@@ -983,16 +985,34 @@ from (
              ga.organism as gene_organism, ga.genus_species ,
              psgene.profile_graph_id as graph_ids,
              case when psgene.profile_graph_id is null then 0 else 1 end as has_graph_data,
-             tn.name as graph_organism, 'TRUE' as mainOpen, 'FALSE' as dataOpen,
+             'TRUE' as mainOpen, 'FALSE' as dataOpen,
              'FALSE' has_meta_data, '' as meta_data_categories,
              graph_descrip.*, dp.summary, dp.short_attribution, dp.display_name,
-             dp.description, 'Phenotype' as assay_type, dp.dataset_presenter_id as dataset_id
+             dp.description, 'Phenotype' as assay_type, dp.dataset_presenter_id as dataset_id,dp.name as dataset_name
       from webready.GeneAttributes_p ga,
            apidbtuning.DatasetDatasource dds,
-           apidbtuning.datasetPresenter dp,
-           sres.taxonname tn,
-           webready.TaxonSpecies_p ts,
-           sres.taxonname sn,
+           apidbtuning.datasetPresenter dp
+           LEFT JOIN (
+             SELECT dataset_name as graph_dataset_name,
+                    JSON_ARRAYAGG(
+                      JSON_OBJECT(
+                        'plotName' VALUE plot_name,
+                        'plotType' VALUE plot_type,
+                        'xAxisEntityId' VALUE x_axis_entity_id,
+                        'yAxisEntityId' VALUE y_axis_entity_id,
+                        'xAxisVariableId' VALUE x_axis_variable_id,
+                        'yAxisVariableId' VALUE y_axis_variable_id,
+                        'displaySpecVariableId' VALUE 'VEUPATHDB_GENE_ID',
+                        'displayMode' VALUE 'highlight',
+                        'xMin' VALUE x_min,
+                        'xMax' VALUE x_max,
+                        'yMin' VALUE y_min,
+                        'yMax' VALUE y_max
+                       )
+                      ) AS plot_configs_json
+             FROM apidbtuning.edagenegraph
+             GROUP BY graph_dataset_name
+           ) graph_descrip ON graph_descrip.graph_dataset_name = dp.name,
            (WITH dataset_genes as (
                SELECT '' as dataset_name, '' as source_id
                -- TEMPLATE_ANCHOR phenotypeEdaGeneTableSql
@@ -1003,42 +1023,19 @@ from (
           from webready.RefSynOrthologousGenes_P rsog
              , dataset_genes p
           where rsog.source_id = p.source_id
-          and rsog.org_abbrev in ('tgonGT1') 
+          and rsog.org_abbrev in ('tgonGT1')
           union
           -- this is the regular case
           select ga.source_id, p.dataset_name, p.source_id as profile_graph_id
-          from dataset_genes p, webready.GeneAttributes_p ga
-          where p.source_id = ga.source_id
-            ) psgene,
-           (  SELECT dataset_name,
-                     JSON_ARRAYAGG(
-                       JSON_OBJECT(
-                         'plotName' VALUE plot_name,
-                         'plotType' VALUE plot_type,
-                         'xAxisEntityId' VALUE x_axis_entity_id,
-                         'yAxisEntityId' VALUE y_axis_entity_id,
-                         'xAxisVariableId' VALUE x_axis_variable_id,
-                         'yAxisVariableId' VALUE y_axis_variable_id,
-                         'xMin' VALUE x_min,
-                         'xMax' VALUE x_max,
-                         'yMin' VALUE y_min,
-                         'yMax' VALUE y_max
-                        )
-                       ) AS plot_configs_json
-              FROM apidbtuning.edagenegraph
-              GROUP BY dataset_name
-           ) graph_descrip
+          from dataset_genes p
+          join webready.geneid_p gi on gi.id = p.source_id and gi.org_abbrev IN (%%PARTITION_KEYS%%)
+          join webready.GeneAttributes_p ga on ga.source_id = gi.gene and ga.org_abbrev IN (%%PARTITION_KEYS%%)
+            ) psgene
         where ga.source_id = psgene.source_id
           and psgene.dataset_name = dds.name
           and dds.dataset_presenter_id = dp.dataset_presenter_id
-          and graph_descrip.dataset_name = dp.name
-          and dds.taxon_id = tn.taxon_id
-          and tn.name_class = 'scientific name'
-          and dds.taxon_id = ts.taxon_id
-          and ts.species_taxon_id = sn.taxon_id
-          and sn.name_class = 'scientific name'
-          and ga.genus_species = sn.name
           and dds.category = 'Phenotype'
+          and dp.name != 'PlasmoDB_Rod_Mal_Phenotype_RSRC'
 ) g
  ]]>
        </sql>
@@ -1046,7 +1043,7 @@ from (
         </sqlQuery>
 
 
-       <sqlQuery name="EdaCellularLocalizationGraphs" includeProjects="ToxoDB,TriTrypDB,UniDB">
+       <sqlQuery name="EdaCellularLocalizationDatasets" includeProjects="ToxoDB,TriTrypDB,UniDB">
             <column name="source_id" />
             <column name="project_id" />
             <column name="project_id_url" />
@@ -1077,22 +1074,40 @@ from (
              ga.organism as gene_organism, ga.genus_species ,
              psgene.profile_graph_id as graph_ids,
              case when psgene.profile_graph_id is null then 0 else 1 end as has_graph_data,
-             tn.name as graph_organism, 'TRUE' as mainOpen, 'FALSE' as dataOpen,
+             'TRUE' as mainOpen, 'FALSE' as dataOpen,
              'FALSE' has_meta_data, '' as meta_data_categories,
              graph_descrip.*, dp.summary, dp.short_attribution, dp.display_name,
-             dp.description, 'Cellular Localization' as assay_type, dp.dataset_presenter_id as dataset_id
+             dp.description, 'Cellular Localization' as assay_type, dp.dataset_presenter_id as dataset_id, dp.name as dataset_name
       from webready.GeneAttributes_p ga,
            apidbtuning.DatasetDatasource dds,
-           apidbtuning.datasetPresenter dp,
-           sres.taxonname tn,
-           webready.TaxonSpecies_p ts,
-           sres.taxonname sn,
+           apidbtuning.datasetPresenter dp
+           LEFT JOIN (
+             SELECT dataset_name as graph_dataset_name,
+                    JSON_ARRAYAGG(
+                      JSON_OBJECT(
+                        'plotName' VALUE plot_name,
+                        'plotType' VALUE plot_type,
+                        'xAxisEntityId' VALUE x_axis_entity_id,
+                        'yAxisEntityId' VALUE y_axis_entity_id,
+                        'xAxisVariableId' VALUE x_axis_variable_id,
+                        'yAxisVariableId' VALUE y_axis_variable_id,
+                        'displaySpecVariableId' VALUE 'VEUPATHDB_GENE_ID',
+                        'displayMode' VALUE 'subset',
+                        'xMin' VALUE x_min,
+                        'xMax' VALUE x_max,
+                        'yMin' VALUE y_min,
+                        'yMax' VALUE y_max
+                       )
+                      ) AS plot_configs_json
+             FROM apidbtuning.edagenegraph
+             GROUP BY graph_dataset_name
+           ) graph_descrip ON graph_descrip.graph_dataset_name = dp.name,
            (WITH dataset_genes as (
                SELECT '' as dataset_name, '' as source_id
                -- TEMPLATE_ANCHOR cellularLocalizationEdaGeneTableSql
            )
           -- Special Case for ToxoDB - ME49 Genes
-          select distinct rsog.ref_source_id, p.dataset_name,
+          select distinct rsog.ref_source_id as source_id, p.dataset_name,
                  rsog.source_id as profile_graph_id
           from webready.RefSynOrthologousGenes_P rsog
              , dataset_genes p
@@ -1101,38 +1116,14 @@ from (
           union
           -- this is the regular case
           select ga.source_id, p.dataset_name, p.source_id as profile_graph_id
-          from dataset_genes p, webready.GeneAttributes_p ga
-          where p.source_id = ga.source_id
-            ) psgene,
-           (  SELECT dataset_name,
-                     JSON_ARRAYAGG(
-                       JSON_OBJECT(
-                         'plotName' VALUE plot_name,
-                         'plotType' VALUE plot_type,
-                         'xAxisEntityId' VALUE x_axis_entity_id,
-                         'yAxisEntityId' VALUE y_axis_entity_id,
-                         'xAxisVariableId' VALUE x_axis_variable_id,
-                         'yAxisVariableId' VALUE y_axis_variable_id,
-                         'xMin' VALUE x_min,
-                         'xMax' VALUE x_max,
-                         'yMin' VALUE y_min,
-                         'yMax' VALUE y_max
-                        )
-                       ) AS plot_configs_json
-              FROM apidbtuning.edagenegraph
-              GROUP BY dataset_name
-           ) graph_descrip
+          from dataset_genes p
+          join webready.geneid_p gi on gi.id = p.source_id and gi.org_abbrev IN (%%PARTITION_KEYS%%)
+          join webready.GeneAttributes_p ga on ga.source_id = gi.gene and ga.org_abbrev IN (%%PARTITION_KEYS%%)
+            ) psgene
         where ga.source_id = psgene.source_id
           and psgene.dataset_name = dds.name
           and dds.dataset_presenter_id = dp.dataset_presenter_id
-          and graph_descrip.dataset_name = dp.name
-          and dds.taxon_id = tn.taxon_id
-          and tn.name_class = 'scientific name'
-          and dds.taxon_id = ts.taxon_id
-          and ts.species_taxon_id = sn.taxon_id
-          and sn.name_class = 'scientific name'
-          and ga.genus_species = sn.name
-          and dp.type = 'cellularLocalization'
+          and dds.category = 'Protein targeting and localization'
 ) g
  ]]>
        </sql>
@@ -1946,90 +1937,57 @@ from (
       <column name="pubmed_id"/>
       <column name="mod_type"/>
       <column name="life_cycle_stage"/>
-      <column name="phenotype"/>
-      <column name="mutation_description"/>
+      <column name="asexual_phenotype"/>
+      <column name="gametocyte_phenotype"/>
+      <column name="ookinete_phenotype"/>
+      <column name="oocyst_phenotype"/>
+      <column name="sporozoite_phenotype"/>
+      <column name="liver_stage_phenotype"/>
       <column name="other_source_id"/>
       <sql>
         <![CDATA[
-          WITH mut AS (
-            SELECT DISTINCT
-              ga.source_id
-              , ga.project_id
-              , pm.source_id AS rmgmid
-              , pm.pubmed_id
-              , pm.modification_type AS mod_type
-              , pm.is_successful AS suc_of_gen_mod
-              , pm.mutation_description
-              , ot.name
-              , SUBSTR(pr.phenotype_post_composition, 1, 4000) AS phenotype1
-              , SUBSTR(pr.phenotype_post_composition, 4001, 4000) AS phenotype2
-              , pm.HAS_MULTIPLE_MUTATIONS AS multiple
-              , na.NA_FEATURE_ID AS id
-              , pm.phenotype_model_id
-            FROM
-              APIDB.PHENOTYPERESULT pr
-                LEFT OUTER JOIN SRES.ONTOLOGYTERM ot ON pr.LIFE_CYCLE_STAGE_TERM_ID = ot.ONTOLOGY_TERM_ID
-              , apidb.phenotypemodel pm
-              , webready.GeneAttributes_p ga
-              , APIDB.NAFEATUREPHENOTYPEMODEL na
-            WHERE pm.PHENOTYPE_MODEL_ID = pr.PHENOTYPE_MODEL_ID
-              AND na.phenotype_model_id = pm.phenotype_model_id
-              AND na.NA_FEATURE_ID = ga.NA_FEATURE_ID
-              AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
-            -- and ga.source_id = 'PF3D7_1030900'
+          WITH gene_obs AS (
+            SELECT gnphntyd_stable_id, string_value AS source_id
+            FROM eda.ATTRIBUTEvalue_s53f554ec6a_gnPhntyD
+            WHERE attribute_stable_id = 'VEUPATHDB_GENE_ID'
+          ),
+          pivoted AS (
+            SELECT
+              gnphntyd_stable_id,
+              MAX(CASE WHEN attribute_stable_id = 'VAR_71b4a7d4' THEN number_value END) AS rmgmid,
+              MAX(CASE WHEN attribute_stable_id = 'VAR_a841ea17' THEN string_value END) AS pubmed_id,
+              MAX(CASE WHEN attribute_stable_id = 'VAR_a8ad31c0' THEN string_value END) AS suc_of_gen_mod,
+              MAX(CASE WHEN attribute_stable_id = 'VAR_385edd39' THEN string_value END) AS mod_type,
+              STRING_AGG(CASE WHEN attribute_stable_id = 'VAR_4dad410c' THEN string_value END, ', ' ORDER BY string_value) AS life_cycle_stage
+            FROM eda.ATTRIBUTEvalue_s53f554ec6a_gnPhntyD
+            GROUP BY gnphntyd_stable_id
+          ),
+          phenotype_pivot AS (
+            SELECT
+              gene_source_id, phenotype_stable_id,
+              MAX(CASE WHEN property = 'phenotype_asexual'    THEN text_value END) AS asexual_phenotype,
+              MAX(CASE WHEN property = 'phenotype_gametocyte' THEN text_value END) AS gametocyte_phenotype,
+              MAX(CASE WHEN property = 'phenotype_ookinete'   THEN text_value END) AS ookinete_phenotype,
+              MAX(CASE WHEN property = 'phenotype_oocyst'     THEN text_value END) AS oocyst_phenotype,
+              MAX(CASE WHEN property = 'phenotype_sporozoite' THEN text_value END) AS sporozoite_phenotype,
+              MAX(CASE WHEN property = 'phenotype_liverstage' THEN text_value END) AS liver_stage_phenotype
+            FROM apidb.genephenotype
+            GROUP BY gene_source_id, phenotype_stable_id
           )
-           , knockdown AS (
-            SELECT DISTINCT
-              genes.source_id
-              , mods.phenotype_model_id AS model_id
-            FROM
-              apidb.phenotypemodel mods
-              , apidb.nafeaturephenotypemodel nod
-              , webready.GeneAttributes_p genes
-              , mut m
-            WHERE mods.phenotype_model_id = m.phenotype_model_id
-              AND m.phenotype_model_id = nod.phenotype_model_id
-              AND mods.phenotype_model_id = nod.phenotype_model_id
-              AND m.id != nod.na_feature_id
-              AND genes.na_feature_id = nod.na_feature_id
-              AND m.source_id != genes.source_id
-              AND genes.org_abbrev IN (%%PARTITION_KEYS%%)
-            --and mods.has_multiple_mutations = 1
-          )
-          , results AS (
-            SELECT m.source_id
-              , m.project_id
-              , m.rmgmid
-              , m.pubmed_id
-              , m.mod_type
-              , CASE
-              WHEN m.suc_of_gen_mod = 0 THEN 'NO'
-              ELSE 'YES'
-                END AS suc_of_gen_mod
-              , m.mutation_description
-              , string_agg(m.name, ', ' ORDER BY m.name) AS life_cycle_stage
-              , concat(phenotype1, phenotype2) AS phenotype
-              , m.phenotype_model_id
-            FROM mut m
-            GROUP BY m.source_id
-              , m.project_id
-              , m.rmgmid
-              , m.pubmed_id
-              , m.mod_type
-              , m.suc_of_gen_mod
-              , m.mutation_description
-              , m.phenotype1
-              , m.phenotype2
-              , m.phenotype_model_id
-            ORDER BY rmgmid
-          )
-          SELECT results.*
-            , knockdown.source_id AS other_source_id
-          FROM
-            results
-              LEFT JOIN knockdown ON results.phenotype_model_id = knockdown.model_id
-          WHERE knockdown.source_id <> results.source_id OR knockdown.source_id IS NULL
-            AND project_id = 'PlasmoDB'
+          SELECT
+            ga.source_id, ga.project_id,
+            p.rmgmid, p.pubmed_id, p.suc_of_gen_mod, p.mod_type,
+            p.life_cycle_stage, pp.asexual_phenotype, pp.gametocyte_phenotype,
+            pp.ookinete_phenotype, pp.oocyst_phenotype, pp.sporozoite_phenotype,
+            pp.liver_stage_phenotype, og.source_id AS other_source_id
+          FROM webready.GeneAttributes_p ga
+          JOIN gene_obs go ON go.source_id = ga.source_id
+          JOIN pivoted p ON p.gnphntyd_stable_id = go.gnphntyd_stable_id
+          JOIN phenotype_pivot pp ON pp.gene_source_id = go.source_id
+            AND pp.phenotype_stable_id = CAST(p.rmgmid AS VARCHAR)
+          LEFT JOIN gene_obs og ON og.gnphntyd_stable_id = go.gnphntyd_stable_id
+            AND og.source_id != go.source_id
+          WHERE ga.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
       </sql>
     </sqlQuery>
@@ -2296,48 +2254,6 @@ from (
       </sql>
     </sqlQuery>
 
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <!-- BlastP Hits -->
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-    <sqlQuery name="BlastP" isCacheable="false">
-      <column name="transcript_id"/>
-      <column name="source_id"/>
-      <column name="project_id"/>
-      <column name="blastp_feature_id"/>
-      <column name="blastp_name"/>
-      <column name="blastp_parent_id"/>
-      <column name="blastp_score"/>
-      <column name="blastp_start"/>
-      <column name="blastp_end"/>
-      <column name="blastp_description"/>
-      <column name="blastp_expect_value"/>
-      <column name="blastp_percent_identity"/>
-      <column name="blastp_percent_positive"/>
-
-      <sql>
-        <![CDATA[
-          SELECT source_id AS transcript_id
-            , gene_source_id AS source_id
-            , project_id
-            , similarity_id AS blastp_feature_id
-            , source_id AS blastp_name
-            , query_id AS blastp_parent_id
-            , score AS blastp_score
-            , min_query_start AS blastp_start
-            , max_query_end AS blastp_end
-            , CONCAT('E() = ', pvalue_mant, 'e', pvalue_exp, ', ', round(100 * number_identical / total_match_length),
-              '% identity, ', description) as blastp_description
-            , CASE WHEN pvalue_mant = 0 THEN '0' ELSE CONCAT(pvalue_mant, 'e', pvalue_exp) END AS blastp_expect_value
-            , round(100 * number_identical / total_match_length) AS blastp_percent_identity
-            , round(100 * number_positive / total_match_length) AS blastp_percent_positive
-          FROM ApidbTuning.Blastp
-          ORDER BY pvalue_exp, pvalue_mant
-        ]]>
-      </sql>
-    </sqlQuery>
-
-
 
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- Low Complexity Regions -->
@@ -2486,114 +2402,6 @@ from (
             AND ta.org_abbrev IN (%%PARTITION_KEYS%%)
          ) ORDER BY display_id, display_order
        ]]>
-      </sql>
-    </sqlQuery>
-
-
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-       <!-- ToxoDB LOPIT tables -->
-       <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-
-    <sqlQuery name="LOPITMAP"
-              isCacheable="false" includeProjects="ToxoDB, UniDB">
-
-      <column name="source_id"/>
-      <column name="project_id"/>
-      <column name="location"/>
-      <column name="probability_MAP"/>
-      <sql>
-        <![CDATA[
-          SELECT ga.source_id, ga.project_id, replace(pan.name,' (lopit)','') as location , lr.probability_mean as probability_MAP
-          FROM study.nodeset s , apidbtuning.NodeSetOutputNode sl, study.ProtocolAppNode pan, apidb.LopitResults lr, webready.GeneAttributes_p ga
-          WHERE s.name in ('TAGM-MAP-Final-Probability')
-            AND s.node_set_id = sl.node_set_id
-            AND sl.protocol_app_node_id = pan.protocol_app_node_id
-            AND pan.protocol_app_node_id = lr.protocol_app_node_id
-            AND ga.na_feature_id = lr.na_feature_id
-            AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
-        ]]>
-      </sql>
-    </sqlQuery>
-
-    <sqlQuery name="LOPITMCMC"     isCacheable="false" includeProjects="ToxoDB, UniDB">
-      <column name="source_id"/>
-      <column name="project_id"/>
-      <column name="sort_prob"/>
-      <column name="location"/>
-      <column name="probability_MCMC"/>
-      <sql>
-        <![CDATA[
-            SELECT ga.source_id
-              , ga.project_id
-              , replace(pan.name, ' (lopit)', '') AS location
-              , lr.probability_mean AS probability_MCMC
-              , 2 AS sort_prob
-            FROM
-              study.nodeset s
-              , apidbtuning.NodeSetOutputNode sl
-              , study.ProtocolAppNode pan
-              , apidb.LopitResults lr
-              , webready.GeneAttributes_p ga
-            WHERE s.name IN ('TAGM-MCMC-Joint-Probability')
-              AND s.node_set_id = sl.node_set_id
-              AND sl.protocol_app_node_id = pan.protocol_app_node_id
-              AND pan.protocol_app_node_id = lr.protocol_app_node_id
-              AND ga.na_feature_id = lr.na_feature_id
-              AND pan.name = 'outlier (lopit)'
-              AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
-          UNION
-            SELECT ga.source_id
-              , ga.project_id
-              , replace(pan.name, ' (lopit)', '') AS location
-              , lr.probability_mean AS probability_MCMC
-              , lr.probability_mean AS sort_prob
-            FROM
-              study.nodeset s
-              , apidbtuning.NodeSetOutputNode sl
-              , study.ProtocolAppNode pan
-              , apidb.LopitResults lr
-              , webready.GeneAttributes_p ga
-            WHERE s.name IN ('TAGM-MCMC-Joint-Probability')
-              AND s.node_set_id = sl.node_set_id
-              AND sl.protocol_app_node_id = pan.protocol_app_node_id
-              AND pan.protocol_app_node_id = lr.protocol_app_node_id
-              AND ga.na_feature_id = lr.na_feature_id
-              AND lr.probability_mean >= 0.05
-              AND pan.name != 'outlier (lopit)'
-              AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
-          ORDER BY sort_prob DESC
-       ]]>
-      </sql>
-    </sqlQuery>
-
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-    <!-- TriTrypDB LOPIT table -->
-    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
-
-    <sqlQuery name="LOPITtryp" includeProjects="TriTrypDB,UniDB">
-      <column name="name"/>
-      <column name="source_id"/>
-      <column name="project_id"/>
-      <column name="location"/>
-      <column name="probability_map"/>
-      <sql>
-        <![CDATA[
-          SELECT ga.source_id, ga.project_id, s.name,
-            REPLACE(pan.name,' (lopit)','') AS location,
-            CASE  WHEN (ROUND (lr.probability_mean,3) = 1 ) THEN '1'
-                 ELSE TO_CHAR(lr.probability_mean,'9.999EEEE') END AS probability_map
-          FROM study.nodeset s,
-            apidbtuning.NodeSetOutputNode sl, study.ProtocolAppNode pan,
-            apidb.LopitResults lr, webready.GeneAttributes_p ga
-          WHERE s.name like 'lopit Study hyperLopit%'
-          AND s.node_set_id = sl.node_set_id
-          AND sl.protocol_app_node_id = pan.protocol_app_node_id
-          AND pan.protocol_app_node_id = lr.protocol_app_node_id
-          AND ga.na_feature_id = lr.na_feature_id
-          AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
-          ORDER BY lr.probability_mean desc
-         ]]>
       </sql>
     </sqlQuery>
 
@@ -4245,27 +4053,25 @@ from (
 
       <sql>
         <![CDATA[
-         SELECT ga.source_id
-            , ga.project_id
-            , target_name
-            , target_type
-            --  listagg(ta.name, ', ') within group (order by ta.name) as organisms
-            , ta.name AS organisms
-          FROM
-            (
-              SELECT DISTINCT dmr.target_name, dmr.target_type, tn.name, dd.taxon_id
-              FROM
-                ApidbTuning.DatasetDatasource dd
-                  INNER JOIN ApidbTuning.DatasetModelRef dmr ON dd.dataset_presenter_id = dmr.dataset_presenter_id
-                  LEFT JOIN sres.TaxonName tn ON dd.taxon_id = tn.taxon_id
-              WHERE (dmr.target_type = 'table' OR dmr.target_type = 'attribute')
-                AND dmr.record_type LIKE 'GeneRecordClasses.GeneRecordClass'
-                AND (tn.name_class IS NULL OR tn.name_class = 'scientific name')
-            ) ta
-            , apidbtuning.GeneAttributes ga
-          WHERE ta.taxon_id = ga.taxon_id
-            AND (ga.project_id = '@PROJECT_ID@' or 'UniDB' = '@PROJECT_ID@')
-          ORDER BY ga.source_id, target_name
+                 with modelrefs as 		  
+                             (
+                               SELECT DISTINCT dmr.target_name, dmr.target_type , dd.taxon_id
+                               FROM
+                                 ApidbTuning.DatasetDatasource dd
+                                   INNER JOIN ApidbTuning.DatasetModelRef dmr ON dd.dataset_presenter_id = dmr.dataset_presenter_id
+                                  WHERE (dmr.target_type = 'table' OR dmr.target_type = 'attribute')
+                                 AND dmr.record_type LIKE 'GeneRecordClasses.GeneRecordClass'
+                             )
+                 select  ga.source_id
+                             , ga.project_id
+                             , target_name
+                             , target_type
+                             , ga.organism AS organisms		
+                 FROM modelrefs
+                    , apidbtuning.GeneAttributes ga
+                 WHERE (modelrefs.taxon_id = ga.taxon_id OR modelrefs.taxon_id is null )
+                  AND (ga.project_id = '@PROJECT_ID@' or 'UniDB' = '@PROJECT_ID@')
+                 ORDER BY ga.source_id, target_name
        ]]>
       </sql>
     </sqlQuery>
@@ -4735,16 +4541,27 @@ from (
             <column name="value"/>
             <sql>
             <![CDATA[
-SELECT ga.source_id, ga.project_id, gd.variable, nvl(gd.string_value, nvl(to_char(round(gd.number_value, 4)), to_char(gd.date_value))) AS value, gd.dataset_id
+SELECT ga.source_id, ga.project_id, gd.variable, coalesce(gd.string_value, coalesce(round(gd.number_value, 4)::text, gd.date_value::text)) AS value, gd.dataset_id
 FROM webready.GeneAttributes_p ga, (
-   SELECT '' as gene, 
-          '' as variable, 
-          '' as string_value, 
-          0 as number_value, 
-          to_date('2000-01-01', 'YYYY-MM-DD') as date_value, 
-          'HAPPY_BIRTHDAY' as dataset_id
-   -- TEMPLATE_ANCHOR phenotypeDataTableGeneTableSql
-   ) gd
+   WITH raw_data as (
+       SELECT '' as gene,
+              '' as variable,
+              '' as string_value,
+              0 as number_value,
+              DATE '2000-01-01' as date_value,
+              'HAPPY_BIRTHDAY' as dataset_id
+       -- TEMPLATE_ANCHOR phenotypeDataTableGeneTableSql
+   )
+   -- Special Case for ToxoDB - ME49 Genes
+   SELECT rsog.ref_source_id as gene, rd.variable, rd.string_value, rd.number_value, rd.date_value, rd.dataset_id
+   FROM webready.RefSynOrthologousGenes_P rsog, raw_data rd
+   WHERE rsog.source_id = rd.gene
+   AND rsog.org_abbrev in ('tgonGT1')
+   UNION
+   -- Regular case
+   SELECT rd.gene, rd.variable, rd.string_value, rd.number_value, rd.date_value, rd.dataset_id
+   FROM raw_data rd
+) gd
    WHERE ga.source_id = gd.gene
      AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
         ]]>
@@ -4760,13 +4577,13 @@ FROM webready.GeneAttributes_p ga, (
             <column name="value"/>
             <sql>
             <![CDATA[
-SELECT ga.source_id, ga.project_id, gd.variable, nvl(gd.string_value, nvl(to_char(round(gd.number_value, 4)), to_char(gd.date_value))) AS value, gd.dataset_id
+SELECT ga.source_id, ga.project_id, gd.variable, coalesce(gd.string_value, coalesce(round(gd.number_value, 4)::text, gd.date_value::text)) AS value, gd.dataset_id
 FROM webready.GeneAttributes_p ga, (
    SELECT '' as gene,
           '' as variable,
           '' as string_value,
           0 as number_value,
-          to_date('2000-01-01', 'YYYY-MM-DD') as date_value,
+          DATE '2000-01-01' as date_value,
           'HAPPY_BIRTHDAY' as dataset_id
    -- TEMPLATE_ANCHOR cellularLocalizationDataTableGeneTableSql
    ) gd
@@ -4939,14 +4756,21 @@ FROM webready.GeneAttributes_p ga, (
                 , dots.DbRefNaFeature dbna
                 , apidbtuning.ExternalDbDatasetPresenter edd
                 , sres.externaldatabaserelease edr
-                , apidbTuning.OrthologousTranscripts og
+                , (SELECT gog.gene_id as source_id
+	    	 , gog.project_id
+		 , ota.gene_source_id AS ortho_gene_source_id
+		 , ota.gene_na_feature_id AS ortho_na_feature_id
+	         FROM webready.GeneOrthologGroup gog
+	         JOIN webready.TranscriptOrthologGroup tog ON gog.group_id = tog.group_id
+	         JOIN apidbtuning.TranscriptAttributes ota ON tog.source_id = ota.source_id
+		 WHERE ota.organism in ('Candida albicans SC5314', 'Saccharomyces cerevisiae S288C','Schizosaccharomyces pombe 972h-')
+		) og
               WHERE
                 db.external_database_release_id = edd.external_database_release_id
                 AND edr.external_database_release_id = edd.external_database_release_id
                 AND dbna.db_ref_id = db.db_ref_id
                 AND og.ortho_na_feature_id = dbna.na_feature_id
                 AND og.source_id != og.ortho_gene_source_id
-                AND og.ortho_organism in ('Candida albicans SC5314', 'Saccharomyces cerevisiae S288C','Schizosaccharomyces pombe 972h-')
                 AND edd.dataset_presenter_display_name  IN ('SGD','PomBase','CGD')
             UNION
               SELECT
@@ -4959,13 +4783,20 @@ FROM webready.GeneAttributes_p ga, (
                 , sres.dbref ref
                 , webready.DbRefNaFeature_p dbna
                 , webready.GeneAttributes_p ga
-                , apidbTuning.OrthologousTranscripts og
+                , (SELECT gog.gene_id as source_id
+	    	 , gog.project_id
+		 , ota.gene_source_id AS ortho_gene_source_id
+		 , ota.gene_na_feature_id AS ortho_na_feature_id
+	         FROM webready.GeneOrthologGroup gog
+	         JOIN webready.TranscriptOrthologGroup tog ON gog.group_id = tog.group_id
+	         JOIN apidbtuning.TranscriptAttributes ota ON tog.source_id = ota.source_id
+		 WHERE ota.organism in ('Drosophila melanogaster iso-1')
+		) og
               WHERE edr.external_database_id = ed.external_database_id
                 AND lower(ed.name) like 'flybase%_gene_id'
                 AND ref.external_database_release_id = edr.external_database_release_id
                 AND dbna.db_ref_id = ref.db_ref_id
                 AND ga.na_feature_id = dbna.na_feature_id
-                AND ga.organism IN ('Drosophila melanogaster iso-1')
                 AND ga.source_id = og.source_id
           ) t
         ]]>

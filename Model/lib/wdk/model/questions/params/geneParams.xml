@@ -6273,11 +6273,21 @@ products of your selected type (or types).<br><br>
   </paramSet>
 
   <paramSet name="userDatasetParams">
+
+    <flatVocabParam name="eda_dataset_id"
+                    queryRef="GeneVQ.PhenotypeUserDataset"
+                    prompt="Your Phenotype Dataset"
+	            quote="false"
+                    multiPick="false" >
+      <help>An Phenotype dataset that you have imported into your workspace, and that is installed in this website </help>
+    </flatVocabParam> 
+
+
     <flatVocabParam name="rna_seq_dataset"
                     queryRef="GeneVQ.RnaSeqUserDataset"
                     prompt="Your RNA-Seq Dataset"
                     multiPick="false" >
-      <help>An RNA-Seq dataset that you have imported into your workspace, and that is installed in @PROJECT_ID@ </help>
+      <help>An RNA-Seq dataset that you have imported into your workspace, and that is installed in this website </help>
     </flatVocabParam>
 
     <flatVocabParam name="profileset_generic"
@@ -6478,7 +6488,7 @@ products of your selected type (or types).<br><br>
 
 
 
-      <sqlQuery name="metacycle_study_ncraOR74A_Bharath_Circadian_Time_Course_ebi_rnaSeq_RSRC" isCacheable="false" includeProjects="FungiDB">
+      <sqlQuery name="metacycle_study_ncraOR74A_Bharath_Circadian_Time_Course_ebi_rnaSeq_RSRC" isCacheable="false" includeProjects="FungiDB,UniDB">
             <column name="internal" />
             <column name="term" />
         <sql>
@@ -6496,7 +6506,7 @@ products of your selected type (or types).<br><br>
       </sqlQuery>
 
 
-      <sqlQuery name="metacycle_study_ncraOR74A_Hurley_2014_NC_3_ebi_rnaSeq_RSRC" isCacheable="false" includeProjects="FungiDB">
+      <sqlQuery name="metacycle_study_ncraOR74A_Hurley_2014_NC_3_ebi_rnaSeq_RSRC" isCacheable="false" includeProjects="FungiDB,UniDB">
             <column name="internal" />
             <column name="term" />
         <sql>
@@ -6514,7 +6524,7 @@ products of your selected type (or types).<br><br>
       </sqlQuery>
 
 
-      <sqlQuery name="metacycle_study_tbruTREU927_Rijo_Circadian_Regulation_ebi_rnaSeq_RSRC" includeProjects="TriTrypDB">
+      <sqlQuery name="metacycle_study_tbruTREU927_Rijo_Circadian_Regulation_ebi_rnaSeq_RSRC" includeProjects="TriTrypDB,UniDB">
              <column name="internal"/>
              <column name="term"/>
           <sql>
@@ -6529,23 +6539,19 @@ products of your selected type (or types).<br><br>
         </sqlQuery>
 
 
-      <sqlQuery name="metacycle_study_agamPEST_microarrayExpression_GSE22585_circadian_rhythm_RSRC" isCacheable="false" includeProjects="VectorBase">
-            <column name="internal" />
-            <column name="term" />
+      <sqlQuery name="metacycle_study_agamPEST_microarrayExpression_GSE22585_circadian_rhythm_RSRC" isCacheable="false" includeProjects="VectorBase,UniDB">
+        <column name="internal" />
+        <column name="term" />
         <sql>
-	      SELECT s.name as internal,
-             CASE  WHEN s.name ='WT MetaCycle FirstStrand' THEN 'WT - Sense'
-             WHEN s.name ='MSN MetaCycle FirstStrand' THEN 'ΔMSN - Sense'
-             WHEN s.name ='WT MetaCycle SecondStrand' THEN 'WT - Antisense'
-             ELSE 'ΔMSN Antisense' END "term"
-        FROM STUDY.nodeset s, sres.externaldatabase ed, sres.externaldatabaserelease edr
-        WHERE ed.name = 'agamPEST_microarrayExpression_GSE22585_circadian_rhythm_RSRC'
-        AND ed.external_database_id = edr.external_database_id
-        AND edr.external_database_release_id = s.external_database_release_id
-        AND node_type IN ('microarray')
+	  SELECT s.name as internal, s.name as term
+          FROM STUDY.nodeset s, sres.externaldatabase ed, sres.externaldatabaserelease edr
+          WHERE ed.name = 'agamPEST_microarrayExpression_GSE22585_circadian_rhythm_RSRC'
+          AND ed.external_database_id = edr.external_database_id
+          AND edr.external_database_release_id = s.external_database_release_id
+          AND node_type IN ('microarray')
+	  AND (s.name like 'Heads%' or s.name like 'Bodies%')
     	</sql>
       </sqlQuery>
-
 
 
 
@@ -6565,6 +6571,7 @@ products of your selected type (or types).<br><br>
 	    , apidb.organism o
           WHERE o.abbrev = $$organismsWithSingleCell$$
             AND dd.taxon_id = o.taxon_id
+	    AND dsp.dataset_presenter_id = dd.dataset_presenter_id
             AND dsp.name like '%cellxgene%'
             AND dsp.name = ed.name
             AND ed.external_database_id = edr.external_database_id
@@ -6602,26 +6609,21 @@ products of your selected type (or types).<br><br>
     <column name="display"/>
     <sql>
       <![CDATA[
-        select display, internal, term from (
-        select case when '@PROJECT_ID@' = 'HostDB' then CONCAT('h_', lower(display)) else CONCAT('p_', lower(display)) end as display,
-               internal,
-               case when '@PROJECT_ID@' = 'HostDB' then CONCAT('h_', lower(display)) else CONCAT('p_', lower(display)) end as term
-          from (
+        select * from (
         select distinct
           pan.protocol_app_node_id as internal
-          , regexp_replace(pan.name,'(((\w+)\s){1}).*', '\1') as display --clean pan.name by keeping only the first full word
+          , regexp_replace(pan.name,'(((\w+)\s){1}).*', '\1') as term
+          , regexp_replace(pan.name,'(((\w+)\s){1}).*', '\1') as display
         from study.protocolappnode pan
           , study.nodeset s
           , apidbtuning.NodeSetOutputNode sl
-        where s.external_database_release_id = $$wgcnaDataset$$
+          where s.external_database_release_id = $$wgcnaDataset$$
           and s.node_set_id = sl.node_set_id
           and sl.protocol_app_node_id = pan.protocol_app_node_id
           and pan.name like '%module%'
-         ) a
          UNION
-         select 'Choose a Module' as display, -1 as internal, '1_choose_module' as term
-         ) b
-        order by term
+         select -1 as internal, '1_choose_module' as term, 'Choose a Module' as display
+) order by term
       ]]>
     </sql>
   </sqlQuery>
@@ -7263,6 +7265,28 @@ products of your selected type (or types).<br><br>
    ) order by num, display
        </sql>
        </sqlQuery>
+
+
+       <sqlQuery name="PhenotypeUserDataset" isCacheable="false">
+          <paramRef ref="InternalParams.user_id"/>
+          <column name="internal"/>
+          <column name="term"/>
+          <column name="display"/>
+          <sql>
+            <![CDATA[
+              SELECT
+                CONCAT('EDAUD_', aud.user_dataset_id) as term
+              , CONCAT('EDAUD_', aud.user_dataset_id) as internal
+              , aud.name as display
+              FROM
+                @VDI_CONTROL_SCHEMA@.availableuserdatasets aud
+              WHERE
+                user_id = $$user_id$$
+                AND type = 'phenotype'
+              ORDER BY display
+            ]]>
+          </sql>
+  </sqlQuery>
 
         <sqlQuery name="RnaSeqUserDataset" isCacheable="false">
           <paramRef ref="InternalParams.user_id"/>
@@ -8557,7 +8581,7 @@ end as term
                      ELSE CONCAT(org.organism, '_', dsp.dataset_name_pattern)
                 END AS experiment,
                 org.Project_Id,
-                replace(sdi.sample,'.tab', '')  as internal_id,
+                sdi.dataset_name || '-' || replace(sdi.sample,'.tab', '')  as internal_id,
                 sdi.sort_order
             FROM apidbTuning.sampledisplayinfo sdi,
                   apidbTuning.datasetPresenter dsp,
@@ -8672,6 +8696,7 @@ end as term
             , apidbtuning.TranscriptAttributes ta
             , apidbtuning.datasetpresenter dp
             WHERE ms.source_id = ta.source_id
+              and (ta.project_id = '@PROJECT_ID@' or 'UniDB' = '@PROJECT_ID@')
               AND (ms.modification_type in ( $$ptm_type$$ ) OR $$ptm_type$$ = 'any')
               AND (ms.external_database_name = dp.name OR regexp_replace(ms.external_database_name, '^.+?_', '_') = dp.name)
           )
@@ -8783,6 +8808,7 @@ end as term
           ) AS term
           , ga.gene_type as internal
         FROM apidbtuning.TranscriptAttributes ga
+        where (project_id = '@PROJECT_ID@' or 'UniDB' = '@PROJECT_ID')
       </sql>
     </sqlQuery>
 

@@ -3,6 +3,7 @@ package ApiCommonModel::Model::JbrowseOrgSpecificNaTracks;
 use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 
+use ApiCommonModel::Model::JBrowseTrackConfig::ReferenceSequenceTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedMassSpecTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedSnpTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig;
@@ -52,6 +53,7 @@ sub processOrganism {
   my $isAnnotated = ($orgHash->{isAnnotatedGenome});
   my $isReference = ($orgHash->{isReferenceStrain});
 
+  &addReferenceSequence($applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addScaffolds($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addCentromere($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedMassSpec($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
@@ -59,13 +61,13 @@ sub processOrganism {
 
   #  &addSynteny($applicationType, $dbh, $result);
 
-  &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
+  &addDatasets($dbh, \%datasets, \%strain, $projectName) unless($isApollo);
 
   # TODO: get these from buildProps
   my $datasetProperties = $datasetProps;
 
-  &addSynteny($applicationType, $dbh, $result, $organismAbbrev);
-  &addDatasets($dbh, \%datasets, \%strain) unless($isApollo);
+  &addSynteny($applicationType, $dbh, $result, $organismAbbrev, $projectName);
+
   &addChipChipTracks($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber,$nameForFileNames, $applicationType);
   &addSmallNcRnaSeq($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result);
 
@@ -134,9 +136,9 @@ sub processOrganism {
 }
 
 sub addDatasets {
-  my ($dbh, $datasets, $strain) = @_;
+  my ($dbh, $datasets, $strain, $projectName) = @_;
   #Public facing track requires public_abbrev here!
-  my $sql = "select public_abbrev, internal_abbrev, organism_name FROM Apidbtuning.organismattributes order by organism_name";
+  my $sql = "select public_abbrev, internal_abbrev, organism_name FROM Apidbtuning.organismattributes where project_id = '$projectName' order by organism_name";
 
   my $sh = $dbh->prepare($sql);
   $sh->execute();
@@ -463,6 +465,23 @@ sub addESTs {
    push @{$result->{tracks}}, $track if($track);
 }
 
+sub addReferenceSequence {
+  my ($applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+
+  my $relativePathToFastaFile = "/a/service/jbrowse/store?data=" . $nameForFileNames . "/genomeAndProteome/fasta/genome.fasta";
+
+  my $track = ApiCommonModel::Model::JBrowseTrackConfig::ReferenceSequenceTrackConfig->new({
+    application_type      => $applicationType,
+    project_name          => $projectName,
+    build_number          => $buildNumber,
+    relative_path_to_file => $relativePathToFastaFile,
+    key                   => "Reference Sequence",
+    label                 => "refseqs",
+  })->getConfigurationObject();
+
+  push @{$result->{tracks}}, $track if($track);
+}
+
 sub addCentromere {
   my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
   my $hasCentromere = $datasetProps->{hasCentromere} ? $datasetProps->{hasCentromere} : {};
@@ -512,7 +531,7 @@ sub addGenes {
 	       maxheight => 4000,
 	       style => {
                          label => "id",
-                         description => "note, description",
+                         description => "description",
                          showLabels => JSON::true,
 			 color => "{processedTranscriptColor}",
 			 borderColor=> "{processedTranscriptBorderColor}",
@@ -524,23 +543,15 @@ sub addGenes {
 			    trackType => "Processed Transcript"
 			   },
  	       onClick => {
- 			   content => "function(track, feature) { track.project ='$projectName'; track.orgabbrev='$orgPublicAbbrev'; return track.browser.config.geneDetailsNew(track, feature)}"
- 			  },
-   	       menuTemplate => [
-  				{
-				 title=> "{id} details",
-				 content => "function(track, feature) { track.project ='$projectName'; track.orgabbrev='$orgPublicAbbrev'; return track.browser.config.geneDetailsNew(track, feature)}",
-				},
-				{
-				 label=> "View Gene Page",
-				 iconClass => "dijitIconDatabase",
-				 action => "newWindow",
-				 url => "function(track,f) { return '/a/app/record/gene/' + f.get('id') }"
-				}
- 			       ]
-	      };
+		   action => "iframeDialog",
+		   hideIframeDialogUrl => JSON::true,
+		   url => "/a/app/embed-record/gene/{id}?tables=GeneTranscripts,GOTerms,PubMed",
+	       },
+  };
   push (@{$result->{tracks}}, $track);
 }
+
+
 
 sub addGeneDensity {
   my ($result, $orgPublicAbbrev, $projectName, $nameForFileNames) = @_;
@@ -564,7 +575,7 @@ sub addGeneDensity {
 }
 
 sub addSynteny {
-  my ($applicationType, $dbh, $result, $organismAbbrev) = @_;
+  my ($applicationType, $dbh, $result, $organismAbbrev, $projectName) = @_;
 
   return unless ($applicationType eq 'jbrowse' );
   # Requires public_abbrev here!
@@ -632,7 +643,7 @@ sub addSynteny {
                         transcriptType => "processed_transcript",
                         noncodingType => ["nc_transcript"],
                         glyph => "function(f){return f.get('syntype') === 'span' ? 'JBrowse/View/FeatureGlyph/Box' : 'JBrowse/View/FeatureGlyph/Gene'; }",
-                        subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon,pseudogenic_exon,aamRNA",
+                        subParts => "CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon,pseudogenic_exon,RNA",
                         key => "Syntenic Sequences and Genes (Shaded by Orthology)",
                         label => "Syntenic Sequences and Genes (Shaded by Orthology)",
                         region_feature_densities => "function(){return false}",
@@ -657,7 +668,9 @@ sub addSynteny {
                           subcategory => "Orthology and Synteny",
                           trackType => 'Segments',
                         },
-                        query => {'feature' => "gene:syntenyJBrowseScaled"
+                        query => {'feature' => "gene:syntenyJBrowseScaled",
+                                  'projectName' => $projectName,
+                                  'orgAbbrev' => $organismAbbrev,
                         },
                         subtracks => $subtracksAr,
                         onClick => {
@@ -1045,7 +1058,7 @@ sub addAntismash {
 											     relative_path_to_file => $relativePathToGffFile,
 											     application_type => $applicationType,
 											     summary => $summary,
-											     gene_legend => "<img src='https://microscope.readthedocs.io/en/stable/_images/antiSMASH6_colorcode_features.png'/>",
+											     gene_legend => "<img src='https://microscope.readthedocs.io/en/stable/_images/antiSMASH7_colorcode_features.png'/>",
 											     region_legend => "<img src='/a/images/antismash_cluster_colors.png'  height='250' width='250' align=left/>",
 											    })->getConfigurationObject();
 

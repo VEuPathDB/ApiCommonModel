@@ -7,17 +7,6 @@ use warnings;
 
 use ApiCommonModel::Model::JBrowseTrackConfig::GFFStore;
 
-#sub getSubParts {$_[0]->{sub_parts}}
-#sub setSubParts {$_[0]->{sub_parts} = $_[1]}
-
-#sub getGeneLegend {$_[0]->{gene_legend}}
-#sub setGeneLegend {$_[0]->{gene_legend} = $_[1]}
-
-#sub getRegionLegend {$_[0]->{region_legend}}
-#sub setRegionLegend {$_[0]->{region_legend} = $_[1]}
-
-#sub getBorderColor {$_[0]->{border_color}}
-#sub setBorderColor {$_[0]->{border_color} = $_[1]}
 
 sub new {
     my ($class, $args) = @_;
@@ -34,6 +23,9 @@ sub new {
     my $store;
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
+        $self->setSubParts("CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon,pseudogenic_exon,proto_core");
+        # this required to prevent fall-through to Box glyph in Segments.pm
+        $self->setGlyph(undef);
     }
     else {
         # TODO
@@ -43,8 +35,6 @@ sub new {
     $self->setStore($store);
 
     $self->setColor("{antismashColor}");
-    #$self->setSubParts("CDS,UTR,five_prime_UTR,three_prime_UTR,nc_exon,pseudogenic_exon,proto_core");
-    $self->setGlyph("JBrowse/View/FeatureGlyph/Segments");
 
     return $self;
 }
@@ -56,32 +46,31 @@ sub getJBrowseStyle {
    $jbrowseStyle->{borderColor} = "black";
    $jbrowseStyle->{utrColor} = "white";
    $jbrowseStyle->{label} = "{antismashLabel}";
+   # hides empty description string from popup and mouseover
+   $jbrowseStyle->{description} = undef;
 
 
    return $jbrowseStyle;
 }
 
-# sub getMetadata {
-#     my $self = shift;
-
-#     my $geneLegend = $self->getGeneLegend();
-#     my $regionLegend = $self->getRegionLegend();
-
-#     my $metadata = $self->SUPER::getMetadata();
-#     $metadata->{GeneLegend} = $geneLegend if($geneLegend);
-#     $metadata->{RegionLegend} = $regionLegend if($regionLegend);
-
-#     return $metadata;
-# }
 
 sub getJBrowseObject{
 	my $self = shift;
 
 	my $jbrowseObject = $self->SUPER::getJBrowseObject();
-        $jbrowseObject->{unsafePopup} = "JSON::true";
-        #$jbrowseObject->{subParts} = $self->getSubParts() if($self->getSubParts());
-        #$jbrowseObject->{transcriptType} = "function(f) { return f.children()[0].get(\"type\")}";
+    $jbrowseObject->{unsafePopup} = \1;
+    $jbrowseObject->{transcriptType} = "function(f) { return f.children()[0].get(\"type\")}";
 
+    # Hides the description from the body of the popup if the string is empty. 
+    # Shows the description if it contains something.
+    # In the JS layer, the empty string from the GFF becomes a string containing two quotes
+    # Horrible escaping to handle this!
+    $jbrowseObject->{fmtDetailField_description} = "function(fieldname, feature) { var value = feature.get(\"description\"); return (value === \"\\\"\\\"\" || value === null || value === undefined) ? null : fieldname; }";
+
+    # repurpose the Type tag as a link to the gene page for gene features
+    # show the Type for other types of feature
+    $jbrowseObject->{fmtDetailField_Type} = "function(fieldname, feature) { if (feature.get(\"type\") !== \"gene\") { return fieldname; } return \"Gene Page\"; }";
+    $jbrowseObject->{fmtDetailValue_Type} = "function(value, feature) { if (feature.get(\"type\") !== \"gene\") { return value; } var id = feature.get(\"id\"); return \"<a href='/a/app/record/gene/\" + id + \"' target='_blank'>\" + id + \"</a>\"; }";
 
     return $jbrowseObject;
 }
@@ -93,10 +82,9 @@ sub getJBrowse2Object{
 	my $uri = $self->getStore()->getUrlTemplate();
 	my $indexLocation = $uri . "\.tbi";
 
-        $jbrowse2Object->{adapter}->{gffGzLocation} = {uri => $uri, locationType => "UriLocation"};
-        $jbrowse2Object->{adapter}->{index}->{location} = {uri => $indexLocation, locationType => "UriLocation"};
-        #$jbrowse2Object->{adapter}->{type} = "Gff3TabixAdapter";
-        $jbrowse2Object->{displays}->[0]->{displayId} = "gff_" . scalar($self);
+    $jbrowse2Object->{adapter}->{gffGzLocation} = {uri => $uri, locationType => "UriLocation"};
+    $jbrowse2Object->{adapter}->{index}->{location} = {uri => $indexLocation, locationType => "UriLocation"};
+    $jbrowse2Object->{displays}->[0]->{displayId} = "gff_" . scalar($self);
 
 	return $jbrowse2Object;
 }

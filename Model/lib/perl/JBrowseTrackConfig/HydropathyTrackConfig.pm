@@ -23,7 +23,6 @@ sub new {
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore->new($args);
-	#$store->setQueryParamsHash($args->{query_params});
 
 	$self->setDisplayType("JBrowse/View/Track/Wiggle/XYPlot");
         $self->setTrackTypeDisplay("XYPlot");

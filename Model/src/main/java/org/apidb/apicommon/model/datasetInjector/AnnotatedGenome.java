@@ -296,7 +296,6 @@ public class AnnotatedGenome extends UnannotatedGenome {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Orthologs");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "OrthologsLite");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "LowComplexity");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "BlastP");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneId");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneName");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "BlastpForm");
@@ -304,7 +303,6 @@ public class AnnotatedGenome extends UnannotatedGenome {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "InterPro");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "InterProForm");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MendelGPIForm");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MitoprotForm");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "StringDBForm");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "WolfPsortForm");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "ECNumbersInferred");
