@@ -5783,32 +5783,52 @@ select distinct ta.gene_source_id
       <column name="cluster_start"/>
       <column name="cluster_end"/>
       <column name="sequence_id"/>
+      <column name="overlapping_clusters"/>
       <sql>
         <![CDATA[
-        SELECT DISTINCT ta.source_id
-        , ta.gene_source_id
-        , ta.project_id
-        , 10 as wdk_weight -- do we still need this?
-        , 'Y' as matched_result
-        , ac.category
-        , af.antismash_annotation
-        , ac.cluster_start
-        , ac.cluster_end
-        , ta.sequence_id
-        FROM apidb.antismashcluster ac
-        JOIN apidb.antismashclusterfeature acf
-            ON acf.antismash_cluster_id = ac.antismash_cluster_id
-        JOIN apidb.antismashfeature af
-            ON af.antismash_feature_id = acf.antismash_feature_id
-        JOIN apidbtuning.transcriptattributes ta
-            ON ta.gene_na_feature_id = af.na_feature_id
-        WHERE ta.project_id = 'FungiDB'
-        AND ta.org_abbrev IN ($$antismash_organism$$)
-        AND ac.category IN ($$antismash_category$$)
-        AND (af.antismash_annotation IN ($$antismash_annotation$$)
-        --    OR ($$antismash_annotation$$ = 'biosynthetic any' AND af.antismash_annotation like 'biosynthetic%')
-            OR ($$antismash_annotation$$ = 'unknown' AND af.antismash_annotation IS NULL)
+        WITH gene_clusters AS (
+          SELECT DISTINCT
+            ta.source_id, ta.gene_source_id, ta.project_id, ta.sequence_id,
+            ac.antismash_cluster_id, ac.category, af.antismash_annotation,
+            ac.cluster_start, ac.cluster_end,
+            (ac.cluster_end - ac.cluster_start) AS cluster_length
+          FROM apidb.antismashcluster ac
+          JOIN apidb.antismashclusterfeature acf ON acf.antismash_cluster_id = ac.antismash_cluster_id
+          JOIN apidb.antismashfeature af ON af.antismash_feature_id = acf.antismash_feature_id
+          JOIN apidbtuning.transcriptattributes ta ON ta.gene_na_feature_id = af.na_feature_id
+          WHERE ta.project_id = 'FungiDB'
+          AND ta.org_abbrev IN ($$antismash_organism$$)
+          AND ac.category IN ($$antismash_category$$)
+          AND (af.antismash_annotation IN ($$antismash_annotation$$)
+              OR ('unknown' IN ($$antismash_annotation$$) AND af.antismash_annotation IS NULL)
+          )
+        ),
+        gene_overlaps AS (
+          SELECT gc1.source_id,
+            STRING_AGG(gc2.sequence_id || ':' || gc2.cluster_start || '-' || gc2.cluster_end, ', '
+                       ORDER BY gc2.cluster_start) AS overlapping_clusters
+          FROM gene_clusters gc1
+          JOIN gene_clusters gc2
+            ON gc2.source_id = gc1.source_id
+            AND gc2.antismash_cluster_id != gc1.antismash_cluster_id
+          GROUP BY gc1.source_id
+        ),
+        ranked AS (
+          SELECT gc.*,
+            COALESCE(go.overlapping_clusters, 'No') AS overlapping_clusters,
+            ROW_NUMBER() OVER (
+              PARTITION BY gc.source_id
+              ORDER BY gc.cluster_length DESC, gc.antismash_cluster_id
+            ) AS rn
+          FROM gene_clusters gc
+          LEFT JOIN gene_overlaps go ON go.source_id = gc.source_id
         )
+        SELECT source_id, gene_source_id, project_id,
+          10 AS wdk_weight, 'Y' AS matched_result,
+          category, antismash_annotation, cluster_start, cluster_end, sequence_id,
+          overlapping_clusters
+        FROM ranked
+        WHERE rn = 1
         ]]>
       </sql>
     </sqlQuery>
