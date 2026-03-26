@@ -5783,12 +5783,16 @@ select distinct ta.gene_source_id
       <column name="cluster_start"/>
       <column name="cluster_end"/>
       <column name="sequence_id"/>
+      <column name="org_abbrev"/>
+      <column name="cluster_context_start"/>
+      <column name="cluster_context_end"/>
       <column name="overlapping_clusters"/>
       <sql>
         <![CDATA[
         WITH gene_clusters AS (
           SELECT DISTINCT
             ta.source_id, ta.gene_source_id, ta.project_id, ta.sequence_id,
+            ta.org_abbrev,
             ac.antismash_cluster_id, ac.category, af.antismash_annotation,
             ac.cluster_start, ac.cluster_end,
             (ac.cluster_end - ac.cluster_start) AS cluster_length
@@ -5803,32 +5807,43 @@ select distinct ta.gene_source_id
               OR ('unknown' IN ($$antismash_annotation$$) AND af.antismash_annotation IS NULL)
           )
         ),
-        gene_overlaps AS (
-          SELECT gc1.source_id,
-            STRING_AGG(gc2.sequence_id || ':' || gc2.cluster_start || '-' || gc2.cluster_end, ', '
-                       ORDER BY gc2.cluster_start) AS overlapping_clusters
-          FROM gene_clusters gc1
-          JOIN gene_clusters gc2
-            ON gc2.source_id = gc1.source_id
-            AND gc2.antismash_cluster_id != gc1.antismash_cluster_id
-          GROUP BY gc1.source_id
-        ),
         ranked AS (
           SELECT gc.*,
-            COALESCE(go.overlapping_clusters, 'No') AS overlapping_clusters,
             ROW_NUMBER() OVER (
               PARTITION BY gc.source_id
               ORDER BY gc.cluster_length DESC, gc.antismash_cluster_id
             ) AS rn
           FROM gene_clusters gc
-          LEFT JOIN gene_overlaps go ON go.source_id = gc.source_id
+        ),
+        gene_overlaps AS (
+          SELECT r.source_id,
+            STRING_AGG(
+              CONCAT(
+                '<a href="@JBROWSE_WEBPAGE_URL@?loc=', gc2.sequence_id, ':',
+                GREATEST(gc2.cluster_start - 500, 1), '..', gc2.cluster_end + 500,
+                '&data=@JBROWSE_SERVICE_URL@/tracks/', gc2.org_abbrev,
+                '&tracks=gene%2Cantibiotics%20and%20Secondary%20Metabolites%20Analysis%20SHell%20(antiSMASH)">',
+                gc2.sequence_id, ':', gc2.cluster_start, '-', gc2.cluster_end, '</a>'
+              ),
+              ', ' ORDER BY gc2.cluster_start
+            ) AS overlapping_clusters
+          FROM ranked r
+          JOIN gene_clusters gc2
+            ON gc2.source_id = r.source_id
+            AND gc2.antismash_cluster_id != r.antismash_cluster_id
+          WHERE r.rn = 1
+          GROUP BY r.source_id
         )
-        SELECT source_id, gene_source_id, project_id,
+        SELECT r.source_id, r.gene_source_id, r.project_id,
           10 AS wdk_weight, 'Y' AS matched_result,
-          category, antismash_annotation, cluster_start, cluster_end, sequence_id,
-          overlapping_clusters
-        FROM ranked
-        WHERE rn = 1
+          r.category, r.antismash_annotation, r.cluster_start, r.cluster_end, r.sequence_id,
+          r.org_abbrev,
+          GREATEST(r.cluster_start - 1000, 1) AS cluster_context_start,
+          r.cluster_end + 1000 AS cluster_context_end,
+          COALESCE(go.overlapping_clusters, 'No') AS overlapping_clusters
+        FROM ranked r
+        LEFT JOIN gene_overlaps go ON go.source_id = r.source_id
+        WHERE r.rn = 1
         ]]>
       </sql>
     </sqlQuery>
