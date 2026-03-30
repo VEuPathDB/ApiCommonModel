@@ -3,8 +3,6 @@ use base qw(ApiCommonModel::Model::JBrowseTrackConfig::CoverageTrackConfig);
 use strict;
 use warnings;
 
-use ApiCommonModel::Model::JBrowseTrackConfig::RestStore;
-
 sub getName {$_[0]->{name}}
 sub setName {$_[0]->{name} = $_[1] }
 
@@ -19,25 +17,9 @@ sub new {
     $datasetConfig->setCategory("Genetic Variation");
     $datasetConfig->setSubcategory("CGH Array");
 
-    $self->setId("SNPs by coding potential");
-    $self->setLabel("SNPs by coding potential");
+    $self->setId($args->{key});
+    $self->setLabel($args->{label});
     $self->setName($args->{name});
-    #$self->setDisplayType("JBrowse/View/Track/Wiggle/XYPlot");
-
-    my $name = $self->getName();
-
-    my $store;
-
-    if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
-        $store = ApiCommonModel::Model::JBrowseTrackConfig::RestStore->new($args);
-        $store->setQuery("cnv:ArrayJBrowse"); 
-        $store->setQueryParamsHash({sample => $name});
-    }
-    else {
-        # TODO
-    }
-
-    $self->setStore($store);
 
     $self->setTrackTypeDisplay("XYPlot");
 
