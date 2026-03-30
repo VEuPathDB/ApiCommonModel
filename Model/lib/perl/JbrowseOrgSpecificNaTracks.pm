@@ -96,7 +96,7 @@ sub processOrganism {
       &addApolloGFF($dbh, $result, $organismAbbrev, $applicationType);
   }
 
-  &addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber);
+  &addMergedRnaSeq($result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber);
 
   &addLongReadRNASeq($result, $datasetProperties, $nameForFileNames, $webservicesDir, $projectName, $buildNumber, $applicationType);
 
@@ -213,7 +213,7 @@ sub addApolloGFF {
 }
 
 sub addMergedRnaSeq {
-  my ($dbh, $result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber) = @_;
+  my ($result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber) = @_;
   my @urlArray;
   my $genomeName;
 
@@ -236,7 +236,7 @@ sub addMergedRnaSeq {
       my $keyName = $bigwigFileName;
          $keyName =~ s/_/ /g;
 
-        my $bigWigRelativePath = "/var/www/Common/apiSiteFilesMirror/webServices/${projectName}/build-${buildNumber}/${nameForFileNames}/bigwig/${sampleName}/mergedBigwigs/*";
+        my $bigWigRelativePath = "/var/www/Common/apiSiteFilesMirror/webServices/${projectName}/build-${buildNumber}/${nameForFileNames}/bulkrnaseq/bigwig/${sampleName}/mergedBigwigs/*";
         my @bigwigFiles = glob($bigWigRelativePath);
         my $shortAttribution = $rnaSeqDatasets->{$dataset}->{shortAttribution};
         foreach(@bigwigFiles){
@@ -244,12 +244,12 @@ sub addMergedRnaSeq {
                 my $bigwigName = (split '/', $bigwigPath)[-1];
                 my $shortBigwigName = $bigwigName;
                 my $shortBigwigName = substr($shortBigwigName,0, -3);
-                my $bigwigUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/bigwig/${sampleName}/mergedBigwigs/${bigwigName}");
+                my $bigwigUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/bulkrnaseq/bigwig/${sampleName}/mergedBigwigs/${bigwigName}");
                 my $template = { url=>${bigwigUrl}, name=> ${shortBigwigName}, color=> 'black' };
                 push (@urlArray, $template);
                 push (@urlArrayProject, $template);
                 }
- }
+  }
         ### Print out combinedRNAseq track for organism
         my $arrayLength = @urlArray;
 
