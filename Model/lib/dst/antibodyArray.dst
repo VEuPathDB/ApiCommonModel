@@ -226,3 +226,141 @@ Note that changing the sample subset will reset any group assignments you have a
         </dynamicAttributes>
     </question>
 >templateTextEnd<
+
+
+[templateStart]
+name=antibodyArrayEdaAttributeQueriesNumeric
+anchorFile=ApiCommonModel/Model/lib/wdk/model/records/transcriptAttributeQueries.xml
+prop=datasetName
+prop=edaStudyStableId
+prop=edaEntityAbbrev
+prop=includeProjects
+>templateTextStart<
+        <sqlQuery name="AntibodyArrayIntensities${datasetName}"
+                  doNotTest="true"
+                  attributeMetaQueryRef="TranscriptAttributes.MetaAntibodyArrayIntensities${datasetName}"
+                  includeProjects="${includeProjects}">
+            <column name="source_id"/>
+            <column name="gene_source_id"/>
+            <column name="project_id"/>
+            <sql>
+              <![CDATA[
+  SELECT ta.source_id, ta.project_id, ta.gene_source_id, p.*
+  FROM apidbtuning.TranscriptAttributes ta
+    LEFT OUTER JOIN (
+      SELECT * FROM public.crosstab(
+        'SELECT gene_ids.gene_id,
+                CONCAT(''${edaStudyStableId}_'', anc.sample_stable_id) AS sample_col,
+                av_int.number_value AS intensity
+         FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev} av_int
+         JOIN eda.ancestors_${edaStudyStableId}_${edaEntityAbbrev} anc
+           ON anc.${edaEntityAbbrev}_stable_id = av_int.${edaEntityAbbrev}_stable_id
+         JOIN (SELECT av.${edaEntityAbbrev}_stable_id, MIN(gi.gene) AS gene_id
+               FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev} av
+               JOIN apidbtuning.GeneId gi ON gi.id = av.string_value
+               WHERE av.attribute_stable_id = ''VEUPATHDB_GENE_ID''
+               GROUP BY av.${edaEntityAbbrev}_stable_id) gene_ids
+           ON gene_ids.${edaEntityAbbrev}_stable_id = av_int.${edaEntityAbbrev}_stable_id
+         WHERE av_int.attribute_stable_id = ''NORMALIZED_INTENSITY''
+         ORDER BY 1, 2',
+        'SELECT CONCAT(''${edaStudyStableId}_'', sample_stable_id) AS sample_col
+         FROM (SELECT DISTINCT sample_stable_id
+               FROM eda.ancestors_${edaStudyStableId}_${edaEntityAbbrev}) s
+         ORDER BY sample_col'
+      ) AS ct(gene_id text, &&META_ATTRIBUTE_COLUMNS_FOR_CROSSTAB&&)
+    ) p ON ta.gene_source_id = p.gene_id
+              ]]>
+            </sql>
+        </sqlQuery>
+
+       <sqlQuery name="MetaAntibodyArrayIntensities${datasetName}" includeProjects="${includeProjects}">
+          <column name="name" />
+          <column name="display_name" />
+          <column name="help" />
+          <column name="reporter_name" />
+          <column name="reporter_display" />
+          <column name="reporter_description" />
+          <column name="reporter_implementation" />
+          <column name="reporter_properties" />
+
+          <sql>
+            <![CDATA[
+           SELECT CONCAT('${edaStudyStableId}_', sample_stable_id) AS name,
+                  sample_stable_id::text AS display_name,
+                  'number' AS column_type,
+                  'Normalized intensity from ${datasetName}' AS help,
+                  'histogram' AS reporter_name,
+                  'Histogram' AS reporter_display,
+                  'Display a histogram of the values' AS reporter_description,
+                  'org.gusdb.wdk.model.report.reporter.HistogramAttributeReporter' AS reporter_implementation,
+                  null AS reporter_properties
+           FROM (SELECT DISTINCT sample_stable_id
+                 FROM eda.ancestors_${edaStudyStableId}_${edaEntityAbbrev}) s
+           ORDER BY sample_stable_id
+            ]]>
+          </sql>
+       </sqlQuery>
+>templateTextEnd<
+
+
+[templateStart]
+name=antibodyArrayEdaAttributeRef
+anchorFile=ApiCommonModel/Model/lib/wdk/model/records/transcriptRecord.xml
+prop=datasetName
+prop=includeProjects
+>templateTextStart<
+              <attributeQueryRef ref="TranscriptAttributes.AntibodyArrayIntensities${datasetName}" attributeMetaQueryRef="TranscriptAttributes.MetaAntibodyArrayIntensities${datasetName}" includeProjects="${includeProjects}">
+              </attributeQueryRef>
+>templateTextEnd<
+
+
+[templateStart]
+name=antibodyArrayEdaAttributeCategory
+anchorFile=ApiCommonModel/Model/lib/wdk/ontology/individuals.txt
+prop=datasetName
+prop=datasetDisplayName
+>templateTextStart<
+AntibodyArrayDataset_${datasetName}	http://edamontology.org/topic_3360	Immunology	DatasetRecordClasses.DatasetRecordClass	dataset	${datasetName}	${datasetDisplayName}	results
+TranscriptAttributes.MetaAntibodyArrayIntensities${datasetName}	AntibodyArrayDataset_${datasetName}		TranscriptRecordClasses.TranscriptRecordClass	attributeMetaQuery	MetaAntibodyArrayIntensities${datasetName}			gene		results	download
+>templateTextEnd<
+
+
+[templateStart]
+name=antibodyArrayEdaGeneTableSql
+anchorFile=ApiCommonModel/Model/lib/wdk/model/records/geneTableQueries.xml
+prop=datasetName
+prop=edaStudyStableId
+prop=edaEntityAbbrev
+>templateTextStart<
+               UNION
+               SELECT '${datasetName}' AS dataset_name , string_value AS source_id
+               FROM eda.ATTRIBUTEvalue_${edaStudyStableId}_${edaEntityAbbrev} av
+               WHERE av.attribute_stable_id = 'VEUPATHDB_GENE_ID'
+>templateTextEnd<
+
+
+[templateStart]
+name=antibodyArrayDataTableGeneTableSql
+anchorFile=ApiCommonModel/Model/lib/wdk/model/records/geneTableQueries.xml
+prop=datasetName
+prop=edaStudyStableId
+prop=edaEntityAbbrev
+>templateTextStart<
+UNION
+SELECT genes.string_value AS gene,
+       ag.display_name AS variable,
+       av.string_value,
+       av.number_value,
+       av.date_value,
+       '${datasetName}' AS dataset_id
+FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev} av,
+     eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev} ag,
+     (SELECT av.${edaEntityAbbrev}_stable_id, MIN(gi.gene) as string_value
+      FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev} av
+      JOIN apidbtuning.GeneId gi ON gi.id = av.string_value
+      WHERE av.attribute_stable_id = 'VEUPATHDB_GENE_ID'
+      GROUP BY av.${edaEntityAbbrev}_stable_id) genes
+WHERE av.attribute_stable_id = ag.stable_id
+  AND av.${edaEntityAbbrev}_stable_id = genes.${edaEntityAbbrev}_stable_id
+  AND av.attribute_stable_id != 'VEUPATHDB_GENE_ID'
+>templateTextEnd<
