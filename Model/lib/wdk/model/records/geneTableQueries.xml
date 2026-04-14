@@ -1135,6 +1135,111 @@ from (
         </sqlQuery>
 
 
+       <sqlQuery name="EdaAntibodyArrayDatasets" includeProjects="PlasmoDB,UniDB">
+            <column name="source_id" />
+            <column name="project_id" />
+            <column name="project_id_url" />
+            <column name="graph_ids" />
+            <column name="default_graph_id" />
+            <column name="species" />
+            <column name="genus_species" />
+            <column name="mainOpen" />
+            <column name="dataOpen" />
+            <column name="display_name" />
+            <column name="description" />
+            <column name="has_graph_data"/>
+            <column name="has_meta_data"/>
+            <column name="meta_data_categories"/>
+            <column name="dataset_name"/>
+            <column name="dataset_id"/>
+            <column name="summary"/>
+            <column name="short_attribution"/>
+            <column name="assay_type"/>
+            <column name="plot_configs_json"/>
+            <sql>
+
+<![CDATA[
+select g.*
+     , CASE WHEN '@PROJECT_ID@' = 'UniDB' THEN 'EuPathDB' ELSE g.project_id END AS project_id_url
+     , regexp_substr(graph_ids, '[^,]*') as default_graph_id
+from (
+        select ga.source_id, ga.project_id,
+             ga.organism as gene_organism, ga.genus_species ,
+             psgene.profile_graph_id as graph_ids,
+             case when psgene.profile_graph_id is null then 0 else 1 end as has_graph_data,
+             'TRUE' as mainOpen, 'FALSE' as dataOpen,
+             'FALSE' has_meta_data, '' as meta_data_categories,
+             graph_descrip.*, dp.summary, dp.short_attribution, dp.display_name,
+             dp.description, 'Antibody Array' as assay_type, dp.dataset_presenter_id as dataset_id, dp.name as dataset_name
+      from webready.GeneAttributes_p ga,
+           apidbtuning.DatasetDatasource dds,
+           apidbtuning.datasetPresenter dp
+           LEFT JOIN (
+             SELECT dataset_name as graph_dataset_name,
+                    JSON_ARRAYAGG(
+                      JSON_OBJECT(
+                        'plotName' VALUE plot_name,
+                        'plotType' VALUE plot_type,
+                        'xAxisEntityId' VALUE x_axis_entity_id,
+                        'yAxisEntityId' VALUE y_axis_entity_id,
+                        'xAxisVariableId' VALUE x_axis_variable_id,
+                        'yAxisVariableId' VALUE y_axis_variable_id,
+                        'displaySpecVariableId' VALUE 'VEUPATHDB_GENE_ID',
+                        'displayMode' VALUE 'highlight',
+                        'xMin' VALUE x_min,
+                        'xMax' VALUE x_max,
+                        'yMin' VALUE y_min,
+                        'yMax' VALUE y_max
+                       )
+                      ) AS plot_configs_json
+             FROM apidbtuning.edagenegraph
+             GROUP BY graph_dataset_name
+           ) graph_descrip ON graph_descrip.graph_dataset_name = dp.name,
+           (WITH dataset_genes as (
+               SELECT '' as dataset_name, '' as source_id
+               -- TEMPLATE_ANCHOR antibodyArrayEdaGeneTableSql
+           )
+          select ga.source_id, p.dataset_name, p.source_id as profile_graph_id
+          from dataset_genes p
+          join webready.geneid_p gi on gi.id = p.source_id and gi.org_abbrev IN (%%PARTITION_KEYS%%)
+          join webready.GeneAttributes_p ga on ga.source_id = gi.gene and ga.org_abbrev IN (%%PARTITION_KEYS%%)
+            ) psgene
+        where ga.source_id = psgene.source_id
+          and psgene.dataset_name = dds.name
+          and dds.dataset_presenter_id = dp.dataset_presenter_id
+          and dds.category = 'Immunology'
+) g
+ ]]>
+       </sql>
+
+        </sqlQuery>
+
+
+          <sqlQuery name="EdaAntibodyArrayGraphsDataTable" isCacheable="false" includeProjects="PlasmoDB,UniDB">
+            <column name="source_id"/>
+            <column name="project_id"/>
+            <column name="dataset_id"/>
+            <column name="variable"/>
+            <column name="value"/>
+            <sql>
+            <![CDATA[
+SELECT ga.source_id, ga.project_id, gd.variable, coalesce(gd.string_value, coalesce(round(gd.number_value, 4)::text, gd.date_value::text)) AS value, gd.dataset_id
+FROM webready.GeneAttributes_p ga, (
+   SELECT '' as gene,
+          '' as variable,
+          '' as string_value,
+          0 as number_value,
+          DATE '2000-01-01' as date_value,
+          'HAPPY_BIRTHDAY' as dataset_id
+   -- TEMPLATE_ANCHOR antibodyArrayDataTableGeneTableSql
+   ) gd
+   WHERE ga.source_id = gd.gene
+     AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
     <sqlQuery name="PhenotypeScoreGraphs" includeProjects="PlasmoDB,UniDB">
       <column name="source_id" />
       <column name="project_id" />
