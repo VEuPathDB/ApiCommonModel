@@ -24,6 +24,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::SyntenyTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::LongReadRNASeqTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::AntiSmashTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::LowComplexityTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::TransposableElements;
 use ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig;
@@ -56,6 +57,7 @@ sub processOrganism {
   &addReferenceSequence($applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addScaffolds($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addCentromere($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
+  &addTransposableElements($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedMassSpec($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedSnp($datasetProps, $applicationType, $result);
 
@@ -498,11 +500,27 @@ sub addCentromere {
 }
 
 
+sub addTransposableElements {
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my $hasTransposableElements = $datasetProps->{hasTransposableElements} ? $datasetProps->{hasTransposableElements} : 0;
+  if($hasTransposableElements == 1) {
+    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/transposableElements.gff.gz";
+    my $track = ApiCommonModel::Model::JBrowseTrackConfig::TransposableElements->new({
+                                                                                       project_name          => $projectName,
+                                                                                       build_number          => $buildNumber,
+                                                                                       relative_path_to_file => $relativePathToGffFile,
+                                                                                       application_type      => $applicationType,
+                                                                                     })->getConfigurationObject();
+    push @{$result->{tracks}}, $track;
+  }
+}
+
+
 sub addScaffolds {
   my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
   my $hasScaffold = $datasetProps->{hasScaffoldGenome} ? $datasetProps->{hasScaffoldGenome} : 0;
   if($hasScaffold == 1) {
-    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/scaffolds.gff.gz";
+    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/scaffoldGenome.gff.gz";
     my $track = ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig->new({
       application_type      => $applicationType,
       project_name          => $projectName,
