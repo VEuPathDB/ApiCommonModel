@@ -96,7 +96,7 @@ sub processOrganism {
       &addApolloGFF($dbh, $result, $organismAbbrev, $applicationType);
   }
 
-  &addMergedRnaSeq($dbh, $result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber);
+  &addMergedRnaSeq($result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber);
 
   &addLongReadRNASeq($result, $datasetProperties, $nameForFileNames, $webservicesDir, $projectName, $buildNumber, $applicationType);
 
@@ -109,7 +109,7 @@ sub processOrganism {
 
   # other organism specific tracks
   if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
-      &addCnvArray($dbh, $result, $projectName, $applicationType);
+      &addCnvArray($result, $projectName, $applicationType, $webservicesDir, $nameForFileNames, $buildNumber);
   }
   # TODO: Add back
   #if ($isAnnotated eq 'true'){
@@ -213,7 +213,7 @@ sub addApolloGFF {
 }
 
 sub addMergedRnaSeq {
-  my ($dbh, $result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber) = @_;
+  my ($result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber) = @_;
   my @urlArray;
   my $genomeName;
 
@@ -236,7 +236,7 @@ sub addMergedRnaSeq {
       my $keyName = $bigwigFileName;
          $keyName =~ s/_/ /g;
 
-        my $bigWigRelativePath = "/var/www/Common/apiSiteFilesMirror/webServices/${projectName}/build-${buildNumber}/${nameForFileNames}/bigwig/${sampleName}/mergedBigwigs/*";
+        my $bigWigRelativePath = "/var/www/Common/apiSiteFilesMirror/webServices/${projectName}/build-${buildNumber}/${nameForFileNames}/bulkrnaseq/bigwig/${sampleName}/mergedBigwigs/*";
         my @bigwigFiles = glob($bigWigRelativePath);
         my $shortAttribution = $rnaSeqDatasets->{$dataset}->{shortAttribution};
         foreach(@bigwigFiles){
@@ -244,12 +244,12 @@ sub addMergedRnaSeq {
                 my $bigwigName = (split '/', $bigwigPath)[-1];
                 my $shortBigwigName = $bigwigName;
                 my $shortBigwigName = substr($shortBigwigName,0, -3);
-                my $bigwigUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/bigwig/${sampleName}/mergedBigwigs/${bigwigName}");
+                my $bigwigUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/bulkrnaseq/bigwig/${sampleName}/mergedBigwigs/${bigwigName}");
                 my $template = { url=>${bigwigUrl}, name=> ${shortBigwigName}, color=> 'black' };
                 push (@urlArray, $template);
                 push (@urlArrayProject, $template);
                 }
- }
+  }
         ### Print out combinedRNAseq track for organism
         my $arrayLength = @urlArray;
 
@@ -903,34 +903,34 @@ sub makeChipChipSmoothed {
 
 
 sub addCnvArray {
-  my ($dbh, $result, $projectName, $applicationType) = @_;
+  my ($result, $projectName, $applicationType, $webservicesDir, $nameForFileNames, $buildNumber) = @_;
 
-  my $sql = "select distinct pan.name
-from study.protocolappnode pan
-   , study.study s
-   , study.studylink sl
-where pan.PROTOCOL_APP_NODE_ID = sl.PROTOCOL_APP_NODE_ID
-and sl.study_id = s.study_id
-and s.name like 'tcruCLBrenerEsmeraldo-like_cghArrayExper_Tarelton_GSE23576_CNV_RSRC%'
-order by pan.name";
-  my $sh = $dbh->prepare($sql);
-  $sh->execute();
+  my $datasetName = 'tcruCLBrenerEsmeraldo-like_cghArrayExper_Tarelton_GSE23576_CNV_RSRC';
+  my $bigwigDir = "${webservicesDir}/${projectName}/build-${buildNumber}/${nameForFileNames}/cghArray/bigwig/${datasetName}";
 
   my $summary = "Comparative Genomic Hybridization to determine regions of significant Copy Number Variation in <i>T. cruzi</i> strains with strain CL Brener as reference. Type I strains used include: Brazil, Chinata, Colombiana, M78, Montalvania, PalDa1 (clone 9), SylvioX10/4, TCC, TEDa2 (clone 4), TEP6 (clone 5). Type II-VI strains used include: Esmeraldo, M5631, Tu18 (clone 1), Tulahuen, wtCL, Y. Scores from Type I strain is shown in Green and from Type II-VI are show in Brown. Score value represents the number of strains showing CNV , with a postive score implying amplification and a negative score implying deletion with respect to CL Brener. CNV criteria: minimum log2 ratio of signal intensities (test strain/reference) +/- 0.6, minimum number of probes 5. For more details refer the following manuscript: <a href=\"http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3060142/\">Widespread, focal copy number variations (CNV) and whole chromosome aneuploidies in Trypanosoma cruzi strains revealed by array comparative genomic hybridization</a> ";
 
-  while(my ($dataset) = $sh->fetchrow_array()) {
+  foreach my $bwFile (glob("${bigwigDir}/*.bw")) {
+    my $sample = $bwFile;
+    $sample =~ s{.*/}{};
+    $sample =~ s/\.bw$//;
+
+    my $relativePath = "${nameForFileNames}/cghArray/bigwig/${datasetName}/${sample}.bw";
 
     my $cnv = ApiCommonModel::Model::JBrowseTrackConfig::CnvArrayTrackConfig->new({
-                                                                                                dataset_name => $dataset,
-                                                                                                study_display_name => "Comparative Genomic Hybridizations of 33 strains",
-                                                                                                description => $summary,
-                                                                                                application_type => $applicationType,
-                                                                                                name => $dataset,
-                                                                                              })->getConfigurationObject();
+                                                                                    dataset_name          => $datasetName,
+                                                                                    study_display_name    => "Comparative Genomic Hybridizations of 33 strains",
+                                                                                    description           => $summary,
+                                                                                    application_type      => $applicationType,
+                                                                                    name                  => $sample,
+                                                                                    label                 => $sample,
+                                                                                    key                   => $sample,
+                                                                                    relative_path_to_file => $relativePath,
+                                                                                    project_name          => $projectName,
+                                                                                    build_number          => $buildNumber,
+                                                                                  })->getConfigurationObject();
     push @{$result->{tracks}}, $cnv;
-
   }
-  $sh->finish();
 }
 
 

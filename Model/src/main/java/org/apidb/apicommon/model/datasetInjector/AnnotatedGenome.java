@@ -287,10 +287,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneLinkouts");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Seqedits");
 
-
-
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "AllProducts");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "CommunityExpComments");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "SignalP");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "TMHMM");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Orthologs");
@@ -299,7 +296,6 @@ public class AnnotatedGenome extends UnannotatedGenome {
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneId");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "GeneName");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "BlastpForm");
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "FungalGPIForm");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "InterPro");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "InterProForm");
     addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "MendelGPIForm");
@@ -325,8 +321,17 @@ public class AnnotatedGenome extends UnannotatedGenome {
 	addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "SyntenyGbrowseUrl");
     }
 
+    // FungalGPIForm only for FungiDB
+    if (!(projectName.equals("FungiDB"))){
+	addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "FungalGPIForm");
+    }
 
-
+    // CommunityExpComments for only GiardiaDB and FungiDB
+    if (!(projectName.equals("GiardiaDB")) ||
+	(projectName.equals("FungiDB"))){
+	addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "CommunityExpComments");
+    }
+    
     // no Apollo updates for CryptoDB, HostDB, GiardiaDB, MicrosporidiaDB and TrichDB
     if (!(projectName.equals("CryptoDB")) ||
 	(projectName.equals("HostDB")) ||
