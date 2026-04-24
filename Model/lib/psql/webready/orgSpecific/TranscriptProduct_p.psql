@@ -92,11 +92,41 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
       GROUP BY t.source_id
     ),
 
-    -- Priority 5: 1:1 + All gene products (concatenated)
-    gene_all_one_to_one AS (
+    -- Priority 5: 1:1 + Preferred gene products (is_preferred=1, concatenated)
+    gene_preferred_one_to_one AS (
       SELECT oto.transcript_source_id as source_id,
              SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
              5 as source_rule,
+             COUNT(DISTINCT gfp.product) as value_count,
+             'preferred_gene_1to1' as rule_description
+      FROM one_to_one_transcripts oto
+      INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = oto.gene_na_feature_id
+      WHERE gfp.is_preferred = 1
+        AND gfp.product IS NOT NULL
+        AND gfp.product != 'hypothetical protein'
+      GROUP BY oto.transcript_source_id
+    ),
+
+    -- Priority 6: Preferred transcript products (is_preferred=1, concatenated)
+    transcript_preferred_all AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
+             6 as source_rule,
+             COUNT(DISTINCT tp.product) as value_count,
+             'preferred_transcript' as rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = t.na_feature_id
+      WHERE tp.is_preferred = 1
+        AND tp.product IS NOT NULL
+        AND tp.product != 'hypothetical protein'
+      GROUP BY t.source_id
+    ),
+
+    -- Priority 7: 1:1 + All gene products (concatenated)
+    gene_all_one_to_one AS (
+      SELECT oto.transcript_source_id as source_id,
+             SUBSTR(STRING_AGG(DISTINCT gfp.product, ', ' ORDER BY gfp.product), 1, 4000) as product,
+             7 as source_rule,
              COUNT(DISTINCT gfp.product) as value_count,
              'all_gene_1to1' as rule_description
       FROM one_to_one_transcripts oto
@@ -106,11 +136,11 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
       GROUP BY oto.transcript_source_id
     ),
 
-    -- Priority 6: All transcript products (concatenated)
+    -- Priority 8: All transcript products (concatenated)
     transcript_all AS (
       SELECT t.source_id,
              SUBSTR(STRING_AGG(DISTINCT tp.product, ', ' ORDER BY tp.product), 1, 4000) as product,
-             6 as source_rule,
+             8 as source_rule,
              COUNT(DISTINCT tp.product) as value_count,
              'all_transcript' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
@@ -120,11 +150,11 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
       GROUP BY t.source_id
     ),
 
-    -- Priority 7: 1:1 + Base gene product field
+    -- Priority 9: 1:1 + Base gene product field
     gene_base_one_to_one AS (
       SELECT oto.transcript_source_id as source_id,
              gf.product,
-             7 as source_rule,
+             9 as source_rule,
              1 as value_count,
              'base_gene_1to1' as rule_description
       FROM one_to_one_transcripts oto
@@ -132,11 +162,11 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
       WHERE gf.product IS NOT NULL
     ),
 
-    -- Priority 8: Base transcript product field
+    -- Priority 10: Base transcript product field
     transcript_base AS (
       SELECT t.source_id,
              t.product,
-             8 as source_rule,
+             10 as source_rule,
              1 as value_count,
              'base_transcript' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
@@ -149,6 +179,8 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
       UNION ALL SELECT * FROM gene_curated_any_one_to_one
       UNION ALL SELECT * FROM transcript_curated_preferred
       UNION ALL SELECT * FROM transcript_curated_any
+      UNION ALL SELECT * FROM gene_preferred_one_to_one
+      UNION ALL SELECT * FROM transcript_preferred_all
       UNION ALL SELECT * FROM gene_all_one_to_one
       UNION ALL SELECT * FROM transcript_all
       UNION ALL SELECT * FROM gene_base_one_to_one
@@ -164,7 +196,7 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
   SELECT t.source_id,
          COALESCE(rp.product, 'unspecified product') as product,
          COALESCE(rp.value_count, 0) as value_count,
-         COALESCE(rp.source_rule, 9) as source_rule,
+         COALESCE(rp.source_rule, 11) as source_rule,
          COALESCE(rp.rule_description, 'unspecified') as source_rule_description,
          ':PROJECT_ID' as project_id,
          ':ORG_ABBREV' as org_abbrev,
