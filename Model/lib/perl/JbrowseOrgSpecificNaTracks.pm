@@ -26,6 +26,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::AntiSmashTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::LowComplexityTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TransposableElements;
 use ApiCommonModel::Model::JBrowseTrackConfig::MicrosatelliteStsTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::HaplotypeBlockTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig;
@@ -60,6 +61,7 @@ sub processOrganism {
   &addCentromere($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addTransposableElements($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addMicrosatelliteSts($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
+  &addHaplotypeBlock($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedMassSpec($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedSnp($datasetProps, $applicationType, $result);
 
@@ -529,6 +531,22 @@ sub addMicrosatelliteSts {
                                                                                                relative_path_to_file => $relativePathToGffFile,
                                                                                                application_type      => $applicationType,
                                                                                              })->getConfigurationObject();
+    push @{$result->{tracks}}, $track;
+  }
+}
+
+
+sub addHaplotypeBlock {
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my $hasHaplotypeBlock = $datasetProps->{hasHaplotypeBlock} ? $datasetProps->{hasHaplotypeBlock} : 0;
+  if($hasHaplotypeBlock == 1) {
+    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/haplotypeBlock.gff.gz";
+    my $track = ApiCommonModel::Model::JBrowseTrackConfig::HaplotypeBlockTrackConfig->new({
+                                                                                            project_name          => $projectName,
+                                                                                            build_number          => $buildNumber,
+                                                                                            relative_path_to_file => $relativePathToGffFile,
+                                                                                            application_type      => $applicationType,
+                                                                                          })->getConfigurationObject();
     push @{$result->{tracks}}, $track;
   }
 }
