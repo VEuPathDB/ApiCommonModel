@@ -27,6 +27,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::LowComplexityTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TransposableElements;
 use ApiCommonModel::Model::JBrowseTrackConfig::MicrosatelliteStsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::HaplotypeBlockTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::BindingSitesTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig;
@@ -62,6 +63,7 @@ sub processOrganism {
   &addTransposableElements($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addMicrosatelliteSts($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addHaplotypeBlock($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
+  &addFeatureBindingSite($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedMassSpec($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedSnp($datasetProps, $applicationType, $result);
 
@@ -552,6 +554,22 @@ sub addHaplotypeBlock {
 }
 
 
+sub addFeatureBindingSite {
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my $hasFeatureBindingSite = $datasetProps->{hasFeatureBindingSite} ? $datasetProps->{hasFeatureBindingSite} : 0;
+  if($hasFeatureBindingSite == 1) {
+    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/featureBindingSite.gff.gz";
+    my $track = ApiCommonModel::Model::JBrowseTrackConfig::BindingSitesTrackConfig->new({
+                                                                                          project_name          => $projectName,
+                                                                                          build_number          => $buildNumber,
+                                                                                          relative_path_to_file => $relativePathToGffFile,
+                                                                                          application_type      => $applicationType,
+                                                                                        })->getConfigurationObject();
+    push @{$result->{tracks}}, $track;
+  }
+}
+
+
 sub addScaffolds {
   my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
   my $hasScaffold = $datasetProps->{hasScaffoldGenome} ? $datasetProps->{hasScaffoldGenome} : 0;
@@ -846,7 +864,6 @@ sub addUnifiedMassSpec {
 }
 
 
-#     my $hasScaffold = $datasetProps->{hasScaffold} ? $datasetProps->{hasScaffold} : {};
 
 sub addChipChipTracks {
   my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType) = @_;
