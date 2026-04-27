@@ -25,6 +25,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::LongReadRNASeqTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::AntiSmashTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::LowComplexityTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TransposableElements;
+use ApiCommonModel::Model::JBrowseTrackConfig::MicrosatelliteStsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig;
@@ -58,6 +59,7 @@ sub processOrganism {
   &addScaffolds($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addCentromere($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addTransposableElements($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
+  &addMicrosatelliteSts($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedMassSpec($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedSnp($datasetProps, $applicationType, $result);
 
@@ -511,6 +513,22 @@ sub addTransposableElements {
                                                                                        relative_path_to_file => $relativePathToGffFile,
                                                                                        application_type      => $applicationType,
                                                                                      })->getConfigurationObject();
+    push @{$result->{tracks}}, $track;
+  }
+}
+
+
+sub addMicrosatelliteSts {
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my $hasMicrosatelliteSts = $datasetProps->{hasMicrosatelliteSts} ? $datasetProps->{hasMicrosatelliteSts} : 0;
+  if($hasMicrosatelliteSts == 1) {
+    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/microsatelliteSts.gff.gz";
+    my $track = ApiCommonModel::Model::JBrowseTrackConfig::MicrosatelliteStsTrackConfig->new({
+                                                                                               project_name          => $projectName,
+                                                                                               build_number          => $buildNumber,
+                                                                                               relative_path_to_file => $relativePathToGffFile,
+                                                                                               application_type      => $applicationType,
+                                                                                             })->getConfigurationObject();
     push @{$result->{tracks}}, $track;
   }
 }
