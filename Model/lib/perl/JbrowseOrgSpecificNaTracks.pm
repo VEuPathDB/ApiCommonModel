@@ -25,6 +25,9 @@ use ApiCommonModel::Model::JBrowseTrackConfig::LongReadRNASeqTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::AntiSmashTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::LowComplexityTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TransposableElements;
+use ApiCommonModel::Model::JBrowseTrackConfig::MicrosatelliteStsTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::HaplotypeBlockTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::BindingSitesTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig;
@@ -58,6 +61,9 @@ sub processOrganism {
   &addScaffolds($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addCentromere($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addTransposableElements($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
+  &addMicrosatelliteSts($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
+  &addHaplotypeBlock($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
+  &addFeatureBindingSite($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedMassSpec($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedSnp($datasetProps, $applicationType, $result);
 
@@ -516,6 +522,54 @@ sub addTransposableElements {
 }
 
 
+sub addMicrosatelliteSts {
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my $hasMicrosatelliteSts = $datasetProps->{hasMicrosatelliteSts} ? $datasetProps->{hasMicrosatelliteSts} : 0;
+  if($hasMicrosatelliteSts == 1) {
+    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/microsatelliteSts.gff.gz";
+    my $track = ApiCommonModel::Model::JBrowseTrackConfig::MicrosatelliteStsTrackConfig->new({
+                                                                                               project_name          => $projectName,
+                                                                                               build_number          => $buildNumber,
+                                                                                               relative_path_to_file => $relativePathToGffFile,
+                                                                                               application_type      => $applicationType,
+                                                                                             })->getConfigurationObject();
+    push @{$result->{tracks}}, $track;
+  }
+}
+
+
+sub addHaplotypeBlock {
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my $hasHaplotypeBlock = $datasetProps->{hasHaplotypeBlock} ? $datasetProps->{hasHaplotypeBlock} : 0;
+  if($hasHaplotypeBlock == 1) {
+    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/haplotypeBlock.gff.gz";
+    my $track = ApiCommonModel::Model::JBrowseTrackConfig::HaplotypeBlockTrackConfig->new({
+                                                                                            project_name          => $projectName,
+                                                                                            build_number          => $buildNumber,
+                                                                                            relative_path_to_file => $relativePathToGffFile,
+                                                                                            application_type      => $applicationType,
+                                                                                          })->getConfigurationObject();
+    push @{$result->{tracks}}, $track;
+  }
+}
+
+
+sub addFeatureBindingSite {
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my $hasFeatureBindingSite = $datasetProps->{hasFeatureBindingSite} ? $datasetProps->{hasFeatureBindingSite} : 0;
+  if($hasFeatureBindingSite == 1) {
+    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/featureBindingSite.gff.gz";
+    my $track = ApiCommonModel::Model::JBrowseTrackConfig::BindingSitesTrackConfig->new({
+                                                                                          project_name          => $projectName,
+                                                                                          build_number          => $buildNumber,
+                                                                                          relative_path_to_file => $relativePathToGffFile,
+                                                                                          application_type      => $applicationType,
+                                                                                        })->getConfigurationObject();
+    push @{$result->{tracks}}, $track;
+  }
+}
+
+
 sub addScaffolds {
   my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
   my $hasScaffold = $datasetProps->{hasScaffoldGenome} ? $datasetProps->{hasScaffoldGenome} : 0;
@@ -810,7 +864,6 @@ sub addUnifiedMassSpec {
 }
 
 
-#     my $hasScaffold = $datasetProps->{hasScaffold} ? $datasetProps->{hasScaffold} : {};
 
 sub addChipChipTracks {
   my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType) = @_;
