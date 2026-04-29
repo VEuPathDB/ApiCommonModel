@@ -324,6 +324,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
     // FungalGPIForm only for FungiDB
     if (!(projectName.equals("FungiDB"))){
 	addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "FungalGPIForm");
+    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "SecondaryMetaboliteClusters");
     }
 
     // CommunityExpComments for only GiardiaDB and FungiDB
