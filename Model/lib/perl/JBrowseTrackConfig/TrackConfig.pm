@@ -201,7 +201,8 @@ sub getJBrowseObject{
 
     if(ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::GFFStore' ||
         ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore' ||
-	ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::BedStore') {
+	ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::BedStore' ||
+        ref($store) eq 'ApiCommonModel::Model::JBrowseTrackConfig::AuxiliaryGFFStore') {
 	my $query = $store->getQuery();
         my $urlTemplate = $store->getUrlTemplate();
         $jbrowseObject->{urlTemplate}= $urlTemplate if($urlTemplate);

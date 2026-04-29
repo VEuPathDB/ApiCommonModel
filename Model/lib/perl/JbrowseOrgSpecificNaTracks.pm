@@ -32,6 +32,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::ClonedInsertEndsTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::AuxiliaryGffTrackConfig;
 
 use Data::Dumper;
 
@@ -90,7 +91,7 @@ sub processOrganism {
 
   &addClonedInsertEnds($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
 
-
+  &addAuxiliaryUtrAnnotations($result, $nameForFileNames, $projectName, $buildNumber, $applicationType);
 
   &addProteinExpressionMassSpec($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $webservicesDir);
   &addVCF($dbh, $result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType);
@@ -1086,6 +1087,40 @@ sub addOrfs {
 																																						 })->getConfigurationObject();
 
 	push @{$result->{tracks}}, $track;
+}
+
+
+sub addAuxiliaryUtrAnnotations {
+  my ($result, $nameForFileNames, $projectName, $buildNumber, $applicationType) = @_;
+
+  my $auxiliaryDir = "/var/www/Common/apiSiteFilesMirror/auxiliary/TriTrypDB/UTR_annotations";
+
+  foreach my $gffFile (glob("${auxiliaryDir}/${nameForFileNames}*.gff.gz")) {
+    my $basename = (split '/', $gffFile)[-1];
+
+    my $displayName = $basename;
+    $displayName =~ s/^${nameForFileNames}_//;
+    $displayName =~ s/\.gff\.gz$//;
+    $displayName =~ s/_/ /g;
+
+    my $label = $basename;
+    $label =~ s/\.gff\.gz$//;
+
+    my $relativePathToFile = "TriTrypDB/UTR_annotations/${basename}";
+
+    my $track = ApiCommonModel::Model::JBrowseTrackConfig::AuxiliaryGffTrackConfig->new({
+      project_name          => $projectName,
+      build_number          => $buildNumber,
+      relative_path_to_file => $relativePathToFile,
+      application_type      => $applicationType,
+      key                   => $displayName,
+      label                 => $label,
+      category              => "Gene Models",
+      subcategory           => "UTR Annotations",
+    })->getConfigurationObject();
+
+    push @{$result->{tracks}}, $track if $track;
+  }
 }
 
 
