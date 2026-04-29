@@ -15,6 +15,7 @@ sub new {
 
     $self->setId($args->{key});
     $self->setLabel($args->{label});
+    $self->setColor("{auxiliaryUtrColor}");
 
     my $store = ApiCommonModel::Model::JBrowseTrackConfig::AuxiliaryGFFStore->new($args);
     $self->setStore($store);
