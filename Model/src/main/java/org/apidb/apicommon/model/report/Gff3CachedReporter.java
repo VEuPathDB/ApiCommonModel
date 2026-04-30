@@ -245,7 +245,7 @@ public class Gff3CachedReporter extends PagedAnswerReporter {
       throw new WdkModelException(ex);
     }
     finally {
-      SqlUtils.closeResultSetAndStatement(rsTable, null);
+      SqlUtils.closeResultSetAndStatement(rsTable);
     }
   }
 
@@ -297,7 +297,7 @@ public class Gff3CachedReporter extends PagedAnswerReporter {
       throw new WdkModelException(ex);
     }
     finally {
-      SqlUtils.closeResultSetAndStatement(rsTable, null);
+      SqlUtils.closeResultSetAndStatement(rsTable);
     }
   }
 

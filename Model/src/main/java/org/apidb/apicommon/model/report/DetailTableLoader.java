@@ -378,7 +378,7 @@ public class DetailTableLoader extends BaseCLI {
       return counts;
     }
     finally {
-      SqlUtils.closeResultSetAndStatement(resultSet, null);
+      SqlUtils.closeResultSetAndStatement(resultSet);
     }
   }
 
