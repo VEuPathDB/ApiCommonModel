@@ -328,7 +328,7 @@ public class AnnotatedGenome extends UnannotatedGenome {
     }
 
     // CommunityExpComments for only GiardiaDB and FungiDB
-    if (!(projectName.equals("GiardiaDB")) ||
+    if ((projectName.equals("GiardiaDB")) ||
 	(projectName.equals("FungiDB"))){
 	addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "CommunityExpComments");
     }
