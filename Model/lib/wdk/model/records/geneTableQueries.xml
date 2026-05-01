@@ -3926,6 +3926,23 @@ from (
              END authors
           FROM ApidbTuning.GenePubmed_p
           WHERE org_abbrev IN (%%PARTITION_KEYS%%)
+            AND pubmed_id NOT IN (
+              -- Hide high-fanout citations: a PubMed ID associated with
+              -- more than 100 distinct genes is almost always generic
+              -- noise (e.g. NCBI gene2pubmed bulk imports that attach
+              -- one paper to a large gene set with no biological
+              -- specificity). The threshold applies to every PMID in
+              -- this tuning table regardless of source -- gene2pubmed,
+              -- curator-submitted, and Apollo-submitted entries are all
+              -- evaluated by fanout. A small number of genuinely
+              -- high-fanout curator entries may be filtered as a side
+              -- effect; this is intentional, since high fanout means
+              -- low per-gene specificity regardless of provenance.
+              SELECT pubmed_id
+              FROM ApidbTuning.GenePubmed_p
+              GROUP BY pubmed_id
+              HAVING COUNT(DISTINCT gene_source_id) > 100
+            )
         ]]>
       </sql>
     </sqlQuery>
