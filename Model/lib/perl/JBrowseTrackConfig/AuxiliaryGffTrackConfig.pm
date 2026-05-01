@@ -17,10 +17,24 @@ sub new {
     $self->setLabel($args->{label});
     $self->setColor("{auxiliaryUtrColor}");
 
+    if ($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
+        $self->setDisplayType("NeatCanvasFeatures/View/Track/NeatFeatures");
+        $self->setGlyph("NeatCanvasFeatures/View/FeatureGlyph/Gene");
+        $self->setSubParts("CDS,five_prime_UTR,three_prime_UTR");
+    }
+
     my $store = ApiCommonModel::Model::JBrowseTrackConfig::AuxiliaryGFFStore->new($args);
     $self->setStore($store);
 
     return $self;
+}
+
+sub getJBrowseObject {
+    my $self = shift;
+    my $obj = $self->SUPER::getJBrowseObject();
+    $obj->{transcriptType}  = "{geneTranscriptType}";
+    $obj->{noncodingType}   = ["nc_transcript"];
+    return $obj;
 }
 
 1;

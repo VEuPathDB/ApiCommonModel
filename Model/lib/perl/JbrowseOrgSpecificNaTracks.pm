@@ -1095,16 +1095,16 @@ sub addAuxiliaryUtrAnnotations {
 
   my $auxiliaryDir = "/var/www/Common/apiSiteFilesMirror/auxiliary/TriTrypDB/UTR_annotations";
 
-  foreach my $gffFile (glob("${auxiliaryDir}/${nameForFileNames}*.gff.gz")) {
+  foreach my $gffFile (glob("${auxiliaryDir}/${nameForFileNames}*_jbrowse.gff.gz")) {
     my $basename = (split '/', $gffFile)[-1];
 
     my $displayName = $basename;
     $displayName =~ s/^${nameForFileNames}_//;
-    $displayName =~ s/\.gff\.gz$//;
+    $displayName =~ s/_jbrowse\.gff\.gz$//;
     $displayName =~ s/_/ /g;
 
     my $label = $basename;
-    $label =~ s/\.gff\.gz$//;
+    $label =~ s/_jbrowse\.gff\.gz$//;
 
     my $relativePathToFile = "TriTrypDB/UTR_annotations/${basename}";
 
