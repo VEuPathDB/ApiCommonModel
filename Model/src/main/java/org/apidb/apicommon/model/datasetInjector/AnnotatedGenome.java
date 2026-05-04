@@ -321,17 +321,14 @@ public class AnnotatedGenome extends UnannotatedGenome {
 	addWdkReference("GeneRecordClasses.GeneRecordClass", "attribute", "SyntenyGbrowseUrl");
     }
 
-    // FungalGPIForm only for FungiDB
-    if (!(projectName.equals("FungiDB"))){
-	addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "FungalGPIForm");
-    }
-
+    // for FungiDB only
     if (projectName.equals("FungiDB")){
-    addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "SecondaryMetaboliteClusters");
+	addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "FungalGPIForm");
+	addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "SecondaryMetaboliteClusters");
     }
 
     // CommunityExpComments for only GiardiaDB and FungiDB
-    if (!(projectName.equals("GiardiaDB")) ||
+    if ((projectName.equals("GiardiaDB")) ||
 	(projectName.equals("FungiDB"))){
 	addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "CommunityExpComments");
     }
