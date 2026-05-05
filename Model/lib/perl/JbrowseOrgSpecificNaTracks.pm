@@ -1011,6 +1011,10 @@ my ($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectNam
     my $proteinAlignTrack;
 
     my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/nrProteinToGenome.gff.gz";
+    my $fullPathToGffFile = "${webservicesDir}/${projectName}/build-${buildNumber}/${relativePathToGffFile}";
+
+    return unless(-e $fullPathToGffFile);
+
     my $methodDescription = "<p>NCBI's non redundant collection of proteins (nr) was filtered for deflines matching the Genus of this sequence.  These proteins were aligned using <a href='https://www.ebi.ac.uk/about/vertebrate-genomics/software/exonerate'>exonerate</a>. (protein to genomic sequence)</p>";
 
     $proteinAlignTrack = ApiCommonModel::Model::JBrowseTrackConfig::NrdbProteinTrackConfig->new({
