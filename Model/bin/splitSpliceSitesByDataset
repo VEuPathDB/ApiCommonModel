@@ -1,0 +1,125 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Getopt::Long;
+
+my ($webServicesDir, $projectName, $buildNumber, $nameForFileNames);
+
+GetOptions(
+    'webServicesDir=s'    => \$webServicesDir,
+    'projectName=s'       => \$projectName,
+    'buildNumber=s'       => \$buildNumber,
+    'nameForFileNames=s'  => \$nameForFileNames,
+) or die usage();
+
+die usage() unless $webServicesDir && $projectName && $buildNumber && $nameForFileNames;
+
+my $gffDir   = "$webServicesDir/$projectName/build-$buildNumber/$nameForFileNames/genomeBrowser/gff";
+my $inputFile = "$gffDir/spliceSites.gff.gz";
+
+unless (-e $inputFile) {
+    print "No spliceSites.gff.gz found for $nameForFileNames — nothing to do.\n";
+    exit 0;
+}
+
+print "Processing $inputFile\n";
+
+# Pass 1: buffer parent lines; collect per-sample data from subfeatures
+my %datasetParents;  # dataset -> { parentId -> 1 }
+my %sampleData;      # dataset -> parentId -> [ [sample_name, count], ... ]
+
+open my $fh, "zcat $inputFile |" or die "Cannot read $inputFile: $!";
+while (<$fh>) {
+    chomp;
+    next if /^#/;
+    my @f = split /\t/;
+    next unless @f >= 9;
+    my ($type, $attrs) = @f[2, 8];
+
+    next unless $type eq 'ss_pa_subfeature';
+    next unless $attrs =~ /ext_db_name=([^;]+)/;
+    my $dataset = $1;
+    next unless $attrs =~ /Parent=([^;]+)/;
+    my $parentId = $1;
+
+    my $sample = ($attrs =~ /(?:^|;)sample=([^;]+)/) ? $1 : '';
+    $sample =~ s/\s*\[feature_loc\].*//;   # strip database-artifact suffix
+
+    my $count = ($attrs =~ /(?:^|;)total_count_per_million=([^;]+)/) ? $1 : '0';
+
+    $datasetParents{$dataset}{$parentId} = 1;
+    push @{$sampleData{$dataset}{$parentId}}, [$sample, $count];
+}
+close $fh;
+
+my @datasets = sort keys %datasetParents;
+if (!@datasets) {
+    print "No ext_db_name values found in $inputFile — nothing to split.\n";
+    exit 0;
+}
+
+print "Found " . scalar(@datasets) . " dataset(s): " . join(", ", @datasets) . "\n";
+
+# Open output file handles
+my %fileHandles;
+for my $dataset (@datasets) {
+    my $outFile = "$gffDir/spliceSites_${dataset}.gff";
+    open my $out, '>', $outFile or die "Cannot open $outFile for writing: $!";
+    print $out "##gff-version 3\n";
+    $fileHandles{$dataset} = $out;
+}
+
+# Pass 2: write one augmented ss_pa line per parent per dataset (no subfeature lines)
+open $fh, "zcat $inputFile |" or die "Cannot read $inputFile: $!";
+while (<$fh>) {
+    chomp;
+    next if /^#/;
+    my @f = split /\t/;
+    next unless @f >= 9;
+    next unless $f[2] eq 'ss_pa';
+
+    my $attrs = $f[8];
+    next unless $attrs =~ /(?:^|;)ID=([^;]+)/;
+    my $parentId = $1;
+
+    for my $dataset (@datasets) {
+        next unless $datasetParents{$dataset}{$parentId};
+
+        my @pairs  = @{$sampleData{$dataset}{$parentId} // []};
+        next unless @pairs;
+
+        my @names  = map { $_->[0] } @pairs;
+        my @counts = map { $_->[1] } @pairs;
+
+        $f[8] = $attrs
+              . ";sample_name=" . join(',', @names)
+              . ";count_per_mill=" . join(',', @counts)
+              . ";startm=$f[3]";
+
+        print {$fileHandles{$dataset}} join("\t", @f) . "\n";
+        $f[8] = $attrs;  # restore for next dataset iteration
+    }
+}
+close $fh;
+
+# Close handles, bgzip and tabix-index each output file
+for my $dataset (@datasets) {
+    close $fileHandles{$dataset};
+    my $gff   = "$gffDir/spliceSites_${dataset}.gff";
+    my $gffgz = "${gff}.gz";
+
+    print "Compressing and indexing $gff\n";
+    system("bgzip -f $gff") == 0
+        or die "bgzip failed for $gff: $!";
+    system("tabix -p gff $gffgz") == 0
+        or die "tabix failed for $gffgz: $!";
+}
+
+print "Done. " . scalar(@datasets) . " file(s) written to $gffDir\n";
+
+sub usage {
+    return "Usage: $0 --webServicesDir DIR --projectName NAME --buildNumber NUM --nameForFileNames ORG\n"
+         . "  Example: $0 --webServicesDir /var/www/Common/apiSiteFilesMirror/webServices \\\n"
+         . "              --projectName UniDB --buildNumber 69 --nameForFileNames TbruceiTREU927\n";
+}
