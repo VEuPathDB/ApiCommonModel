@@ -33,6 +33,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::ClonedInsertEndsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::AuxiliaryGffTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::SpliceSiteTrackConfig;
 
 use Data::Dumper;
 
@@ -95,6 +96,7 @@ sub processOrganism {
 
   &addProteinExpressionMassSpec($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $webservicesDir);
   &addVCF($dbh, $result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType);
+  &addSpliceSiteTracks($result, $datasetProperties, $nameForFileNames, $projectName, $buildNumber, $applicationType, $webservicesDir);
   #&addGFF($dbh, $result, $datasetProperties);
 
   if ($projectName !~ m/HostDB/ && $organismAbbrev !~ m/cgloCBS148.51/ && $organismAbbrev !~ m/pgig/ && $organismAbbrev !~ m/amutUAMH3576/ && $organismAbbrev !~ m/anigUAMH3544/ && $organismAbbrev !~ m/bcerUAMH5669/){
@@ -1265,6 +1267,43 @@ sub addLongReadRNASeq {
     }
   }
 }
+
+sub addSpliceSiteTracks {
+  my ($result, $datasetProperties, $nameForFileNames, $projectName, $buildNumber, $applicationType, $webservicesDir) = @_;
+
+  my $spliceSiteDatasets = $datasetProperties->{splicedleaderandpolya} ? $datasetProperties->{splicedleaderandpolya} : {};
+
+  foreach my $dataset (keys %$spliceSiteDatasets) {
+    my $datasetName  = $spliceSiteDatasets->{$dataset}->{datasetName};
+    my $displayName  = $spliceSiteDatasets->{$dataset}->{datasetDisplayName};
+    my $featureType  = $spliceSiteDatasets->{$dataset}->{featureType};
+    my $summary      = $spliceSiteDatasets->{$dataset}->{summary};
+    $summary =~ s/\n/ /g if $summary;
+    my $attribution  = $spliceSiteDatasets->{$dataset}->{shortAttribution};
+
+    my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/spliceSites_${datasetName}.gff.gz";
+    my $fullPathToGffFile = "${webservicesDir}/${projectName}/build-${buildNumber}/${relativePathToGffFile}";
+
+    next unless(-e $fullPathToGffFile);
+
+    my $track = ApiCommonModel::Model::JBrowseTrackConfig::SpliceSiteTrackConfig->new({
+      project_name          => $projectName,
+      build_number          => $buildNumber,
+      relative_path_to_file => $relativePathToGffFile,
+      application_type      => $applicationType,
+      key                   => "${displayName} ${featureType}s",
+      label                 => $dataset,
+      dataset_name          => $datasetName,
+      study_display_name    => $displayName,
+      summary               => $summary,
+      attribution           => $attribution,
+      feature_type          => $featureType,
+    })->getConfigurationObject();
+
+    push @{$result->{tracks}}, $track if $track;
+  }
+}
+
 
 
 

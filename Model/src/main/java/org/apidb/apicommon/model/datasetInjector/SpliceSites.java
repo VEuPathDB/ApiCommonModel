@@ -86,7 +86,8 @@ public class SpliceSites extends  DatasetInjector {
       injectTemplate("datasetExampleGraphDescriptions");
 
       setPropValue("summary", getPropValue("summary").replaceAll("\"", "'"));
-      injectTemplate("jbrowseSpliceSites");
+      setPropValue("featureType", getPropValue("type"));
+      injectTemplate("jbrowseSpliceSitesBuildProps");
   }
 
 
@@ -125,6 +126,7 @@ public class SpliceSites extends  DatasetInjector {
       String [][] declaration = {
                                  {"isEuPathDBSite", ""},
                                  {"hasMultipleSamples", "if experiment has just one sample, then NO fold-change or differential Q"},
+                                 {"type", "feature type: 'Splice Site' or 'Poly A'"},
                                  {"graphColor", ""},
                                  {"graphBottomMarginSize", ""},
                                  {"graphXAxisSamplesDescription", "will show up on the gene record page next to the graph"},
