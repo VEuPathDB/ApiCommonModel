@@ -457,8 +457,11 @@ sub addESTs {
   my $track;
 
   my $estFilename = "ESTs.gff.gz";
- 
+
   my $relativePathToGffFile = "${nameForFileNames}/alignedTranscripts/gff/${estFilename}";
+  my $fullPathToGffFile = "${webservicesDir}/${projectName}/build-${buildNumber}/${relativePathToGffFile}";
+
+  return unless(-e $fullPathToGffFile);
 
   $track = ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig->
     new({
