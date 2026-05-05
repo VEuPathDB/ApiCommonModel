@@ -37,8 +37,8 @@ sub new {
 
     $self->setColor("{colorSpliceSiteFxn}");
     $self->setGlyph("EbrcTracks/View/FeatureGlyph/Diamond");
-    $self->setMaxFeatureScreenDensity(0.01);
-    $self->setRegionFeatureDensities(JSON::true);
+    $self->setMaxFeatureScreenDensity(0.5);
+    $self->setRegionFeatureDensities(JSON::false);
 
     return $self;
 }
