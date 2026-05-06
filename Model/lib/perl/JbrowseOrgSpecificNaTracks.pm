@@ -872,7 +872,7 @@ sub addUnifiedMassSpec {
 sub addChipChipTracks {
   my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType) = @_;
 
-  my $chipChipSeqDatasets = $datasetProperties->{chipchip} ? $datasetProperties->{chipchip} : {};
+  my $chipChipDatasets = $datasetProperties->{chipchip} ? $datasetProperties->{chipchip} : {};
 
   # get sample names for each dataset
   my $dataFile = "/var/www/Common/apiSiteFilesMirror/webServices/$projectName/build-${buildNumber}/${nameForFileNames}/genomeBrowser/config/jbrowse.conf";
@@ -897,7 +897,7 @@ sub addChipChipTracks {
   #print Dumper \%cc_data;
 
   # get data from auto_generated prop file
-  foreach my $dataset (keys %$chipChipSeqDatasets){
+  foreach my $dataset (keys %$chipChipDatasets){
     next unless($dataset =~ /chipChipExper/);
 
     foreach my $sample (@{$cc_data{$dataset}}) { # for each
@@ -913,13 +913,13 @@ sub addChipChipTracks {
 
 sub makeChipChipPeak {
   my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset) = @_;
-  my $chipChipSeqDatasets = $datasetProperties->{chipchip};
-  my $datasetName = $chipChipSeqDatasets->{$dataset}->{datasetName};
-  my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
-  my $datasetPresenterId = $chipChipSeqDatasets->{$dataset}->{datasetPresenterId};
-  my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
+  my $chipChipDatasets = $datasetProperties->{chipchip};
+  my $datasetName = $chipChipDatasets->{$dataset}->{datasetName};
+  my $datasetDisplayName = $chipChipDatasets->{$dataset}->{datasetDisplayName};
+  my $datasetPresenterId = $chipChipDatasets->{$dataset}->{datasetPresenterId};
+  my $summary = $chipChipDatasets->{$dataset}->{summary};
   $summary =~ s/\n/ /g;
-  my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution}; 
+  my $shortAttribution = $chipChipDatasets->{$dataset}->{shortAttribution}; 
 
   my $cutoff = $datasetProperties->{$dataset}->{cutoff} || 0;
   my $colorFunction = $cutoff ? "colorSegmentByScore" : "chipColor";
@@ -947,13 +947,13 @@ sub makeChipChipPeak {
 
 sub makeChipChipSmoothed {
   my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset) = @_;
-  my $chipChipSeqDatasets = $datasetProperties->{chipchip};
-  my $datasetName = $chipChipSeqDatasets->{$dataset}->{datasetName};
-  my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
-  my $datasetPresenterId = $chipChipSeqDatasets->{$dataset}->{presenterId};
-  my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
+  my $chipChipDatasets = $datasetProperties->{chipchip};
+  my $datasetName = $chipChipDatasets->{$dataset}->{datasetName};
+  my $datasetDisplayName = $chipChipDatasets->{$dataset}->{datasetDisplayName};
+  my $datasetPresenterId = $chipChipDatasets->{$dataset}->{presenterId};
+  my $summary = $chipChipDatasets->{$dataset}->{summary};
   $summary =~ s/\n/ /g;
-  my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution};
+  my $shortAttribution = $chipChipDatasets->{$dataset}->{shortAttribution};
   #print Dumper "SMOOTHED nameForFileNames $nameForFileNames";
   my $relativePath = "${nameForFileNames}/chipChip/bigwig/${datasetName}/${sample}.bw";
 
