@@ -1,9 +1,12 @@
-package ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig;
+package ApiCommonModel::Model::JBrowseTrackConfig::RepeatsTrackConfig;
 use base qw(ApiCommonModel::Model::JBrowseTrackConfig::Segments);
 use strict;
 use warnings;
 
 use ApiCommonModel::Model::JBrowseTrackConfig::BedStore;
+
+# for RepeatFinder and Tandem Repeats
+
 
 sub getGlyph {$_[0]->{glyph} }
 sub setGlyph {$_[0]->{glyph} = $_[1]}
@@ -39,7 +42,7 @@ sub new {
     
     $self->setGlyph("JBrowse/View/FeatureGlyph/Box") unless(defined $self->getGlyph());
 
-    my $detailsFunction = "{tandemRepeatDetailsFxn}";
+    my $detailsFunction = "{repeatsDetailsFxn}";
 
     $self->setOnClickContent($detailsFunction);
     $self->setViewDetailsContent($detailsFunction);

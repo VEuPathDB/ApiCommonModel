@@ -28,7 +28,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::TransposableElements;
 use ApiCommonModel::Model::JBrowseTrackConfig::MicrosatelliteStsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::HaplotypeBlockTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::BindingSitesTrackConfig;
-use ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::RepeatsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::ClonedInsertEndsTrackConfig;
@@ -83,7 +83,7 @@ sub processOrganism {
   &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
 
   &addTandemRepeats($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
-
+  &addRepeatMaskerRepeats($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
 
   &addESTs($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev);
 
@@ -402,7 +402,7 @@ sub addTandemRepeats {
   my $track;
   my $relativePathToBedFile = "${nameForFileNames}/genomeAndProteome/bed/tandemRepeats.bed.gz";
 
-  $track = ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig->
+  $track = ApiCommonModel::Model::JBrowseTrackConfig::RepeatsTrackConfig->
     new({
 	 project_name => $projectName,
 	 build_number => $buildNumber,
@@ -415,6 +415,27 @@ sub addTandemRepeats {
 
    push @{$result->{tracks}}, $track if($track);
 }
+
+sub addRepeatMaskerRepeats {
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+
+  my $track;
+  my $relativePathToBedFile = "${nameForFileNames}/genomeAndProteome/bed/blocked.seq.bed.gz";
+
+  $track = ApiCommonModel::Model::JBrowseTrackConfig::RepeatsTrackConfig->
+    new({
+	 project_name => $projectName,
+	 build_number => $buildNumber,
+	 relative_path_to_file => $relativePathToBedFile,
+	 application_type => $applicationType,
+	 key => "RepeatMasker Repeats",
+	 label => "RepeatMasker Repeats",
+         subcategory => "Sequence composition, complexity and repeats",
+	})->getConfigurationObject();
+
+   push @{$result->{tracks}}, $track if($track);
+}
+
 
 sub addClonedInsertEnds {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
