@@ -56,6 +56,8 @@ WHERE av.attribute_stable_id = ag.stable_id
   AND av.${edaEntityAbbrev}_stable_id = genes.${edaEntityAbbrev}_stable_id
   AND av.attribute_stable_id != 'VEUPATHDB_GENE_ID'
 >templateTextEnd<
+
+Note: no ORDER BY in the template — it belongs on the outer query in geneTableQueries.xml.
 ```
 
 ### cellularLocalization.dst — new template
@@ -93,8 +95,7 @@ FROM webready.GeneAttributes_p ga, (
               '' AS dataset_presenter_display_name,
               '' AS short_attribution,
               '' AS variable,
-              '' AS value,
-              'HAPPY_BIRTHDAY' AS dataset_id
+              '' AS value
        -- TEMPLATE_ANCHOR phenotypeAllDataGeneTableSql
    )
    SELECT rsog.ref_source_id AS gene, rd.dataset_presenter_id,
@@ -109,6 +110,7 @@ FROM webready.GeneAttributes_p ga, (
 ) gd
 WHERE ga.source_id = gd.gene
   AND ga.org_abbrev IN (%%PARTITION_KEYS%%)
+ORDER BY gd.dataset_presenter_display_name, gd.variable, gd.value
   ]]></sql>
 </sqlQuery>
 ```
@@ -188,4 +190,4 @@ Datasets are identified via `apidb.datasource.type IN ('phenotype', 'cellularLoc
 
 ## Sorting
 
-Sorting (dataset display name → variable → value) is applied in the template SQL. The outer WDK query does not re-sort.
+Sorting (dataset display name → variable → value) is applied via `ORDER BY` at the end of the outer `sqlQuery` SQL in `geneTableQueries.xml`. ORDER BY cannot appear inside a UNION piece, so it is not in the template.
