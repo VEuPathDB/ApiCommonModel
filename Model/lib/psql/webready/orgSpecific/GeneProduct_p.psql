@@ -11,56 +11,6 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
 )
 ;
 
-CREATE OR REPLACE FUNCTION pg_temp.is_uninformative(p_product TEXT) RETURNS BOOLEAN AS $$
-BEGIN
-    IF p_product IS NULL OR TRIM(p_product) = '' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product ~* '(hypothetical[_ ]protein|unspecified product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product ~* '^has domain\(s\) with predicted'
-       AND (p_product LIKE '%,%' OR p_product ~* ' and ') THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product NOT LIKE '% %' AND p_product LIKE 'XM%' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product ~ '^CAD\d+(\.\d+)?$' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product ~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product ~* 'uncharacterized\s+loc\d+' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product LIKE 'CSON%'
-       OR p_product LIKE 'hypothetical protein BGH%'
-       OR p_product LIKE 'DEHA2A%' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product NOT LIKE '% %' THEN
-        IF p_product ~ '^[A-Z]{2,4}\d{4,}$'
-           OR p_product ~ '^[A-Z]{3,5}_\d+$'
-           OR p_product ~ '^LOC\d+$'
-           OR p_product ~ '^[A-Z]+\d+\.[0-9]+$' THEN
-            RETURN TRUE;
-        END IF;
-    END IF;
-    IF p_product LIKE 'Similar to [%' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product LIKE '%Source:UniProt%' THEN
-        RETURN TRUE;
-    END IF;
-    IF LOWER(TRIM(p_product)) IN ('protein', 'gene product', 'gene', 'orf') THEN
-        RETURN TRUE;
-    END IF;
-    RETURN FALSE;
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
-
 
 :CREATE_AND_POPULATE
   WITH
@@ -81,7 +31,20 @@ $$ LANGUAGE plpgsql IMMUTABLE;
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
       INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
       WHERE gfp.product IS NOT NULL
-        AND NOT pg_temp.is_uninformative(gfp.product)
+        AND TRIM(gfp.product) != ''
+        AND gfp.product !~* '(hypothetical[_ ]protein|unspecified product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+        AND NOT (gfp.product ~* '^has domain\(s\) with predicted' AND (gfp.product LIKE '%,%' OR gfp.product ~* ' and '))
+        AND NOT (gfp.product NOT LIKE '% %' AND gfp.product LIKE 'XM%')
+        AND gfp.product !~ '^CAD\d+(\.\d+)?$'
+        AND gfp.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+        AND gfp.product !~* 'uncharacterized\s+loc\d+'
+        AND gfp.product NOT LIKE 'CSON%'
+        AND gfp.product NOT LIKE 'hypothetical protein BGH%'
+        AND gfp.product NOT LIKE 'DEHA2A%'
+        AND NOT (gfp.product NOT LIKE '% %' AND (gfp.product ~ '^[A-Z]{2,4}\d{4,}$' OR gfp.product ~ '^[A-Z]{3,5}_\d+$' OR gfp.product ~ '^LOC\d+$' OR gfp.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+        AND gfp.product NOT LIKE 'Similar to [%'
+        AND gfp.product NOT LIKE '%Source:UniProt%'
+        AND LOWER(TRIM(gfp.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
     ),
 
     -- Informative transcript products (uninformative products excluded)
@@ -91,7 +54,20 @@ $$ LANGUAGE plpgsql IMMUTABLE;
       INNER JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
       INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = t.na_feature_id
       WHERE tp.product IS NOT NULL
-        AND NOT pg_temp.is_uninformative(tp.product)
+        AND TRIM(tp.product) != ''
+        AND tp.product !~* '(hypothetical[_ ]protein|unspecified product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+        AND NOT (tp.product ~* '^has domain\(s\) with predicted' AND (tp.product LIKE '%,%' OR tp.product ~* ' and '))
+        AND NOT (tp.product NOT LIKE '% %' AND tp.product LIKE 'XM%')
+        AND tp.product !~ '^CAD\d+(\.\d+)?$'
+        AND tp.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+        AND tp.product !~* 'uncharacterized\s+loc\d+'
+        AND tp.product NOT LIKE 'CSON%'
+        AND tp.product NOT LIKE 'hypothetical protein BGH%'
+        AND tp.product NOT LIKE 'DEHA2A%'
+        AND NOT (tp.product NOT LIKE '% %' AND (tp.product ~ '^[A-Z]{2,4}\d{4,}$' OR tp.product ~ '^[A-Z]{3,5}_\d+$' OR tp.product ~ '^LOC\d+$' OR tp.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+        AND tp.product NOT LIKE 'Similar to [%'
+        AND tp.product NOT LIKE '%Source:UniProt%'
+        AND LOWER(TRIM(tp.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
     ),
 
     -- Priority 1: Preferred curated gene products
@@ -228,7 +204,20 @@ $$ LANGUAGE plpgsql IMMUTABLE;
              'base_gene' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
       WHERE gf.product IS NOT NULL
-        AND NOT pg_temp.is_uninformative(gf.product)
+        AND TRIM(gf.product) != ''
+        AND gf.product !~* '(hypothetical[_ ]protein|unspecified product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+        AND NOT (gf.product ~* '^has domain\(s\) with predicted' AND (gf.product LIKE '%,%' OR gf.product ~* ' and '))
+        AND NOT (gf.product NOT LIKE '% %' AND gf.product LIKE 'XM%')
+        AND gf.product !~ '^CAD\d+(\.\d+)?$'
+        AND gf.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+        AND gf.product !~* 'uncharacterized\s+loc\d+'
+        AND gf.product NOT LIKE 'CSON%'
+        AND gf.product NOT LIKE 'hypothetical protein BGH%'
+        AND gf.product NOT LIKE 'DEHA2A%'
+        AND NOT (gf.product NOT LIKE '% %' AND (gf.product ~ '^[A-Z]{2,4}\d{4,}$' OR gf.product ~ '^[A-Z]{3,5}_\d+$' OR gf.product ~ '^LOC\d+$' OR gf.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+        AND gf.product NOT LIKE 'Similar to [%'
+        AND gf.product NOT LIKE '%Source:UniProt%'
+        AND LOWER(TRIM(gf.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
     ),
 
     -- Combine all priorities
