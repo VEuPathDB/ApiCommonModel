@@ -28,7 +28,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::TransposableElements;
 use ApiCommonModel::Model::JBrowseTrackConfig::MicrosatelliteStsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::HaplotypeBlockTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::BindingSitesTrackConfig;
-use ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::RepeatsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::ClonedInsertEndsTrackConfig;
@@ -83,7 +83,7 @@ sub processOrganism {
   &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
 
   &addTandemRepeats($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
-
+  &addRepeatMaskerRepeats($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
 
   &addESTs($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev);
 
@@ -402,7 +402,7 @@ sub addTandemRepeats {
   my $track;
   my $relativePathToBedFile = "${nameForFileNames}/genomeAndProteome/bed/tandemRepeats.bed.gz";
 
-  $track = ApiCommonModel::Model::JBrowseTrackConfig::TandemRepeatsTrackConfig->
+  $track = ApiCommonModel::Model::JBrowseTrackConfig::RepeatsTrackConfig->
     new({
 	 project_name => $projectName,
 	 build_number => $buildNumber,
@@ -415,6 +415,27 @@ sub addTandemRepeats {
 
    push @{$result->{tracks}}, $track if($track);
 }
+
+sub addRepeatMaskerRepeats {
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+
+  my $track;
+  my $relativePathToBedFile = "${nameForFileNames}/genomeAndProteome/bed/blocked.seq.bed.gz";
+
+  $track = ApiCommonModel::Model::JBrowseTrackConfig::RepeatsTrackConfig->
+    new({
+	 project_name => $projectName,
+	 build_number => $buildNumber,
+	 relative_path_to_file => $relativePathToBedFile,
+	 application_type => $applicationType,
+	 key => "RepeatMasker Repeats",
+	 label => "RepeatMasker Repeats",
+         subcategory => "Sequence composition, complexity and repeats",
+	})->getConfigurationObject();
+
+   push @{$result->{tracks}}, $track if($track);
+}
+
 
 sub addClonedInsertEnds {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
@@ -457,8 +478,11 @@ sub addESTs {
   my $track;
 
   my $estFilename = "ESTs.gff.gz";
- 
+
   my $relativePathToGffFile = "${nameForFileNames}/alignedTranscripts/gff/${estFilename}";
+  my $fullPathToGffFile = "${webservicesDir}/${projectName}/build-${buildNumber}/${relativePathToGffFile}";
+
+  return unless(-e $fullPathToGffFile);
 
   $track = ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig->
     new({
@@ -869,7 +893,7 @@ sub addUnifiedMassSpec {
 sub addChipChipTracks {
   my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType) = @_;
 
-  my $chipChipSeqDatasets = $datasetProperties->{chipchip} ? $datasetProperties->{chipchip} : {};
+  my $chipChipDatasets = $datasetProperties->{chipchip} ? $datasetProperties->{chipchip} : {};
 
   # get sample names for each dataset
   my $dataFile = "/var/www/Common/apiSiteFilesMirror/webServices/$projectName/build-${buildNumber}/${nameForFileNames}/genomeBrowser/config/jbrowse.conf";
@@ -894,7 +918,7 @@ sub addChipChipTracks {
   #print Dumper \%cc_data;
 
   # get data from auto_generated prop file
-  foreach my $dataset (keys %$chipChipSeqDatasets){
+  foreach my $dataset (keys %$chipChipDatasets){
     next unless($dataset =~ /chipChipExper/);
 
     foreach my $sample (@{$cc_data{$dataset}}) { # for each
@@ -910,13 +934,13 @@ sub addChipChipTracks {
 
 sub makeChipChipPeak {
   my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset) = @_;
-  my $chipChipSeqDatasets = $datasetProperties->{chipchip};
-  my $datasetName = $chipChipSeqDatasets->{$dataset}->{datasetName};
-  my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
-  my $datasetPresenterId = $chipChipSeqDatasets->{$dataset}->{datasetPresenterId};
-  my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
+  my $chipChipDatasets = $datasetProperties->{chipchip};
+  my $datasetName = $chipChipDatasets->{$dataset}->{datasetName};
+  my $datasetDisplayName = $chipChipDatasets->{$dataset}->{datasetDisplayName};
+  my $datasetPresenterId = $chipChipDatasets->{$dataset}->{datasetPresenterId};
+  my $summary = $chipChipDatasets->{$dataset}->{summary};
   $summary =~ s/\n/ /g;
-  my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution}; 
+  my $shortAttribution = $chipChipDatasets->{$dataset}->{shortAttribution}; 
 
   my $cutoff = $datasetProperties->{$dataset}->{cutoff} || 0;
   my $colorFunction = $cutoff ? "colorSegmentByScore" : "chipColor";
@@ -944,13 +968,13 @@ sub makeChipChipPeak {
 
 sub makeChipChipSmoothed {
   my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset) = @_;
-  my $chipChipSeqDatasets = $datasetProperties->{chipchip};
-  my $datasetName = $chipChipSeqDatasets->{$dataset}->{datasetName};
-  my $datasetDisplayName = $chipChipSeqDatasets->{$dataset}->{datasetDisplayName};
-  my $datasetPresenterId = $chipChipSeqDatasets->{$dataset}->{presenterId};
-  my $summary = $chipChipSeqDatasets->{$dataset}->{summary};
+  my $chipChipDatasets = $datasetProperties->{chipchip};
+  my $datasetName = $chipChipDatasets->{$dataset}->{datasetName};
+  my $datasetDisplayName = $chipChipDatasets->{$dataset}->{datasetDisplayName};
+  my $datasetPresenterId = $chipChipDatasets->{$dataset}->{presenterId};
+  my $summary = $chipChipDatasets->{$dataset}->{summary};
   $summary =~ s/\n/ /g;
-  my $shortAttribution = $chipChipSeqDatasets->{$dataset}->{shortAttribution};
+  my $shortAttribution = $chipChipDatasets->{$dataset}->{shortAttribution};
   #print Dumper "SMOOTHED nameForFileNames $nameForFileNames";
   my $relativePath = "${nameForFileNames}/chipChip/bigwig/${datasetName}/${sample}.bw";
 
@@ -1011,6 +1035,10 @@ my ($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectNam
     my $proteinAlignTrack;
 
     my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/nrProteinToGenome.gff.gz";
+    my $fullPathToGffFile = "${webservicesDir}/${projectName}/build-${buildNumber}/${relativePathToGffFile}";
+
+    return unless(-e $fullPathToGffFile);
+
     my $methodDescription = "<p>NCBI's non redundant collection of proteins (nr) was filtered for deflines matching the Genus of this sequence.  These proteins were aligned using <a href='https://www.ebi.ac.uk/about/vertebrate-genomics/software/exonerate'>exonerate</a>. (protein to genomic sequence)</p>";
 
     $proteinAlignTrack = ApiCommonModel::Model::JBrowseTrackConfig::NrdbProteinTrackConfig->new({

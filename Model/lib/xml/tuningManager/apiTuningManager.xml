@@ -6,7 +6,7 @@
   <!-- unpartitioned version of this table -->
  <tuningTable name="GeneAttributes">
     <externalDependency name="webready.GeneAttributes_p"/>
-    <externalDependency name="TempGeneProduct"/>
+    <externalDependency name="webready.GeneProduct_p"/>
     <sql>
       <![CDATA[
        create table geneattributes&1 as select * from webready.geneattributes_p;
@@ -15,10 +15,10 @@
     <sql>
       <![CDATA[
         UPDATE geneattributes&1 ga
-        SET product = tgp.product
-        FROM TempGeneProduct&1 tgp
-        WHERE ga.source_id = tgp.source_id
-          AND tgp.product IS NOT NULL
+        SET product = gp.product
+        FROM webready.GeneProduct_p gp
+        WHERE ga.source_id = gp.source_id
+          AND gp.product IS NOT NULL
       ]]>
     </sql>
     <sql>
@@ -46,8 +46,8 @@
   <!-- unpartitioned version of this table -->
  <tuningTable name="TranscriptAttributes">
     <externalDependency name="webready.TranscriptAttributes_p"/>
-    <externalDependency name="TempGeneProduct"/>
-    <externalDependency name="TempTranscriptProduct"/>
+    <externalDependency name="webready.GeneProduct_p"/>
+    <!--externalDependency name="webready.TranscriptProduct_p"/-->
     <sql>
       <![CDATA[
        create table transcriptattributes&1 as select * from webready.transcriptattributes_p;
@@ -57,20 +57,20 @@
       <![CDATA[
         UPDATE transcriptattributes&1 ta
         SET gene_product = gp.product
-        FROM TempGeneProduct&1 tgp
-        WHERE ta.gene_source_id = tgp.source_id
-          AND tgp.product IS NOT NULL
+        FROM webready.GeneProduct_p gp
+        WHERE ta.gene_source_id = gp.source_id
+          AND gp.product IS NOT NULL
       ]]>
     </sql>
-    <sql>
+    <!--sql>
       <![CDATA[
         UPDATE transcriptattributes&1 ta
         SET transcript_product = tp.product
-        FROM TempTranscriptProduct&1 ttp
-        WHERE ta.source_id = ttp.source_id
-          AND ttp.product IS NOT NULL
+        FROM webready.TranscriptProduct_p tp
+        WHERE ta.source_id = tp.source_id
+          AND tp.product IS NOT NULL
       ]]>
-    </sql>
+    </sql-->
     <sql>
       <![CDATA[
         CREATE UNIQUE INDEX transcriptattr_sourceId&1 ON TranscriptAttributes&1  (source_id);
@@ -3057,8 +3057,11 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
       <![CDATA[
         CREATE TABLE DatasetCategoricalValue&1 (
             dataset_id            varchar(200),
-            variable_source_id    varchar(255),
-            value                 varchar(4000)
+            study_id              numeric,
+            stable_id             varchar(255),
+            entity_stable_id      varchar(255),
+            variable_source_id    varchar(255), -- remove this after bld 70. redundant for bkwd compat
+            value                 text
         )
       ]]>
     </sql>
@@ -3073,7 +3076,9 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
                 SELECT DISTINCT
                     COALESCE(dds.dataset_presenter_id, s.stable_id) AS dataset_id,
                     s.internal_abbrev                               AS study_abbrev,
-                    e.internal_abbrev                               AS entity_abbrev
+                    e.internal_abbrev                               AS entity_abbrev,
+                    e.stable_id                                     AS entity_stable_id,
+                    e.study_id                                      AS study_id
                 FROM eda.study s
                 JOIN eda.entitytypegraph e ON s.study_id = e.study_id
                 LEFT JOIN eda.studyexternaldatabaserelease sedr ON s.study_id = sedr.study_id
@@ -3089,17 +3094,21 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
                 END IF;
 
                 EXECUTE format(
-                    'INSERT INTO DatasetCategoricalValue&1 (dataset_id, variable_source_id, value)
-                     SELECT %L, ag.stable_id, v.value
-                     FROM %s ag
+                    'INSERT INTO DatasetCategoricalValue&1 (dataset_id, study_id, variable_source_id, stable_id, entity_stable_id, value)
+                     SELECT %L, etg.study_id, ag.stable_id, ag.stable_id, etg.stable_id as entity_stable_id, v.value
+                     FROM %s ag, eda.entitytypegraph etg
                      CROSS JOIN LATERAL jsonb_array_elements_text(ag.vocabulary::jsonb) AS v(value)
                      WHERE ag.data_shape = %L
+                       AND etg.stable_id = %L
+                       AND etg.study_id = %L
                        AND ag.vocabulary IS NOT NULL
                        AND ag.stable_id != %L',
                     rec.dataset_id,  -- %L: literal dataset_id value
                     ag_table,        -- %s: attributegraph table
-                    'categorical',   -- %L: data_shape filter
-                    'VEUPATHDB_GENE_ID'  -- %L: exclude gene id variable
+                    'categorical',   -- %L
+                    rec.entity_stable_id,  -- %L: literal entity_stable_id value
+                    rec.study_id,          -- %L: literal study_id value
+                    'VEUPATHDB_GENE_ID'    -- %L: exclude gene id variable
                 );
             END LOOP;
         END $$;
@@ -3125,10 +3134,22 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     <sql>
       <![CDATA[
         CREATE TABLE DatasetVariable&1 (
-            dataset_id            varchar(200),
-            variable_source_id    varchar(255),
-            variable_definition   text,
-            variable_display_name varchar(200)
+            dataset_id character varying(255) NOT NULL,
+            study_id numeric,
+            stable_id character varying(255) NOT NULL,
+            entity_stable_id character varying(255) NOT NULL,
+            variable_source_id    varchar(255), -- remove this after bld 70. redundant for bkwd compat
+            variable_definition   text,         -- remove this after bld 70. redundant for bkwd compat
+            variable_display_name varchar(200), -- remove this after bld 70. redundant for bkwd compat
+            data_shape text,
+            data_type text,
+            definition text,
+            display_name text,
+            display_range_max text,
+            display_range_min text,
+            display_type text,
+            provider_label text,
+            hidden text   
         )
       ]]>
     </sql>
@@ -3143,7 +3164,9 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
                 SELECT DISTINCT
                     COALESCE(dds.dataset_presenter_id, s.stable_id) AS dataset_id,
                     s.internal_abbrev                               AS study_abbrev,
-                    e.internal_abbrev                               AS entity_abbrev
+                    s.study_id                                      AS study_id,
+                    e.internal_abbrev                               AS entity_abbrev,
+                    e.stable_id                                     AS entity_stable_id
                 FROM eda.study s
                 JOIN eda.entitytypegraph e ON s.study_id = e.study_id
                 LEFT JOIN eda.studyexternaldatabaserelease sedr ON s.study_id = sedr.study_id
@@ -3159,13 +3182,17 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
                 END IF;
 
                 EXECUTE format(
-                    'INSERT INTO DatasetVariable&1 (dataset_id, variable_source_id, variable_display_name, variable_definition)
-                     SELECT %L, ag.stable_id, ag.display_name, ag.definition
-                     FROM %s ag
-                     WHERE ag.stable_id != %L',
+                    'INSERT INTO DatasetVariable&1 (dataset_id, study_id, entity_stable_id, variable_source_id, variable_display_name, variable_definition, stable_id, display_name, definition,  data_shape, data_type, display_range_max, display_range_min, display_type, provider_label, hidden)
+                     SELECT %L, etg.study_id, etg.stable_id as entity_stable_id, ag.stable_id, ag.display_name, ag.definition, ag.stable_id, ag.display_name, ag.definition,  data_shape, data_type, display_range_max, display_range_min, display_type, ag.provider_label, ag.hidden
+                     FROM %s ag, eda.entitytypegraph etg
+                     WHERE ag.stable_id != %L
+		     AND etg.stable_id = %L
+		     AND etg.study_id = %L',
                     rec.dataset_id,  -- %L: literal dataset_id value
                     ag_table,        -- %s: attributegraph table
-                    'VEUPATHDB_GENE_ID'  -- %L: exclude gene id variable
+                    'VEUPATHDB_GENE_ID',  -- %L: exclude gene id variable
+                    rec.entity_stable_id,  -- %L: literal entity_stable_id value
+                    rec.study_id           -- %L: literal study_id
                 );
             END LOOP;
         END $$;
