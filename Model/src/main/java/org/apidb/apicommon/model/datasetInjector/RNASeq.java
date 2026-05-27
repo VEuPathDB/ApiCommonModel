@@ -233,7 +233,7 @@ public class RNASeq extends  DatasetInjector {
 	      injectTemplate("rnaSeqFoldChangeQuestion");
               //              injectTemplate("rnaSeqFoldChangeCategories");
 	      setPropValue("searchCategory", "searchCategory-transcriptomics-fold-change");
-	      setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName());
+	      setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_'));
 	      injectTemplate("internalGeneSearchCategory");
 	      if(getPropValueAsBoolean("isStrandSpecific")) {
 		  injectTemplate("strandSpecificGraph");
@@ -249,13 +249,13 @@ public class RNASeq extends  DatasetInjector {
 	  injectTemplate("rnaSeqPercentileQuestion");
           //injectTemplate("rnaSeqPercentileCategories");
 	  setPropValue("searchCategory", "searchCategory-transcriptomics-percentile");
-	  setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
+	  setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_') + "Percentile");
 	  injectTemplate("internalGeneSearchCategory");
 
 	  if(getPropValueAsBoolean("isDESeq")) {
 	      injectTemplate("rnaSeqDESeqQuestion");
 	      setPropValue("searchCategory", "searchCategory-transcriptomics-differential-expression");
-	      setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "DESeq");
+	      setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_') + "DESeq");
 	      injectTemplate("internalGeneSearchCategory");
 	  }
 	  if(getPropValueAsBoolean("isDEGseq")) {
