@@ -8144,15 +8144,23 @@ products of your selected type (or types).<br><br>
       <column name="parentTerm" />
       <sql>
         <![CDATA[
-          SELECT c.three_letter_abbrev as term, c.name as internal, c.name as display,
-                 CASE WHEN p.orthomcl_clade_id = (SELECT min(orthomcl_clade_id) FROM apidb.orthomclclade)
-                      THEN NULL
-                      ELSE p.three_letter_abbrev END as parentTerm
-          FROM apidb.orthomclclade c
-          LEFT JOIN apidb.orthomclclade p ON c.parent_id = p.orthomcl_clade_id
-          WHERE c.three_letter_abbrev not in ('BACI')
-            AND c.orthomcl_clade_id != (SELECT min(orthomcl_clade_id) FROM apidb.orthomclclade)
-          ORDER BY c.depth_first_index ASC, c.three_letter_abbrev ASC
+          WITH RECURSIVE cte AS (
+            SELECT orthomcl_clade_id, three_letter_abbrev, name, depth_first_index,
+                   NULL::varchar AS parent_abbrev, 0 AS level
+            FROM apidb.orthomclclade
+            WHERE orthomcl_clade_id = (SELECT min(orthomcl_clade_id) FROM apidb.orthomclclade)
+            UNION ALL
+            SELECT c.orthomcl_clade_id, c.three_letter_abbrev, c.name, c.depth_first_index,
+                   cte.three_letter_abbrev AS parent_abbrev, cte.level + 1
+            FROM apidb.orthomclclade c
+            JOIN cte ON c.parent_id = cte.orthomcl_clade_id
+          )
+          SELECT three_letter_abbrev AS term, name AS internal, name AS display,
+                 CASE WHEN level = 1 THEN NULL ELSE parent_abbrev END AS parentTerm
+          FROM cte
+          WHERE level > 0
+            AND three_letter_abbrev NOT IN ('BACI')
+          ORDER BY depth_first_index ASC, level ASC, three_letter_abbrev ASC
         ]]>
       </sql>
     </sqlQuery>
