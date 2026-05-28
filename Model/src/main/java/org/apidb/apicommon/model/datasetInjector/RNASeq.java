@@ -370,26 +370,26 @@ public class RNASeq extends  DatasetInjector {
 	  addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "TranscriptionSummary");
           if(getPropValueAsBoolean("hasMultipleSamples")) {
               addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
-                              "GeneQuestions.GenesByRNASeq" + getDatasetName());
+                              "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_'));
 
 	      if(getPropValueAsBoolean("isStrandSpecific")) {
 		  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
-				  "GeneQuestions.GenesByRNASeq" + getDatasetName() + "SenseAntisense");
+				  "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_') + "SenseAntisense");
 	      }
           }
 
 	  if(getPropValueAsBoolean("includeProfileSimilarity")) {
-	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"ProfileSimilarity");
+	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_') + "ProfileSimilarity");
 	  }
 	  if (getPropValueAsBoolean("isDESeq")) {
-	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"DESeq");
+	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_') + "DESeq");
 	  }
 	  if (getPropValueAsBoolean("isDEGseq")) {
-	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"DEGseq");
+	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_') + "DEGseq");
 	  }
 
           addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
-                          "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
+                          "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_') + "Percentile");
 
           if (getPropValueAsBoolean("showIntronJunctions") && getPropValueAsBoolean("includeInUnifiedJunctions")){
 	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByIntronJunctions");
