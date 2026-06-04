@@ -14,17 +14,6 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
 
 :CREATE_AND_POPULATE
   WITH
-    -- Identify 1:1 gene:transcript relationships for this organism
-    one_to_one_genes AS (
-      SELECT gf.na_feature_id as gene_na_feature_id,
-             gf.source_id as gene_source_id,
-             MAX(t.na_feature_id) as transcript_na_feature_id
-      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
-      LEFT JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
-      GROUP BY gf.na_feature_id, gf.source_id
-      HAVING COUNT(t.na_feature_id) = 1
-    ),
-
     -- Informative gene feature products (uninformative products excluded)
     informative_gfp AS (
       SELECT gfp.na_feature_id, gfp.product, gfp.assigned_by, gfp.is_preferred
@@ -101,35 +90,37 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       GROUP BY gf.source_id
     ),
 
-    -- Priority 3: 1:1 + Preferred curated transcript products
+    -- Priority 3: Preferred curated transcript products with 1 distinct informative product across all transcripts
     transcript_curated_preferred_one_to_one AS (
-      SELECT oto.gene_source_id as source_id,
-             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) as product,
+      SELECT gf.source_id,
+             MIN(itp.product) as product,
              3 as source_rule,
-             COUNT(DISTINCT itp.product) as value_count,
-             'preferred_curated_transcript_1to1' as rule_description
-      FROM one_to_one_genes oto
-      INNER JOIN informative_tp itp ON itp.gene_na_feature_id = oto.gene_na_feature_id
+             1 as value_count,
+             'preferred_curated_transcript_1distinct' as rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN informative_tp itp ON itp.gene_na_feature_id = gf.na_feature_id
       WHERE LOWER(itp.assigned_by) IN ('veupathdb', 'genedb', 'hagai', 'liverpool', 'beverleylab',
                                         'kissingerlab', 'robello_lab', 'sanger', 'sgd', 'cgd',
                                         'pombase', 'dictybase', 'flybase', 'tair')
         AND itp.is_preferred = 1
-      GROUP BY oto.gene_source_id
+      GROUP BY gf.na_feature_id, gf.source_id
+      HAVING COUNT(DISTINCT itp.product) = 1
     ),
 
-    -- Priority 4: 1:1 + Any curated transcript products
+    -- Priority 4: Any curated transcript products with 1 distinct informative product across all transcripts
     transcript_curated_any_one_to_one AS (
-      SELECT oto.gene_source_id as source_id,
-             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) as product,
+      SELECT gf.source_id,
+             MIN(itp.product) as product,
              4 as source_rule,
-             COUNT(DISTINCT itp.product) as value_count,
-             'curated_transcript_1to1' as rule_description
-      FROM one_to_one_genes oto
-      INNER JOIN informative_tp itp ON itp.gene_na_feature_id = oto.gene_na_feature_id
+             1 as value_count,
+             'curated_transcript_1distinct' as rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN informative_tp itp ON itp.gene_na_feature_id = gf.na_feature_id
       WHERE LOWER(itp.assigned_by) IN ('veupathdb', 'genedb', 'hagai', 'liverpool', 'beverleylab',
                                         'kissingerlab', 'robello_lab', 'sanger', 'sgd', 'cgd',
                                         'pombase', 'dictybase', 'flybase', 'tair')
-      GROUP BY oto.gene_source_id
+      GROUP BY gf.na_feature_id, gf.source_id
+      HAVING COUNT(DISTINCT itp.product) = 1
     ),
 
     -- Priority 5: ARBA annotations
