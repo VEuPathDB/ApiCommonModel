@@ -123,11 +123,67 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       HAVING COUNT(DISTINCT itp.product) = 1
     ),
 
-    -- Priority 5: ARBA annotations
-    gene_arba AS (
+    -- Priority 5: Preferred GenBank gene products
+    gene_genbank_preferred AS (
       SELECT gf.source_id,
              SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) as product,
              5 as source_rule,
+             COUNT(DISTINCT igfp.product) as value_count,
+             'preferred_genbank_gene' as rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN informative_gfp igfp ON igfp.na_feature_id = gf.na_feature_id
+      WHERE igfp.assigned_by = 'GenBank'
+        AND igfp.is_preferred = 1
+      GROUP BY gf.source_id
+    ),
+
+    -- Priority 6: Any GenBank gene products
+    gene_genbank_any AS (
+      SELECT gf.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) as product,
+             6 as source_rule,
+             COUNT(DISTINCT igfp.product) as value_count,
+             'genbank_gene' as rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN informative_gfp igfp ON igfp.na_feature_id = gf.na_feature_id
+      WHERE igfp.assigned_by = 'GenBank'
+      GROUP BY gf.source_id
+    ),
+
+    -- Priority 7: Preferred GenBank transcript products with 1 distinct informative product across all transcripts
+    transcript_genbank_preferred_one_to_one AS (
+      SELECT gf.source_id,
+             MIN(itp.product) as product,
+             7 as source_rule,
+             1 as value_count,
+             'preferred_genbank_transcript_1distinct' as rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN informative_tp itp ON itp.gene_na_feature_id = gf.na_feature_id
+      WHERE itp.assigned_by = 'GenBank'
+        AND itp.is_preferred = 1
+      GROUP BY gf.na_feature_id, gf.source_id
+      HAVING COUNT(DISTINCT itp.product) = 1
+    ),
+
+    -- Priority 8: Any GenBank transcript products with 1 distinct informative product across all transcripts
+    transcript_genbank_any_one_to_one AS (
+      SELECT gf.source_id,
+             MIN(itp.product) as product,
+             8 as source_rule,
+             1 as value_count,
+             'genbank_transcript_1distinct' as rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN informative_tp itp ON itp.gene_na_feature_id = gf.na_feature_id
+      WHERE itp.assigned_by = 'GenBank'
+      GROUP BY gf.na_feature_id, gf.source_id
+      HAVING COUNT(DISTINCT itp.product) = 1
+    ),
+
+    -- Priority 9: ARBA annotations
+    gene_arba AS (
+      SELECT gf.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) as product,
+             9 as source_rule,
              COUNT(DISTINCT igfp.product) as value_count,
              'arba_gene' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
@@ -136,11 +192,11 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       GROUP BY gf.source_id
     ),
 
-    -- Priority 6: Preferred gene products (is_preferred=1, concatenated)
+    -- Priority 10: Preferred gene products (is_preferred=1, concatenated)
     gene_preferred_all AS (
       SELECT gf.source_id,
              SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) as product,
-             6 as source_rule,
+             10 as source_rule,
              COUNT(DISTINCT igfp.product) as value_count,
              'preferred_gene' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
@@ -149,11 +205,11 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       GROUP BY gf.source_id
     ),
 
-    -- Priority 7: Preferred transcript products (is_preferred=1, concatenated)
+    -- Priority 11: Preferred transcript products (is_preferred=1, concatenated)
     transcript_preferred_all AS (
       SELECT gf.source_id,
              SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) as product,
-             7 as source_rule,
+             11 as source_rule,
              COUNT(DISTINCT itp.product) as value_count,
              'preferred_transcript' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
@@ -162,11 +218,11 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       GROUP BY gf.source_id
     ),
 
-    -- Priority 8: All gene products (concatenated)
+    -- Priority 12: All gene products (concatenated)
     gene_all AS (
       SELECT gf.source_id,
              SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) as product,
-             8 as source_rule,
+             12 as source_rule,
              COUNT(DISTINCT igfp.product) as value_count,
              'all_gene' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
@@ -174,11 +230,11 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       GROUP BY gf.source_id
     ),
 
-    -- Priority 9: All transcript products (concatenated)
+    -- Priority 13: All transcript products (concatenated)
     transcript_all AS (
       SELECT gf.source_id,
              SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) as product,
-             9 as source_rule,
+             13 as source_rule,
              COUNT(DISTINCT itp.product) as value_count,
              'all_transcript' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
@@ -186,11 +242,11 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       GROUP BY gf.source_id
     ),
 
-    -- Priority 10: Base gene product field
+    -- Priority 14: Base gene product field
     gene_base AS (
       SELECT gf.source_id,
              gf.product,
-             10 as source_rule,
+             14 as source_rule,
              1 as value_count,
              'base_gene' as rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
@@ -217,6 +273,10 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       UNION ALL SELECT * FROM gene_curated_any
       UNION ALL SELECT * FROM transcript_curated_preferred_one_to_one
       UNION ALL SELECT * FROM transcript_curated_any_one_to_one
+      UNION ALL SELECT * FROM gene_genbank_preferred
+      UNION ALL SELECT * FROM gene_genbank_any
+      UNION ALL SELECT * FROM transcript_genbank_preferred_one_to_one
+      UNION ALL SELECT * FROM transcript_genbank_any_one_to_one
       UNION ALL SELECT * FROM gene_arba
       UNION ALL SELECT * FROM gene_preferred_all
       UNION ALL SELECT * FROM transcript_preferred_all
@@ -234,7 +294,7 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
   SELECT gf.source_id,
          COALESCE(rp.product, 'unspecified product') as product,
          COALESCE(rp.value_count, 0) as value_count,
-         COALESCE(rp.source_rule, 11) as source_rule,
+         COALESCE(rp.source_rule, 15) as source_rule,
          COALESCE(rp.rule_description, 'unspecified') as source_rule_description,
          ':PROJECT_ID' as project_id,
          ':ORG_ABBREV' as org_abbrev,
