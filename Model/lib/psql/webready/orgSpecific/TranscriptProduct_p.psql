@@ -18,44 +18,6 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
 
 :CREATE_AND_POPULATE
   WITH
-    -- Identify 1:1 gene:transcript relationships for this organism
-    one_to_one_transcripts AS (
-      SELECT t.na_feature_id as transcript_na_feature_id,
-             t.source_id as transcript_source_id,
-             t.gene_na_feature_id,
-             t.gene_source_id
-      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
-      WHERE EXISTS (
-        SELECT 1
-        FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t2
-        WHERE t2.gene_na_feature_id = t.gene_na_feature_id
-        GROUP BY t2.gene_na_feature_id
-        HAVING COUNT(*) = 1
-      )
-    ),
-
-    -- Informative gene feature products (uninformative products excluded)
-    informative_gfp AS (
-      SELECT gfp.na_feature_id as gene_na_feature_id, gfp.product, gfp.assigned_by, gfp.is_preferred
-      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
-      INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = t.gene_na_feature_id
-      WHERE gfp.product IS NOT NULL
-        AND TRIM(gfp.product) != ''
-        AND gfp.product !~* '(hypothetical[_ ]protein|unspecified product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
-        AND NOT (gfp.product ~* '^has domain\(s\) with predicted' AND (gfp.product LIKE '%,%' OR gfp.product ~* ' and '))
-        AND NOT (gfp.product NOT LIKE '% %' AND gfp.product LIKE 'XM%')
-        AND gfp.product !~ '^CAD\d+(\.\d+)?$'
-        AND gfp.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
-        AND gfp.product !~* 'uncharacterized\s+loc\d+'
-        AND gfp.product NOT LIKE 'CSON%'
-        AND gfp.product NOT LIKE 'hypothetical protein BGH%'
-        AND gfp.product NOT LIKE 'DEHA2A%'
-        AND NOT (gfp.product NOT LIKE '% %' AND (gfp.product ~ '^[A-Z]{2,4}\d{4,}$' OR gfp.product ~ '^[A-Z]{3,5}_\d+$' OR gfp.product ~ '^LOC\d+$' OR gfp.product ~ '^[A-Z]+\d+\.[0-9]+$'))
-        AND gfp.product NOT LIKE 'Similar to [%'
-        AND gfp.product NOT LIKE '%Source:UniProt%'
-        AND LOWER(TRIM(gfp.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
-    ),
-
     -- Informative transcript products (uninformative products excluded)
     informative_tp AS (
       SELECT tp.na_feature_id, tp.product, tp.assigned_by, tp.is_preferred
@@ -74,188 +36,296 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
         AND tp.product NOT LIKE 'DEHA2A%'
         AND NOT (tp.product NOT LIKE '% %' AND (tp.product ~ '^[A-Z]{2,4}\d{4,}$' OR tp.product ~ '^[A-Z]{3,5}_\d+$' OR tp.product ~ '^LOC\d+$' OR tp.product ~ '^[A-Z]+\d+\.[0-9]+$'))
         AND tp.product NOT LIKE 'Similar to [%'
-        AND tp.product NOT LIKE '%Source:UniProt%'
+        AND tp.product NOT LIKE '%UniProtKB%'
         AND LOWER(TRIM(tp.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
     ),
 
-    -- Priority 1: 1:1 + Preferred curated gene products
-    gene_curated_preferred_one_to_one AS (
-      SELECT oto.transcript_source_id as source_id,
-             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) as product,
-             1 as source_rule,
-             COUNT(DISTINCT igfp.product) as value_count,
-             'preferred_curated_gene_1to1' as rule_description
-      FROM one_to_one_transcripts oto
-      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = oto.gene_na_feature_id
-      WHERE LOWER(igfp.assigned_by) IN ('veupathdb', 'genedb', 'hagai', 'liverpool', 'beverleylab',
-                                         'kissingerlab', 'robello_lab', 'sanger', 'sgd', 'cgd',
-                                         'pombase', 'dictybase', 'flybase', 'tair', 'apollo')
-        AND igfp.is_preferred = 1
-      GROUP BY oto.transcript_source_id
-    ),
+    -- ===========================================================
+    -- Pass 1: Preferred transcript products, walking tier hierarchy
+    -- ===========================================================
 
-    -- Priority 2: 1:1 + Any curated gene products
-    gene_curated_any_one_to_one AS (
-      SELECT oto.transcript_source_id as source_id,
-             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) as product,
-             2 as source_rule,
-             COUNT(DISTINCT igfp.product) as value_count,
-             'curated_gene_1to1' as rule_description
-      FROM one_to_one_transcripts oto
-      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = oto.gene_na_feature_id
-      WHERE LOWER(igfp.assigned_by) IN ('veupathdb', 'genedb', 'hagai', 'liverpool', 'beverleylab',
-                                         'kissingerlab', 'robello_lab', 'sanger', 'sgd', 'cgd',
-                                         'pombase', 'dictybase', 'flybase', 'tair', 'apollo')
-      GROUP BY oto.transcript_source_id
-    ),
-
-    -- Priority 3: Preferred curated transcript products
-    transcript_curated_preferred AS (
+    -- Tier 1 (VEuPathDB) preferred
+    t1_pref_transcript AS (
       SELECT t.source_id,
-             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) as product,
-             3 as source_rule,
-             COUNT(DISTINCT itp.product) as value_count,
-             'preferred_curated_transcript' as rule_description
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             1 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'veupathdb_preferred_transcript' AS rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
       INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
-      WHERE LOWER(itp.assigned_by) IN ('veupathdb', 'genedb', 'hagai', 'liverpool', 'beverleylab',
-                                        'kissingerlab', 'robello_lab', 'sanger', 'sgd', 'cgd',
-                                        'pombase', 'dictybase', 'flybase', 'tair', 'apollo')
+      WHERE LOWER(itp.assigned_by) = 'veupathdb' AND itp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+
+    -- Tier 2 (Apollo) preferred
+    t2_pref_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             2 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'apollo_preferred_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) = 'apollo' AND itp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+
+    -- Tier 3 (Community) preferred
+    t3_pref_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             3 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'community_preferred_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) = 'community' AND itp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+
+    -- Tier 4 (Research Labs) preferred
+    t4_pref_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             4 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'lab_preferred_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) IN ('anderssonlab','berna','beverleylab','corridalab','flegontovlab',
+                                        'franzen','fritzlab','hertzfowlerlab','jcarltonlab','kissingerlab',
+                                        'liverpool','lukeslab','mcbridelab','msu','painlab','requenalab',
+                                        'siegelab','stukenbrocklab','tachezylab','tarletonlab','ubc',
+                                        'ulaval','valkiunaslab','wittwerlab','yurchenkolab')
         AND itp.is_preferred = 1
       GROUP BY t.source_id
     ),
 
-    -- Priority 4: Any curated transcript products
-    transcript_curated_any AS (
+    -- Tier 5 (Genome DBs: JCVI, JGI, Sanger, PomBase, dictyBase, AspGD, CGD, SGD, GeneDB) preferred
+    t5_pref_transcript AS (
       SELECT t.source_id,
-             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) as product,
-             4 as source_rule,
-             COUNT(DISTINCT itp.product) as value_count,
-             'curated_transcript' as rule_description
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             5 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'genomedb_preferred_transcript' AS rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
       INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
-      WHERE LOWER(itp.assigned_by) IN ('veupathdb', 'genedb', 'hagai', 'liverpool', 'beverleylab',
-                                        'kissingerlab', 'robello_lab', 'sanger', 'sgd', 'cgd',
-                                        'pombase', 'dictybase', 'flybase', 'tair', 'apollo')
+      WHERE LOWER(itp.assigned_by) IN ('jcvi','jgi','sanger','pombase','dictybase','aspgd','cgd','sgd','genedb')
+        AND itp.is_preferred = 1
       GROUP BY t.source_id
     ),
 
-    -- Priority 5: 1:1 + Preferred gene products (is_preferred=1, concatenated)
-    gene_preferred_one_to_one AS (
-      SELECT oto.transcript_source_id as source_id,
-             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) as product,
-             5 as source_rule,
-             COUNT(DISTINCT igfp.product) as value_count,
-             'preferred_gene_1to1' as rule_description
-      FROM one_to_one_transcripts oto
-      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = oto.gene_na_feature_id
-      WHERE igfp.is_preferred = 1
-      GROUP BY oto.transcript_source_id
-    ),
-
-    -- Priority 6: Preferred transcript products (is_preferred=1, concatenated)
-    transcript_preferred_all AS (
+    -- Tier 6 (Ensembl) preferred
+    t6_pref_transcript AS (
       SELECT t.source_id,
-             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) as product,
-             6 as source_rule,
-             COUNT(DISTINCT itp.product) as value_count,
-             'preferred_transcript' as rule_description
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             6 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'ensembl_preferred_transcript' AS rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
       INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
-      WHERE itp.is_preferred = 1
+      WHERE LOWER(itp.assigned_by) = 'ensembl' AND itp.is_preferred = 1
       GROUP BY t.source_id
     ),
 
-    -- Priority 7: 1:1 + All gene products (concatenated)
-    gene_all_one_to_one AS (
-      SELECT oto.transcript_source_id as source_id,
-             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) as product,
-             7 as source_rule,
-             COUNT(DISTINCT igfp.product) as value_count,
-             'all_gene_1to1' as rule_description
-      FROM one_to_one_transcripts oto
-      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = oto.gene_na_feature_id
-      GROUP BY oto.transcript_source_id
-    ),
-
-    -- Priority 8: All transcript products (concatenated)
-    transcript_all AS (
+    -- Tier 7 (UniProt) preferred
+    t7_pref_transcript AS (
       SELECT t.source_id,
-             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) as product,
-             8 as source_rule,
-             COUNT(DISTINCT itp.product) as value_count,
-             'all_transcript' as rule_description
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             7 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'uniprot_preferred_transcript' AS rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
       INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) IN ('uniprot','uniprotkb/trembl','uniprot/pfam')
+        AND itp.is_preferred = 1
       GROUP BY t.source_id
     ),
 
-    -- Priority 9: 1:1 + Base gene product field
-    gene_base_one_to_one AS (
-      SELECT oto.transcript_source_id as source_id,
-             gf.product,
-             9 as source_rule,
-             1 as value_count,
-             'base_gene_1to1' as rule_description
-      FROM one_to_one_transcripts oto
-      INNER JOIN dots.GeneFeature gf ON gf.na_feature_id = oto.gene_na_feature_id
-      WHERE gf.product IS NOT NULL
-        AND TRIM(gf.product) != ''
-        AND gf.product !~* '(hypothetical[_ ]protein|unspecified product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
-        AND NOT (gf.product ~* '^has domain\(s\) with predicted' AND (gf.product LIKE '%,%' OR gf.product ~* ' and '))
-        AND NOT (gf.product NOT LIKE '% %' AND gf.product LIKE 'XM%')
-        AND gf.product !~ '^CAD\d+(\.\d+)?$'
-        AND gf.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
-        AND gf.product !~* 'uncharacterized\s+loc\d+'
-        AND gf.product NOT LIKE 'CSON%'
-        AND gf.product NOT LIKE 'hypothetical protein BGH%'
-        AND gf.product NOT LIKE 'DEHA2A%'
-        AND NOT (gf.product NOT LIKE '% %' AND (gf.product ~ '^[A-Z]{2,4}\d{4,}$' OR gf.product ~ '^[A-Z]{3,5}_\d+$' OR gf.product ~ '^LOC\d+$' OR gf.product ~ '^[A-Z]+\d+\.[0-9]+$'))
-        AND gf.product NOT LIKE 'Similar to [%'
-        AND gf.product NOT LIKE '%Source:UniProt%'
-        AND LOWER(TRIM(gf.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
-    ),
-
-    -- Priority 10: Base transcript product field
-    transcript_base AS (
+    -- Tier 8 (RefSeq) preferred
+    t8_pref_transcript AS (
       SELECT t.source_id,
-             t.product,
-             10 as source_rule,
-             1 as value_count,
-             'base_transcript' as rule_description
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             8 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'refseq_preferred_transcript' AS rule_description
       FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
-      WHERE t.product IS NOT NULL
-        AND TRIM(t.product) != ''
-        AND t.product !~* '(hypothetical[_ ]protein|unspecified product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
-        AND NOT (t.product ~* '^has domain\(s\) with predicted' AND (t.product LIKE '%,%' OR t.product ~* ' and '))
-        AND NOT (t.product NOT LIKE '% %' AND t.product LIKE 'XM%')
-        AND t.product !~ '^CAD\d+(\.\d+)?$'
-        AND t.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
-        AND t.product !~* 'uncharacterized\s+loc\d+'
-        AND t.product NOT LIKE 'CSON%'
-        AND t.product NOT LIKE 'hypothetical protein BGH%'
-        AND t.product NOT LIKE 'DEHA2A%'
-        AND NOT (t.product NOT LIKE '% %' AND (t.product ~ '^[A-Z]{2,4}\d{4,}$' OR t.product ~ '^[A-Z]{3,5}_\d+$' OR t.product ~ '^LOC\d+$' OR t.product ~ '^[A-Z]+\d+\.[0-9]+$'))
-        AND t.product NOT LIKE 'Similar to [%'
-        AND t.product NOT LIKE '%Source:UniProt%'
-        AND LOWER(TRIM(t.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) = 'refseq' AND itp.is_preferred = 1
+      GROUP BY t.source_id
     ),
 
-    -- Combine all priorities
+    -- Tier 9 (EntrezGene) preferred
+    t9_pref_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             9 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'entrezgene_preferred_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) = 'entrezgene' AND itp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+
+    -- Tier 10 (GenBank) preferred
+    t10_pref_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             10 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'genbank_preferred_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) IN ('genbank','gb') AND itp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+
+    -- Tier 11 (Pfam) preferred
+    t11_pref_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             11 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'pfam_preferred_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) = 'pfam' AND itp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+
+    -- ===========================================================
+    -- Pass 2: Non-preferred transcript products, walking tier hierarchy
+    -- ===========================================================
+
+    -- Tier 1 (VEuPathDB) non-preferred
+    t1_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             12 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'veupathdb_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) = 'veupathdb'
+      GROUP BY t.source_id
+    ),
+
+    -- Tier 2 (Apollo) non-preferred
+    t2_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             13 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'apollo_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) = 'apollo'
+      GROUP BY t.source_id
+    ),
+
+    -- Tier 3 (Community) non-preferred
+    t3_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             14 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'community_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) = 'community'
+      GROUP BY t.source_id
+    ),
+
+    -- Tier 4 (Research Labs) non-preferred
+    t4_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             15 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'lab_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) IN ('anderssonlab','berna','beverleylab','corridalab','flegontovlab',
+                                        'franzen','fritzlab','hertzfowlerlab','jcarltonlab','kissingerlab',
+                                        'liverpool','lukeslab','mcbridelab','msu','painlab','requenalab',
+                                        'siegelab','stukenbrocklab','tachezylab','tarletonlab','ubc',
+                                        'ulaval','valkiunaslab','wittwerlab','yurchenkolab')
+      GROUP BY t.source_id
+    ),
+
+    -- Tier 5 (Genome DBs) non-preferred
+    t5_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             16 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'genomedb_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) IN ('jcvi','jgi','sanger','pombase','dictybase','aspgd','cgd','sgd','genedb')
+      GROUP BY t.source_id
+    ),
+
+    -- Tier 6 (Ensembl) non-preferred
+    t6_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             17 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'ensembl_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) = 'ensembl'
+      GROUP BY t.source_id
+    ),
+
+    -- Tier 7 (UniProt) non-preferred
+    t7_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             18 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'uniprot_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) IN ('uniprot','uniprotkb/trembl','uniprot/pfam')
+      GROUP BY t.source_id
+    ),
+
+    -- Tier 8 (RefSeq) non-preferred
+    t8_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             19 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'refseq_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) = 'refseq'
+      GROUP BY t.source_id
+    ),
+
+    -- Tier 9 (EntrezGene) non-preferred
+    t9_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             20 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'entrezgene_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) = 'entrezgene'
+      GROUP BY t.source_id
+    ),
+
+    -- Tier 10 (GenBank) non-preferred
+    t10_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             21 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'genbank_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) IN ('genbank','gb')
+      GROUP BY t.source_id
+    ),
+
+    -- Tier 11 (Pfam) non-preferred
+    t11_transcript AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) AS product,
+             22 AS source_rule, COUNT(DISTINCT itp.product) AS value_count, 'pfam_transcript' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_tp itp ON itp.na_feature_id = t.na_feature_id
+      WHERE LOWER(itp.assigned_by) = 'pfam'
+      GROUP BY t.source_id
+    ),
+
     all_products AS (
-      SELECT * FROM gene_curated_preferred_one_to_one
-      UNION ALL SELECT * FROM gene_curated_any_one_to_one
-      UNION ALL SELECT * FROM transcript_curated_preferred
-      UNION ALL SELECT * FROM transcript_curated_any
-      UNION ALL SELECT * FROM gene_preferred_one_to_one
-      UNION ALL SELECT * FROM transcript_preferred_all
-      UNION ALL SELECT * FROM gene_all_one_to_one
-      UNION ALL SELECT * FROM transcript_all
-      UNION ALL SELECT * FROM gene_base_one_to_one
-      UNION ALL SELECT * FROM transcript_base
+      SELECT * FROM t1_pref_transcript
+      UNION ALL SELECT * FROM t2_pref_transcript
+      UNION ALL SELECT * FROM t3_pref_transcript
+      UNION ALL SELECT * FROM t4_pref_transcript
+      UNION ALL SELECT * FROM t5_pref_transcript
+      UNION ALL SELECT * FROM t6_pref_transcript
+      UNION ALL SELECT * FROM t7_pref_transcript
+      UNION ALL SELECT * FROM t8_pref_transcript
+      UNION ALL SELECT * FROM t9_pref_transcript
+      UNION ALL SELECT * FROM t10_pref_transcript
+      UNION ALL SELECT * FROM t11_pref_transcript
+      UNION ALL SELECT * FROM t1_transcript
+      UNION ALL SELECT * FROM t2_transcript
+      UNION ALL SELECT * FROM t3_transcript
+      UNION ALL SELECT * FROM t4_transcript
+      UNION ALL SELECT * FROM t5_transcript
+      UNION ALL SELECT * FROM t6_transcript
+      UNION ALL SELECT * FROM t7_transcript
+      UNION ALL SELECT * FROM t8_transcript
+      UNION ALL SELECT * FROM t9_transcript
+      UNION ALL SELECT * FROM t10_transcript
+      UNION ALL SELECT * FROM t11_transcript
     ),
 
-    -- Select highest priority product per transcript
     ranked_products AS (
       SELECT source_id, product, source_rule, value_count, rule_description,
              ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY source_rule) as rank
@@ -264,7 +334,7 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
   SELECT t.source_id,
          COALESCE(rp.product, 'unspecified product') as product,
          COALESCE(rp.value_count, 0) as value_count,
-         COALESCE(rp.source_rule, 11) as source_rule,
+         COALESCE(rp.source_rule, 23) as source_rule,
          COALESCE(rp.rule_description, 'unspecified') as source_rule_description,
          ':PROJECT_ID' as project_id,
          ':ORG_ABBREV' as org_abbrev,
