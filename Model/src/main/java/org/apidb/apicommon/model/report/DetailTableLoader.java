@@ -134,11 +134,6 @@ public class DetailTableLoader extends BaseCLI {
         + " separated list of the name(s) of the table field(s) to be" + " dumped.");
   }
 
-  /*
-   * (non-Javadoc)
-   * 
-   * @see org.gusdb.fgputil.BaseCLI#invoke()
-   */
   @Override
   public void execute() throws Exception {
     long start = System.currentTimeMillis();
@@ -161,7 +156,7 @@ public class DetailTableLoader extends BaseCLI {
       logger.debug("getting tables...");
       RecordClass recordClass = wdkModel.getRecordClassByFullName(recordClassName).orElseThrow(
           () -> new WdkModelException("No record class exists with name '" + recordClassName + "'."));
-      Map<String, TableField> tables = recordClass.getTableFieldMap();
+      Map<String, TableField> tables = recordClass.getTableFieldMap(false);
 
       // dump tables in parallel
       DatabaseInstance appDb = wdkModel.getAppDb();
@@ -310,6 +305,11 @@ public class DetailTableLoader extends BaseCLI {
   private int[] aggregateLocally(TableField table, String idSql, PreparedStatement insertStmt, DBPlatform platform,
       String insertSql, String[] pkColumns) throws WdkModelException, SQLException, WdkUserException {
 
+    // skip process queries
+    if (!table.hasSqlQuery()) {
+      return new int[] { 0, 0, 0 };
+    }
+
     String title = getTableTitle(table);
 
     String wrappedSql = getWrappedSql(table, idSql, pkColumns);
@@ -317,7 +317,7 @@ public class DetailTableLoader extends BaseCLI {
     logger.debug("wrapped sql:\n" + wrappedSql);
     ResultSet resultSet = null;
     try {
-      resultSet = SqlUtils.executeQuery(queryDataSource, wrappedSql, table.getWrappedQuery().getFullName() +
+      resultSet = SqlUtils.executeQuery(queryDataSource, wrappedSql, table.getQueryFullName() +
           "__api-report-detail-aggregate", 2000);
       String pk0 = "";
       String pk1 = "";
@@ -447,7 +447,7 @@ public class DetailTableLoader extends BaseCLI {
     if (attribute instanceof ColumnAttributeField) {
       String value = resultSet.getString(attribute.getName().toUpperCase());
       if (value == null) {
-        String errorMessage = "Table Query [" + table.getWrappedQuery().getFullName() + "] returns null " +
+        String errorMessage = "Table Query [" + table.getQueryFullName() + "] returns null " +
             "value on attribute [" + attribute.getName() + "]. The value will be treated as empty string," +
             " but please investigate.";
         // print out more error about the cause;
@@ -528,7 +528,7 @@ public class DetailTableLoader extends BaseCLI {
   }
 
   private void executeRowBatch(PreparedStatement insertStmt, String insertSql, TableField table) throws SQLException {
-    SqlUtils.executePreparedStatementBatch(insertStmt, insertSql, table.getWrappedQuery().getFullName() +
+    SqlUtils.executePreparedStatementBatch(insertStmt, insertSql, table.getQueryFullName() +
         "__api-report-detail-batch-insert");
   }
 
