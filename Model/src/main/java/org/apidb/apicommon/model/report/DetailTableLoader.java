@@ -398,7 +398,12 @@ public class DetailTableLoader extends BaseCLI {
 
   private String getWrappedSql(TableField table, String idSql, String[] pkColumns) {
 
-    String tableSql = table.getUnwrappedQuery().getSql();
+    String tableSql = table.getQuery().leftOrElseThrow(() ->
+        new WdkRuntimeException("Table field " + table.getFullName() +
+            " does not reference a SqlQuery, required for this function."))
+        .getUnwrappedQuery()
+        .getSql();
+
     String pkPredicates = "idq." + pkColumns[0] + " = tq." + pkColumns[0] + "\n";
     String pkList = "tq." + pkColumns[0];
 
