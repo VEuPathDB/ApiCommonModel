@@ -40,8 +40,30 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
         AND LOWER(TRIM(tp.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
     ),
 
+    -- Informative gene feature products for GFP fallback (uninformative products excluded)
+    informative_gfp AS (
+      SELECT gfp.na_feature_id AS gene_na_feature_id, gfp.product, gfp.assigned_by, gfp.is_preferred
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = t.gene_na_feature_id
+      WHERE gfp.product IS NOT NULL
+        AND TRIM(gfp.product) != ''
+        AND gfp.product !~* '(hypothetical[_ ]protein|unspecified product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+        AND NOT (gfp.product ~* '^has domain\(s\) with predicted' AND (gfp.product LIKE '%,%' OR gfp.product ~* ' and '))
+        AND NOT (gfp.product NOT LIKE '% %' AND gfp.product LIKE 'XM%')
+        AND gfp.product !~ '^CAD\d+(\.\d+)?$'
+        AND gfp.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+        AND gfp.product !~* 'uncharacterized\s+loc\d+'
+        AND gfp.product NOT LIKE 'CSON%'
+        AND gfp.product NOT LIKE 'hypothetical protein BGH%'
+        AND gfp.product NOT LIKE 'DEHA2A%'
+        AND NOT (gfp.product NOT LIKE '% %' AND (gfp.product ~ '^[A-Z]{2,4}\d{4,}$' OR gfp.product ~ '^[A-Z]{3,5}_\d+$' OR gfp.product ~ '^LOC\d+$' OR gfp.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+        AND gfp.product NOT LIKE 'Similar to [%'
+        AND gfp.product NOT LIKE '%UniProtKB%'
+        AND LOWER(TRIM(gfp.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
+    ),
+
     -- ===========================================================
-    -- Pass 1: Preferred transcript products, walking tier hierarchy
+    -- Pass 1: Preferred transcript products, all tiers (rules 1-11)
     -- ===========================================================
 
     -- Tier 1 (VEuPathDB) preferred
@@ -173,7 +195,7 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
     ),
 
     -- ===========================================================
-    -- Pass 2: Non-preferred transcript products, walking tier hierarchy
+    -- Pass 2: Non-preferred transcript products, all tiers (rules 12-22)
     -- ===========================================================
 
     -- Tier 1 (VEuPathDB) non-preferred
@@ -301,6 +323,239 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
       GROUP BY t.source_id
     ),
 
+    -- ===========================================================
+    -- Pass 3: Preferred GFP fallback, all tiers (rules 23-33)
+    -- Each transcript inherits all GFP annotations for its gene
+    -- ===========================================================
+
+    t1_pref_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             23 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'veupathdb_preferred_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) = 'veupathdb' AND igfp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+    t2_pref_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             24 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'apollo_preferred_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) = 'apollo' AND igfp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+    t3_pref_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             25 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'community_preferred_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) = 'community' AND igfp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+    t4_pref_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             26 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'lab_preferred_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) IN ('anderssonlab','berna','beverleylab','corridalab','flegontovlab',
+                                         'franzen','fritzlab','hertzfowlerlab','jcarltonlab','kissingerlab',
+                                         'liverpool','lukeslab','mcbridelab','msu','painlab','requenalab',
+                                         'siegelab','stukenbrocklab','tachezylab','tarletonlab','ubc',
+                                         'ulaval','valkiunaslab','wittwerlab','yurchenkolab')
+        AND igfp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+    t5_pref_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             27 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'genomedb_preferred_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) IN ('jcvi','jgi','sanger','pombase','dictybase','aspgd','cgd','sgd','genedb')
+        AND igfp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+    t6_pref_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             28 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'ensembl_preferred_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) = 'ensembl' AND igfp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+    t7_pref_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             29 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'uniprot_preferred_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) IN ('uniprot','uniprotkb/trembl','uniprot/pfam')
+        AND igfp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+    t8_pref_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             30 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'refseq_preferred_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) = 'refseq' AND igfp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+    t9_pref_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             31 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'entrezgene_preferred_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) = 'entrezgene' AND igfp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+    t10_pref_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             32 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'genbank_preferred_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) IN ('genbank','gb') AND igfp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+    t11_pref_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             33 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'pfam_preferred_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) = 'pfam' AND igfp.is_preferred = 1
+      GROUP BY t.source_id
+    ),
+
+    -- ===========================================================
+    -- Pass 4: Non-preferred GFP fallback, all tiers (rules 34-44)
+    -- ===========================================================
+
+    t1_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             34 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'veupathdb_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) = 'veupathdb'
+      GROUP BY t.source_id
+    ),
+    t2_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             35 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'apollo_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) = 'apollo'
+      GROUP BY t.source_id
+    ),
+    t3_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             36 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'community_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) = 'community'
+      GROUP BY t.source_id
+    ),
+    t4_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             37 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'lab_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) IN ('anderssonlab','berna','beverleylab','corridalab','flegontovlab',
+                                         'franzen','fritzlab','hertzfowlerlab','jcarltonlab','kissingerlab',
+                                         'liverpool','lukeslab','mcbridelab','msu','painlab','requenalab',
+                                         'siegelab','stukenbrocklab','tachezylab','tarletonlab','ubc',
+                                         'ulaval','valkiunaslab','wittwerlab','yurchenkolab')
+      GROUP BY t.source_id
+    ),
+    t5_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             38 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'genomedb_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) IN ('jcvi','jgi','sanger','pombase','dictybase','aspgd','cgd','sgd','genedb')
+      GROUP BY t.source_id
+    ),
+    t6_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             39 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'ensembl_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) = 'ensembl'
+      GROUP BY t.source_id
+    ),
+    t7_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             40 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'uniprot_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) IN ('uniprot','uniprotkb/trembl','uniprot/pfam')
+      GROUP BY t.source_id
+    ),
+    t8_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             41 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'refseq_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) = 'refseq'
+      GROUP BY t.source_id
+    ),
+    t9_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             42 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'entrezgene_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) = 'entrezgene'
+      GROUP BY t.source_id
+    ),
+    t10_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             43 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'genbank_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) IN ('genbank','gb')
+      GROUP BY t.source_id
+    ),
+    t11_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             44 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'pfam_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) = 'pfam'
+      GROUP BY t.source_id
+    ),
+
+    -- ===========================================================
+    -- Rule 45: ARBA (only when all tier sources are uninformative)
+    -- ===========================================================
+    arba_gene AS (
+      SELECT t.source_id,
+             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) AS product,
+             45 AS source_rule, COUNT(DISTINCT igfp.product) AS value_count, 'arba_gene' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t
+      INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t.gene_na_feature_id
+      WHERE LOWER(igfp.assigned_by) = 'arba'
+      GROUP BY t.source_id
+    ),
+
     all_products AS (
       SELECT * FROM t1_pref_transcript
       UNION ALL SELECT * FROM t2_pref_transcript
@@ -324,6 +579,29 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
       UNION ALL SELECT * FROM t9_transcript
       UNION ALL SELECT * FROM t10_transcript
       UNION ALL SELECT * FROM t11_transcript
+      UNION ALL SELECT * FROM t1_pref_gene
+      UNION ALL SELECT * FROM t2_pref_gene
+      UNION ALL SELECT * FROM t3_pref_gene
+      UNION ALL SELECT * FROM t4_pref_gene
+      UNION ALL SELECT * FROM t5_pref_gene
+      UNION ALL SELECT * FROM t6_pref_gene
+      UNION ALL SELECT * FROM t7_pref_gene
+      UNION ALL SELECT * FROM t8_pref_gene
+      UNION ALL SELECT * FROM t9_pref_gene
+      UNION ALL SELECT * FROM t10_pref_gene
+      UNION ALL SELECT * FROM t11_pref_gene
+      UNION ALL SELECT * FROM t1_gene
+      UNION ALL SELECT * FROM t2_gene
+      UNION ALL SELECT * FROM t3_gene
+      UNION ALL SELECT * FROM t4_gene
+      UNION ALL SELECT * FROM t5_gene
+      UNION ALL SELECT * FROM t6_gene
+      UNION ALL SELECT * FROM t7_gene
+      UNION ALL SELECT * FROM t8_gene
+      UNION ALL SELECT * FROM t9_gene
+      UNION ALL SELECT * FROM t10_gene
+      UNION ALL SELECT * FROM t11_gene
+      UNION ALL SELECT * FROM arba_gene
     ),
 
     ranked_products AS (
@@ -334,7 +612,7 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
   SELECT t.source_id,
          COALESCE(rp.product, 'unspecified product') as product,
          COALESCE(rp.value_count, 0) as value_count,
-         COALESCE(rp.source_rule, 23) as source_rule,
+         COALESCE(rp.source_rule, 46) as source_rule,
          COALESCE(rp.rule_description, 'unspecified') as source_rule_description,
          ':PROJECT_ID' as project_id,
          ':ORG_ABBREV' as org_abbrev,
