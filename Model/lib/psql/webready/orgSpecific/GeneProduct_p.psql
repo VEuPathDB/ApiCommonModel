@@ -490,6 +490,27 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       GROUP BY gf.source_id
     ),
 
+    -- ===========================================================
+    -- Rule 46: blank/null assigned_by (all blank products must agree)
+    -- ===========================================================
+    blank_assigned_by AS (
+      SELECT gf.source_id,
+             SUBSTR(STRING_AGG(DISTINCT bp.product, ', ' ORDER BY bp.product), 1, 4000) AS product,
+             46 AS source_rule, COUNT(DISTINCT bp.product) AS value_count, 'blank_assigned_by' AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN (
+        SELECT na_feature_id, product
+        FROM informative_gfp
+        WHERE assigned_by IS NULL OR TRIM(assigned_by) = ''
+        UNION ALL
+        SELECT gene_na_feature_id AS na_feature_id, product
+        FROM informative_tp
+        WHERE assigned_by IS NULL OR TRIM(assigned_by) = ''
+      ) bp ON bp.na_feature_id = gf.na_feature_id
+      GROUP BY gf.source_id
+      HAVING COUNT(DISTINCT bp.product) = 1
+    ),
+
     all_products AS (
       SELECT * FROM t1_pref_gene     UNION ALL SELECT * FROM t2_pref_gene
       UNION ALL SELECT * FROM t3_pref_gene     UNION ALL SELECT * FROM t4_pref_gene
@@ -516,6 +537,7 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
       UNION ALL SELECT * FROM t9_transcript    UNION ALL SELECT * FROM t10_transcript
       UNION ALL SELECT * FROM t11_transcript
       UNION ALL SELECT * FROM arba_gene
+      UNION ALL SELECT * FROM blank_assigned_by
     ),
 
     ranked_products AS (
@@ -526,7 +548,7 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
   SELECT gf.source_id,
          COALESCE(rp.product, 'unspecified product') as product,
          COALESCE(rp.value_count, 0) as value_count,
-         COALESCE(rp.source_rule, 46) as source_rule,
+         COALESCE(rp.source_rule, 47) as source_rule,
          COALESCE(rp.rule_description, 'unspecified') as source_rule_description,
          ':PROJECT_ID' as project_id,
          ':ORG_ABBREV' as org_abbrev,

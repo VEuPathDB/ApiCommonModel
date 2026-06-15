@@ -197,6 +197,18 @@
                                        AND rl.source_type = ai.source_type
               GROUP BY gf.source_id, rl.source_rule, rl.rule_description, rl.source_type
               HAVING rl.source_type = 'gene' OR COUNT(DISTINCT ai.product) = 1
+              UNION ALL
+              -- blank/null assigned_by products (rule 46); all such products for the gene must agree
+              SELECT gf.source_id,
+                     SUBSTR(STRING_AGG(DISTINCT ai.product, ', ' ORDER BY ai.product), 1, 4000) AS product,
+                     46                                                                            AS source_rule,
+                     COUNT(DISTINCT ai.product)                                                    AS value_count,
+                     'blank_assigned_by'                                                           AS rule_description
+              FROM genes gf
+              INNER JOIN all_informative ai ON ai.gene_na_feature_id = gf.na_feature_id
+              WHERE (ai.assigned_by IS NULL OR TRIM(ai.assigned_by) = '')
+              GROUP BY gf.source_id
+              HAVING COUNT(DISTINCT ai.product) = 1
             ),
 
             ranked_products AS (
@@ -207,7 +219,7 @@
         SELECT gf.source_id,
                COALESCE(rp.product, 'unspecified product')  AS product,
                COALESCE(rp.value_count, 0)                  AS value_count,
-               COALESCE(rp.source_rule, 46)                 AS source_rule,
+               COALESCE(rp.source_rule, 47)                 AS source_rule,
                COALESCE(rp.rule_description, 'unspecified') AS source_rule_description,
                gf.org_abbrev,
                current_timestamp                            AS modification_date
@@ -427,6 +439,17 @@
                                        AND rl.source_type = ai.source_type
               GROUP BY ai.source_id, rl.source_rule, rl.rule_description
               HAVING COUNT(DISTINCT ai.product) = 1
+              UNION ALL
+              -- blank/null assigned_by products (rule 46); all such products for the transcript must agree
+              SELECT ai.source_id,
+                     SUBSTR(STRING_AGG(DISTINCT ai.product, ', ' ORDER BY ai.product), 1, 4000) AS product,
+                     46                                                                            AS source_rule,
+                     COUNT(DISTINCT ai.product)                                                    AS value_count,
+                     'blank_assigned_by'                                                           AS rule_description
+              FROM all_informative ai
+              WHERE (ai.assigned_by IS NULL OR TRIM(ai.assigned_by) = '')
+              GROUP BY ai.source_id
+              HAVING COUNT(DISTINCT ai.product) = 1
             ),
 
             ranked_products AS (
@@ -437,7 +460,7 @@
         SELECT tr.transcript_source_id                      AS source_id,
                COALESCE(rp.product, 'unspecified product')  AS product,
                COALESCE(rp.value_count, 0)                  AS value_count,
-               COALESCE(rp.source_rule, 46)                 AS source_rule,
+               COALESCE(rp.source_rule, 47)                 AS source_rule,
                COALESCE(rp.rule_description, 'unspecified') AS source_rule_description,
                tr.org_abbrev,
                current_timestamp                            AS modification_date
@@ -3376,7 +3399,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
                   null as evidence_code_parameter, null as assigned_by,
                   'unspecified product' as source, orgrecord.org_abbrev
            from TempGeneProduct gp, webready.GeneAttributes_p ga
-           where gp.source_rule = 10
+           where gp.source_rule = 47
              and gp.source_id = ga.source_id
              and ga.org_abbrev = orgrecord.org_abbrev
              and gp.org_abbrev = orgrecord.org_abbrev;
