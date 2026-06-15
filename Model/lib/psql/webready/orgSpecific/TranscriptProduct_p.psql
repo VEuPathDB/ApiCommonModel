@@ -62,6 +62,28 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
         AND LOWER(TRIM(gfp.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
     ),
 
+    -- Informative dots.Transcript products (uninformative products excluded)
+    informative_dt AS (
+      SELECT t.na_feature_id, t.product
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp tmp
+      INNER JOIN dots.Transcript t ON t.na_feature_id = tmp.na_feature_id
+      WHERE t.product IS NOT NULL
+        AND TRIM(t.product) != ''
+        AND t.product !~* '(hypothetical[_ ]protein|unspecified product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+        AND NOT (t.product ~* '^has domain\(s\) with predicted' AND (t.product LIKE '%,%' OR t.product ~* ' and '))
+        AND NOT (t.product NOT LIKE '% %' AND t.product LIKE 'XM%')
+        AND t.product !~ '^CAD\d+(\.\d+)?$'
+        AND t.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+        AND t.product !~* 'uncharacterized\s+loc\d+'
+        AND t.product NOT LIKE 'CSON%'
+        AND t.product NOT LIKE 'hypothetical protein BGH%'
+        AND t.product NOT LIKE 'DEHA2A%'
+        AND NOT (t.product NOT LIKE '% %' AND (t.product ~ '^[A-Z]{2,4}\d{4,}$' OR t.product ~ '^[A-Z]{3,5}_\d+$' OR t.product ~ '^LOC\d+$' OR t.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+        AND t.product NOT LIKE 'Similar to [%'
+        AND t.product NOT LIKE '%UniProtKB%'
+        AND LOWER(TRIM(t.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
+    ),
+
     -- ===========================================================
     -- Pass 1: Preferred transcript products, all tiers (rules 1-11)
     -- ===========================================================
@@ -618,6 +640,9 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp as
         FROM :SCHEMA.:CLEAN_ORG_ABBREVTranscriptProductTmp t2
         INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = t2.gene_na_feature_id
         WHERE igfp.assigned_by IS NULL OR TRIM(igfp.assigned_by) = ''
+        UNION ALL
+        SELECT idt.na_feature_id, idt.product
+        FROM informative_dt idt
       ) bp ON bp.na_feature_id = t.na_feature_id
       GROUP BY t.source_id
       HAVING COUNT(DISTINCT bp.product) = 1
