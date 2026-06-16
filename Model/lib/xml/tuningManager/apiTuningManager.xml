@@ -127,6 +127,33 @@
               FROM informative_gf
             ),
 
+            all_noninformative AS (
+              SELECT gf.na_feature_id AS gene_na_feature_id, NULL AS transcript_na_feature_id,
+                     gfp.product, gfp.assigned_by, gfp.is_preferred, 'gene' AS source_type
+              FROM genes gf
+              INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
+              WHERE gfp.product IS NOT NULL AND TRIM(gfp.product) != ''
+              UNION ALL
+              SELECT gf.na_feature_id AS gene_na_feature_id, t.na_feature_id AS transcript_na_feature_id,
+                     tp.product, tp.assigned_by, tp.is_preferred, 'transcript' AS source_type
+              FROM genes gf
+              INNER JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
+              INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = t.na_feature_id
+              WHERE tp.product IS NOT NULL AND TRIM(tp.product) != ''
+              UNION ALL
+              SELECT gf.na_feature_id AS gene_na_feature_id, t.na_feature_id AS transcript_na_feature_id,
+                     t.product, NULL AS assigned_by, 0 AS is_preferred, 'transcript' AS source_type
+              FROM genes gf
+              INNER JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
+              WHERE t.product IS NOT NULL AND TRIM(t.product) != ''
+              UNION ALL
+              SELECT gf.na_feature_id AS gene_na_feature_id, NULL AS transcript_na_feature_id,
+                     dgf.product, NULL AS assigned_by, 0 AS is_preferred, 'gene' AS source_type
+              FROM genes gf
+              INNER JOIN dots.GeneFeature dgf ON dgf.na_feature_id = gf.na_feature_id
+              WHERE dgf.product IS NOT NULL AND TRIM(dgf.product) != ''
+            ),
+
             assigned_by_groups(assigned_by_val, group_name) AS (
               VALUES
                 ('veupathdb',        'veupathdb'),
@@ -259,6 +286,33 @@
               WHERE (ai.assigned_by IS NULL OR TRIM(ai.assigned_by) = '')
               GROUP BY gf.source_id
               HAVING COUNT(DISTINCT ai.product) = 1
+              UNION ALL
+              -- uninformative products via same priority hierarchy (rules 48-93)
+              SELECT gf.source_id,
+                     SUBSTR(STRING_AGG(DISTINCT ani.product, ', ' ORDER BY ani.product), 1, 4000) AS product,
+                     rl.source_rule + 47,
+                     COUNT(DISTINCT ani.product)                                                    AS value_count,
+                     rl.rule_description || '_uninformative'
+              FROM genes gf
+              INNER JOIN all_noninformative ani ON ani.gene_na_feature_id = gf.na_feature_id
+              INNER JOIN assigned_by_groups abg ON abg.assigned_by_val = LOWER(ani.assigned_by)
+              INNER JOIN rule_lookup rl ON rl.group_name = abg.group_name
+                                       AND rl.is_preferred = ani.is_preferred
+                                       AND rl.source_type = ani.source_type
+              GROUP BY gf.source_id, rl.source_rule, rl.rule_description, rl.source_type
+              HAVING rl.source_type = 'gene' OR COUNT(DISTINCT ani.product) = 1
+              UNION ALL
+              -- blank/null assigned_by uninformative products (rule 92)
+              SELECT gf.source_id,
+                     SUBSTR(STRING_AGG(DISTINCT ani.product, ', ' ORDER BY ani.product), 1, 4000) AS product,
+                     92                                                                             AS source_rule,
+                     COUNT(DISTINCT ani.product)                                                    AS value_count,
+                     'blank_assigned_by_uninformative'                                              AS rule_description
+              FROM genes gf
+              INNER JOIN all_noninformative ani ON ani.gene_na_feature_id = gf.na_feature_id
+              WHERE (ani.assigned_by IS NULL OR TRIM(ani.assigned_by) = '')
+              GROUP BY gf.source_id
+              HAVING COUNT(DISTINCT ani.product) = 1
             ),
 
             ranked_products AS (
@@ -269,7 +323,7 @@
         SELECT gf.source_id,
                COALESCE(rp.product, 'unspecified product')  AS product,
                COALESCE(rp.value_count, 0)                  AS value_count,
-               COALESCE(rp.source_rule, 47)                 AS source_rule,
+               COALESCE(rp.source_rule, 94)                 AS source_rule,
                COALESCE(rp.rule_description, 'unspecified') AS source_rule_description,
                gf.org_abbrev,
                current_timestamp                            AS modification_date
@@ -420,6 +474,28 @@
               INNER JOIN informative_gf igf ON igf.gene_na_feature_id = tr.gene_na_feature_id
             ),
 
+            all_noninformative AS (
+              SELECT tr.transcript_source_id AS source_id, tp.product, tp.assigned_by, tp.is_preferred, 'transcript' AS source_type
+              FROM transcripts tr
+              INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = tr.transcript_na_feature_id
+              WHERE tp.product IS NOT NULL AND TRIM(tp.product) != ''
+              UNION ALL
+              SELECT tr.transcript_source_id AS source_id, gfp.product, gfp.assigned_by, gfp.is_preferred, 'gene' AS source_type
+              FROM transcripts tr
+              INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = tr.gene_na_feature_id
+              WHERE gfp.product IS NOT NULL AND TRIM(gfp.product) != ''
+              UNION ALL
+              SELECT tr.transcript_source_id AS source_id, t.product, NULL AS assigned_by, 0 AS is_preferred, 'transcript' AS source_type
+              FROM transcripts tr
+              INNER JOIN dots.Transcript t ON t.na_feature_id = tr.transcript_na_feature_id
+              WHERE t.product IS NOT NULL AND TRIM(t.product) != ''
+              UNION ALL
+              SELECT tr.transcript_source_id AS source_id, dgf.product, NULL AS assigned_by, 0 AS is_preferred, 'gene' AS source_type
+              FROM transcripts tr
+              INNER JOIN dots.GeneFeature dgf ON dgf.na_feature_id = tr.gene_na_feature_id
+              WHERE dgf.product IS NOT NULL AND TRIM(dgf.product) != ''
+            ),
+
             assigned_by_groups(assigned_by_val, group_name) AS (
               VALUES
                 ('veupathdb',        'veupathdb'),
@@ -550,6 +626,31 @@
               WHERE (ai.assigned_by IS NULL OR TRIM(ai.assigned_by) = '')
               GROUP BY ai.source_id
               HAVING COUNT(DISTINCT ai.product) = 1
+              UNION ALL
+              -- uninformative products via same priority hierarchy (rules 48-93)
+              SELECT ani.source_id,
+                     SUBSTR(STRING_AGG(DISTINCT ani.product, ', ' ORDER BY ani.product), 1, 4000) AS product,
+                     rl.source_rule + 47,
+                     COUNT(DISTINCT ani.product)                                                    AS value_count,
+                     rl.rule_description || '_uninformative'
+              FROM all_noninformative ani
+              INNER JOIN assigned_by_groups abg ON abg.assigned_by_val = LOWER(ani.assigned_by)
+              INNER JOIN rule_lookup rl ON rl.group_name = abg.group_name
+                                       AND rl.is_preferred = ani.is_preferred
+                                       AND rl.source_type = ani.source_type
+              GROUP BY ani.source_id, rl.source_rule, rl.rule_description
+              HAVING COUNT(DISTINCT ani.product) = 1
+              UNION ALL
+              -- blank/null assigned_by uninformative products (rule 92)
+              SELECT ani.source_id,
+                     SUBSTR(STRING_AGG(DISTINCT ani.product, ', ' ORDER BY ani.product), 1, 4000) AS product,
+                     92                                                                             AS source_rule,
+                     COUNT(DISTINCT ani.product)                                                    AS value_count,
+                     'blank_assigned_by_uninformative'                                              AS rule_description
+              FROM all_noninformative ani
+              WHERE (ani.assigned_by IS NULL OR TRIM(ani.assigned_by) = '')
+              GROUP BY ani.source_id
+              HAVING COUNT(DISTINCT ani.product) = 1
             ),
 
             ranked_products AS (
@@ -560,7 +661,7 @@
         SELECT tr.transcript_source_id                      AS source_id,
                COALESCE(rp.product, 'unspecified product')  AS product,
                COALESCE(rp.value_count, 0)                  AS value_count,
-               COALESCE(rp.source_rule, 47)                 AS source_rule,
+               COALESCE(rp.source_rule, 94)                 AS source_rule,
                COALESCE(rp.rule_description, 'unspecified') AS source_rule_description,
                tr.org_abbrev,
                current_timestamp                            AS modification_date
