@@ -11,7 +11,7 @@ public class PhenotypeWithImages extends DatasetInjector {
   @Override
   public void addModelReferences() {
       String datasetName = getDatasetName();
-
+      addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "Phenotype"); 
       addWdkReference("GeneRecordClasses.GeneRecordClass", "table", datasetName + "_PhenotypeImages");
   }
 
