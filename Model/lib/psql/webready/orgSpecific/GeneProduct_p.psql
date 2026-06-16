@@ -82,6 +82,27 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
         AND LOWER(TRIM(t.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
     ),
 
+    -- Informative dots.GeneFeature products (uninformative products excluded)
+    informative_gf AS (
+      SELECT gf.na_feature_id, gf.product
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      WHERE gf.product IS NOT NULL
+        AND TRIM(gf.product) != ''
+        AND gf.product !~* '(hypothetical[_ ]protein|unspecified product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+        AND NOT (gf.product ~* '^has domain\(s\) with predicted' AND (gf.product LIKE '%,%' OR gf.product ~* ' and '))
+        AND NOT (gf.product NOT LIKE '% %' AND gf.product LIKE 'XM%')
+        AND gf.product !~ '^CAD\d+(\.\d+)?$'
+        AND gf.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+        AND gf.product !~* 'uncharacterized\s+loc\d+'
+        AND gf.product NOT LIKE 'CSON%'
+        AND gf.product NOT LIKE 'hypothetical protein BGH%'
+        AND gf.product NOT LIKE 'DEHA2A%'
+        AND NOT (gf.product NOT LIKE '% %' AND (gf.product ~ '^[A-Z]{2,4}\d{4,}$' OR gf.product ~ '^[A-Z]{3,5}_\d+$' OR gf.product ~ '^LOC\d+$' OR gf.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+        AND gf.product NOT LIKE 'Similar to [%'
+        AND gf.product NOT LIKE '%UniProtKB%'
+        AND LOWER(TRIM(gf.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
+    ),
+
     -- ===========================================================
     -- Pass 1: Preferred GFP, all tiers (rules 1-11)
     -- ===========================================================
@@ -531,6 +552,9 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
         UNION ALL
         SELECT gene_na_feature_id AS na_feature_id, product
         FROM informative_dt
+        UNION ALL
+        SELECT na_feature_id, product
+        FROM informative_gf
       ) bp ON bp.na_feature_id = gf.na_feature_id
       GROUP BY gf.source_id
       HAVING COUNT(DISTINCT bp.product) = 1

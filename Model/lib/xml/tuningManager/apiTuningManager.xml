@@ -88,6 +88,27 @@
                 AND LOWER(TRIM(t.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
             ),
 
+            informative_gf AS (
+              SELECT gf.na_feature_id AS gene_na_feature_id, dgf.product
+              FROM genes gf
+              INNER JOIN dots.GeneFeature dgf ON dgf.na_feature_id = gf.na_feature_id
+              WHERE dgf.product IS NOT NULL
+                AND TRIM(dgf.product) != ''
+                AND dgf.product !~* '(hypothetical[_ ]protein|unspecified product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+                AND NOT (dgf.product ~* '^has domain\(s\) with predicted' AND (dgf.product LIKE '%,%' OR dgf.product ~* ' and '))
+                AND NOT (dgf.product NOT LIKE '% %' AND dgf.product LIKE 'XM%')
+                AND dgf.product !~ '^CAD\d+(\.\d+)?$'
+                AND dgf.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+                AND dgf.product !~* 'uncharacterized\s+loc\d+'
+                AND dgf.product NOT LIKE 'CSON%'
+                AND dgf.product NOT LIKE 'hypothetical protein BGH%'
+                AND dgf.product NOT LIKE 'DEHA2A%'
+                AND NOT (dgf.product NOT LIKE '% %' AND (dgf.product ~ '^[A-Z]{2,4}\d{4,}$' OR dgf.product ~ '^[A-Z]{3,5}_\d+$' OR dgf.product ~ '^LOC\d+$' OR dgf.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+                AND dgf.product NOT LIKE 'Similar to [%'
+                AND dgf.product NOT LIKE '%UniProtKB%'
+                AND LOWER(TRIM(dgf.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
+            ),
+
             all_informative AS (
               SELECT na_feature_id AS gene_na_feature_id, NULL AS transcript_na_feature_id,
                      product, assigned_by, is_preferred, 'gene' AS source_type
@@ -100,6 +121,10 @@
               SELECT gene_na_feature_id, transcript_na_feature_id,
                      product, NULL AS assigned_by, 0 AS is_preferred, 'transcript' AS source_type
               FROM informative_dt
+              UNION ALL
+              SELECT gene_na_feature_id, NULL AS transcript_na_feature_id,
+                     product, NULL AS assigned_by, 0 AS is_preferred, 'gene' AS source_type
+              FROM informative_gf
             ),
 
             assigned_by_groups(assigned_by_val, group_name) AS (
@@ -356,6 +381,27 @@
                 AND LOWER(TRIM(t.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
             ),
 
+            informative_gf AS (
+              SELECT DISTINCT tr.gene_na_feature_id, dgf.product
+              FROM transcripts tr
+              INNER JOIN dots.GeneFeature dgf ON dgf.na_feature_id = tr.gene_na_feature_id
+              WHERE dgf.product IS NOT NULL
+                AND TRIM(dgf.product) != ''
+                AND dgf.product !~* '(hypothetical[_ ]protein|unspecified product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+                AND NOT (dgf.product ~* '^has domain\(s\) with predicted' AND (dgf.product LIKE '%,%' OR dgf.product ~* ' and '))
+                AND NOT (dgf.product NOT LIKE '% %' AND dgf.product LIKE 'XM%')
+                AND dgf.product !~ '^CAD\d+(\.\d+)?$'
+                AND dgf.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+                AND dgf.product !~* 'uncharacterized\s+loc\d+'
+                AND dgf.product NOT LIKE 'CSON%'
+                AND dgf.product NOT LIKE 'hypothetical protein BGH%'
+                AND dgf.product NOT LIKE 'DEHA2A%'
+                AND NOT (dgf.product NOT LIKE '% %' AND (dgf.product ~ '^[A-Z]{2,4}\d{4,}$' OR dgf.product ~ '^[A-Z]{3,5}_\d+$' OR dgf.product ~ '^LOC\d+$' OR dgf.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+                AND dgf.product NOT LIKE 'Similar to [%'
+                AND dgf.product NOT LIKE '%UniProtKB%'
+                AND LOWER(TRIM(dgf.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
+            ),
+
             all_informative AS (
               SELECT tr.transcript_source_id AS source_id, itp.product, itp.assigned_by, itp.is_preferred, 'transcript' AS source_type
               FROM transcripts tr
@@ -368,6 +414,10 @@
               SELECT tr.transcript_source_id AS source_id, idt.product, NULL AS assigned_by, 0 AS is_preferred, 'transcript' AS source_type
               FROM transcripts tr
               INNER JOIN informative_dt idt ON idt.transcript_na_feature_id = tr.transcript_na_feature_id
+              UNION ALL
+              SELECT tr.transcript_source_id AS source_id, igf.product, NULL AS assigned_by, 0 AS is_preferred, 'gene' AS source_type
+              FROM transcripts tr
+              INNER JOIN informative_gf igf ON igf.gene_na_feature_id = tr.gene_na_feature_id
             ),
 
             assigned_by_groups(assigned_by_val, group_name) AS (
