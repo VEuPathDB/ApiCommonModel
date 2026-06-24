@@ -165,12 +165,14 @@ sub addLowComplexity {
 sub addHydropathy {
   my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
 
-    my $hydropathyTrack;
-    my $relativePathToBigWigFile = "${nameForFileNames}/genomeAndProteome/bigwig/hydropathy.bw";
-    my $summary = "Kyte-Doolittle hydropathy plot";
+  my $hydropathyTrack;
+  my $relativePathToBigWigFile = "${nameForFileNames}/genomeAndProteome/bigwig/hydropathy.bw";
+  my $summary = "Kyte-Doolittle hydropathy plot";
+  my $fullPathToGffFile = "${webservicesDir}/${projectName}/build-${buildNumber}/${relativePathToGffFile}";
+  
+  return unless(-e $fullPathToGffFile);
 
-
-    $hydropathyTrack = ApiCommonModel::Model::JBrowseTrackConfig::HydropathyTrackConfig->new({
+  $hydropathyTrack = ApiCommonModel::Model::JBrowseTrackConfig::HydropathyTrackConfig->new({
                                                                                                 project_name => $projectName,
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToBigWigFile,

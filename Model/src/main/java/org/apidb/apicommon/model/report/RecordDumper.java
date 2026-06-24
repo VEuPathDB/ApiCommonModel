@@ -39,6 +39,7 @@ public class RecordDumper {
     /**
      * @param args
      */
+    @Deprecated
     public static void main(String[] args) throws Exception {
         if (args.length != 6 && args.length != 8) {
             System.err.println("Invalid parameters.");
@@ -161,6 +162,7 @@ public class RecordDumper {
                 + " seconds.");
     }
 
+    @Deprecated
     public static void printUsage() {
         System.out.println();
         System.out.println("Usage: wdkRecordDump -model <model_name> -organism "

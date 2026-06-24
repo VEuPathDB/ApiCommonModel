@@ -7262,6 +7262,7 @@ products of your selected type (or types).<br><br>
            @VDI_DATASETS_SCHEMA@.UD_GeneId g
       where aud.user_id = $$user_id$$
       and g.user_dataset_id = aud.user_dataset_id
+      AND (project_id = '@PROJECT_ID@' or ('UniDB' = '@PROJECT_ID@' and 'ClinEpiDB' != project_id))
    ) order by num, display
        </sql>
        </sqlQuery>
@@ -7283,6 +7284,7 @@ products of your selected type (or types).<br><br>
               WHERE
                 user_id = $$user_id$$
                 AND type = 'phenotype'
+		AND (project_id = '@PROJECT_ID@' or ('UniDB' = '@PROJECT_ID@' and 'ClinEpiDB' != project_id))
               ORDER BY display
             ]]>
           </sql>
@@ -7301,8 +7303,8 @@ products of your selected type (or types).<br><br>
               , aud.name as display
               FROM
                 @VDI_CONTROL_SCHEMA@.availableuserdatasets aud
-              WHERE
-                user_id = $$user_id$$
+              WHERE user_id = $$user_id$$
+		AND (project_id = '@PROJECT_ID@' or ('UniDB' = '@PROJECT_ID@' and 'ClinEpiDB' != project_id))
                 AND exists(
                   SELECT 1
                   FROM
@@ -7314,7 +7316,7 @@ products of your selected type (or types).<br><br>
                   WHERE
                     ps.user_dataset_id = aud.user_dataset_id
                 )
-              ORDER BY display
+		ORDER BY display
             ]]>
           </sql>
         </sqlQuery>
@@ -7344,6 +7346,7 @@ products of your selected type (or types).<br><br>
                        and pan.protocol_app_node_id = nfe.protocol_app_node_id
                     )
              and (iud.is_invalid is null or iud.is_invalid = 0)
+	     AND (project_id = '@PROJECT_ID@' or ('UniDB' = '@PROJECT_ID@' and 'ClinEpiDB' != project_id))
         ) order by ordering, display
              ]]>
            </sql>
@@ -8089,29 +8092,42 @@ products of your selected type (or types).<br><br>
 
 
     <!-- removed BACI group because it has no species in it and screws up the search results -->
-    <sqlQuery name="PhyleticIndentMap" doNotTest="1" >
+    <!-- path-based ordering: species share parent's depth_first_index so ORDER BY DFI alone cannot
+         guarantee parents appear before children; compute a sort path from parent_id tree structure instead -->
+    <sqlQuery name="PhyleticIndentMap" doNotTest="1" isCacheable="false">
       <column name="internal" />
       <column name="term" />
       <column name="display" />
+      <column name="parentTerm" />
       <sql>
         <![CDATA[
-          WITH RECURSIVE cte AS (
-            SELECT depth_first_index, orthomcl_clade_id, 0 AS level, three_letter_abbrev
-            FROM apidb.orthomclClade
-            WHERE orthomcl_clade_id = (
-              SELECT min(orthomcl_clade_id)
-              FROM apidb.orthomclClade
+          WITH RECURSIVE
+          sib_ranks AS (
+            SELECT orthomcl_clade_id, parent_id, depth_first_index, three_letter_abbrev,
+                   ROW_NUMBER() OVER (PARTITION BY parent_id ORDER BY depth_first_index, three_letter_abbrev) AS sib_rank
+            FROM apidb.orthomclclade
+          ),
+          cte AS (
+            SELECT sr.orthomcl_clade_id, 0 AS level, sr.three_letter_abbrev,
+                   NULL::varchar AS parent_abbrev,
+                   LPAD(sr.sib_rank::text, 6, '0') AS sort_path
+            FROM sib_ranks sr
+            WHERE sr.orthomcl_clade_id = (
+              SELECT min(orthomcl_clade_id) FROM apidb.orthomclclade
             )
-            UNION
-            SELECT sub.depth_first_index, sub.orthomcl_clade_id, cte.level + 1, sub.three_letter_abbrev
-            FROM apidb.orthomclclade sub, cte
-            WHERE sub.parent_id = cte.orthomcl_clade_id
+            UNION ALL
+            SELECT sr.orthomcl_clade_id, cte.level + 1, sr.three_letter_abbrev,
+                   cte.three_letter_abbrev AS parent_abbrev,
+                   cte.sort_path || '.' || LPAD(sr.sib_rank::text, 6, '0')
+            FROM sib_ranks sr
+            JOIN cte ON sr.parent_id = cte.orthomcl_clade_id
           )
-          SELECT level AS internal, level AS display, three_letter_abbrev AS term
+          SELECT level AS internal, level AS display, three_letter_abbrev AS term,
+                 parent_abbrev AS parentTerm
           FROM cte
           WHERE level > 0
             AND three_letter_abbrev NOT IN ('BACI')
-          ORDER BY depth_first_index ASC, level ASC, three_letter_abbrev ASC
+          ORDER BY sort_path
         ]]>
       </sql>
     </sqlQuery>
@@ -8133,15 +8149,39 @@ products of your selected type (or types).<br><br>
 
 
     <!-- removed BACI group because it has no species in it and screws up the search results -->
-    <sqlQuery name="PhyleticTermMap" doNotTest="1">
+    <sqlQuery name="PhyleticTermMap" doNotTest="1" isCacheable="false">
       <column name="internal" />
       <column name="term" />
       <column name="display" />
+      <column name="parentTerm" />
       <sql>
-        SELECT three_letter_abbrev as term, name as internal, name as display
-        FROM apidb.orthomclclade
-        WHERE three_letter_abbrev not in ('BACI')
-        ORDER BY depth_first_index  ASC, three_letter_abbrev ASC
+        <![CDATA[
+          WITH RECURSIVE
+          sib_ranks AS (
+            SELECT orthomcl_clade_id, parent_id, depth_first_index, three_letter_abbrev, name,
+                   ROW_NUMBER() OVER (PARTITION BY parent_id ORDER BY depth_first_index, three_letter_abbrev) AS sib_rank
+            FROM apidb.orthomclclade
+          ),
+          cte AS (
+            SELECT sr.orthomcl_clade_id, 0 AS level, sr.three_letter_abbrev, sr.name,
+                   NULL::varchar AS parent_abbrev,
+                   LPAD(sr.sib_rank::text, 6, '0') AS sort_path
+            FROM sib_ranks sr
+            WHERE sr.orthomcl_clade_id = (SELECT min(orthomcl_clade_id) FROM apidb.orthomclclade)
+            UNION ALL
+            SELECT sr.orthomcl_clade_id, cte.level + 1, sr.three_letter_abbrev, sr.name,
+                   cte.three_letter_abbrev AS parent_abbrev,
+                   cte.sort_path || '.' || LPAD(sr.sib_rank::text, 6, '0')
+            FROM sib_ranks sr
+            JOIN cte ON sr.parent_id = cte.orthomcl_clade_id
+          )
+          SELECT three_letter_abbrev AS term, name AS internal, name AS display,
+                 CASE WHEN level = 1 THEN NULL ELSE parent_abbrev END AS parentTerm
+          FROM cte
+          WHERE level > 0
+            AND three_letter_abbrev NOT IN ('BACI')
+          ORDER BY sort_path
+        ]]>
       </sql>
     </sqlQuery>
     <!--

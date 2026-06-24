@@ -233,7 +233,7 @@ public class RNASeq extends  DatasetInjector {
 	      injectTemplate("rnaSeqFoldChangeQuestion");
               //              injectTemplate("rnaSeqFoldChangeCategories");
 	      setPropValue("searchCategory", "searchCategory-transcriptomics-fold-change");
-	      setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName());
+	      setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_'));
 	      injectTemplate("internalGeneSearchCategory");
 	      if(getPropValueAsBoolean("isStrandSpecific")) {
 		  injectTemplate("strandSpecificGraph");
@@ -249,13 +249,13 @@ public class RNASeq extends  DatasetInjector {
 	  injectTemplate("rnaSeqPercentileQuestion");
           //injectTemplate("rnaSeqPercentileCategories");
 	  setPropValue("searchCategory", "searchCategory-transcriptomics-percentile");
-	  setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
+	  setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_') + "Percentile");
 	  injectTemplate("internalGeneSearchCategory");
 
 	  if(getPropValueAsBoolean("isDESeq")) {
 	      injectTemplate("rnaSeqDESeqQuestion");
 	      setPropValue("searchCategory", "searchCategory-transcriptomics-differential-expression");
-	      setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "DESeq");
+	      setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_') + "DESeq");
 	      injectTemplate("internalGeneSearchCategory");
 	  }
 	  if(getPropValueAsBoolean("isDEGseq")) {
@@ -370,26 +370,26 @@ public class RNASeq extends  DatasetInjector {
 	  addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "TranscriptionSummary");
           if(getPropValueAsBoolean("hasMultipleSamples")) {
               addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
-                              "GeneQuestions.GenesByRNASeq" + getDatasetName());
+                              "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_'));
 
 	      if(getPropValueAsBoolean("isStrandSpecific")) {
 		  addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
-				  "GeneQuestions.GenesByRNASeq" + getDatasetName() + "SenseAntisense");
+				  "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_') + "SenseAntisense");
 	      }
           }
 
 	  if(getPropValueAsBoolean("includeProfileSimilarity")) {
-	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"ProfileSimilarity");
+	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_') + "ProfileSimilarity");
 	  }
 	  if (getPropValueAsBoolean("isDESeq")) {
-	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"DESeq");
+	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_') + "DESeq");
 	  }
 	  if (getPropValueAsBoolean("isDEGseq")) {
-	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" +getDatasetName() +"DEGseq");
+	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_') + "DEGseq");
 	  }
 
           addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question",
-                          "GeneQuestions.GenesByRNASeq" + getDatasetName() + "Percentile");
+                          "GeneQuestions.GenesByRNASeq" + getDatasetName().replace('.', '_') + "Percentile");
 
           if (getPropValueAsBoolean("showIntronJunctions") && getPropValueAsBoolean("includeInUnifiedJunctions")){
 	      addWdkReference("TranscriptRecordClasses.TranscriptRecordClass", "question", "GeneQuestions.GenesByIntronJunctions");
