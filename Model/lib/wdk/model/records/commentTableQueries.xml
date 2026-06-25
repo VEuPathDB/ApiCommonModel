@@ -64,6 +64,8 @@
       <column name="stable_id"/>
       <column name="headline"/>
       <column name="user_name_org"/>
+      <column name="user_name_org_display"/>
+      <column name="ai_source_kind"/>
       <column name="comment_date"/>
       <column name="comment_target_id"/>
       <column name="comment_status"/>
@@ -94,7 +96,28 @@
             END AS pmids_link,
             gene_counts.geneCount,
             &&selectReviewed&&
-            CONCAT(u.first_name , ' ' , u.last_name , ', ' , u.organization ) as user_name_org
+            CONCAT(u.first_name , ' ' , u.last_name , ', ' , u.organization ,
+              CASE
+                WHEN aiprov.comment_id IS NULL THEN ''
+                WHEN aiprov.is_edited        THEN ' · AI-assisted (edited)'
+                ELSE                              ' · AI-assisted (as-is)'
+              END) as user_name_org,
+            CASE
+              WHEN aiprov.comment_id IS NULL
+                THEN CONCAT(u.first_name , ' ' , u.last_name , ', ' , u.organization )
+              ELSE CONCAT(u.first_name , ' ' , u.last_name , ', ' , u.organization ,
+                '<br/><span title="',
+                CASE
+                  WHEN aiprov.is_edited
+                    THEN 'AI-generated summary of a publication, edited by the author before publishing.'
+                  ELSE 'AI-generated summary of a publication, published unedited after author review.'
+                END,
+                '" style="display:inline-block;margin-top:3px;padding:1px 6px;border-radius:8px;background-color:#0a7c8a;color:#fff;font-size:0.85em;font-weight:500;white-space:nowrap;">AI-assisted &middot; ',
+                CASE WHEN aiprov.is_edited THEN 'edited' ELSE 'as-is' END,
+                '</span>')
+            END as user_name_org_display,
+            -- download-only AI provenance source: 'pubmed' | 'upload' | 'N/A'
+            COALESCE(car2.source_kind, 'N/A') as ai_source_kind
           FROM
             @REMOTE_COMMENT_SCHEMA@MappedComment c
             INNER JOIN webready.GeneAttributes_p ga ON c.project_name = ga.project_id AND c.stable_id = ga.source_id
@@ -107,8 +130,23 @@
             ) files ON c.comment_id = files.comment_id
             LEFT JOIN (
               SELECT comment_id, string_agg(source_id,',') as pmids
-              FROM @REMOTE_COMMENT_SCHEMA@CommentReference
-              WHERE database_name='pubmed'
+              FROM (
+                SELECT comment_id, source_id
+                FROM @REMOTE_COMMENT_SCHEMA@CommentReference
+                WHERE database_name='pubmed'
+                UNION
+                SELECT cap.comment_id, car.pubmed_id AS source_id
+                FROM @REMOTE_COMMENT_SCHEMA@comment_ai_provenance cap
+                JOIN @REMOTE_COMMENT_SCHEMA@comment_ai_run car ON cap.run_job_id = car.job_id
+                WHERE car.source_kind = 'pubmed' AND car.pubmed_id IS NOT NULL
+                UNION
+                SELECT cap.comment_id, car.external_ref AS source_id
+                FROM @REMOTE_COMMENT_SCHEMA@comment_ai_provenance cap
+                JOIN @REMOTE_COMMENT_SCHEMA@comment_ai_run car ON cap.run_job_id = car.job_id
+                WHERE car.source_kind = 'upload'
+                  AND car.external_ref_kind = 'pubmed'
+                  AND car.external_ref IS NOT NULL
+              ) merged
               GROUP BY comment_id
             ) refs ON c.comment_id = refs.comment_id
             LEFT JOIN (
@@ -117,6 +155,10 @@
               WHERE stable_id IN (SELECT source_id FROM webready.GeneAttributes_p where org_abbrev IN (%%PARTITION_KEYS%%))
               GROUP BY comment_id
             ) gene_counts ON c.comment_id = gene_counts.comment_id
+            LEFT JOIN @REMOTE_COMMENT_SCHEMA@comment_ai_provenance aiprov
+              ON c.comment_id = aiprov.comment_id
+            LEFT JOIN @REMOTE_COMMENT_SCHEMA@comment_ai_run car2
+              ON aiprov.run_job_id = car2.job_id
             LEFT JOIN (
               SELECT dr.primary_identifier AS comment_id , ta.gene_source_id
               FROM sres.dbref dr
