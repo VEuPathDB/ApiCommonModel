@@ -224,64 +224,44 @@ sub addApolloGFF {
 sub addMergedRnaSeq {
   my ($result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber) = @_;
   my @urlArray;
-  my $genomeName;
+  my $genomeName = $nameForFileNames;
 
-  my $rnaSeqDatasets = $datasetProperties->{rnaseq} ? $datasetProperties->{rnaseq} : {};
-  foreach my $dataset (keys %$rnaSeqDatasets) {
-    next unless($dataset =~ /rnaSeq/);
+  my $bigwigBaseDir = "/var/www/Common/apiSiteFilesMirror/webServices/${projectName}/build-${buildNumber}/${nameForFileNames}/bulkrnaseq/bigwig";
+  opendir(my $dh, $bigwigBaseDir) or return;
+  my @datasets = grep { !/^\./ && -d "${bigwigBaseDir}/$_" } readdir($dh);
+  closedir($dh);
 
-    my @urlArrayProject;
-    my $experimentName = $dataset =~ m/${organismAbbrev}_(.+)_ebi_rnaSeq_RSRC/;
-    my $datasetDisplayName = $rnaSeqDatasets->{$dataset}->{datasetDisplayName};
-    my $summary = $rnaSeqDatasets->{$dataset}->{summary};
-    $summary =~ s/\n/ /g;
-    my $shortAttribution = $rnaSeqDatasets->{$dataset}->{shortAttribution};
-    my $keyName = $datasetDisplayName;
-    
-    $genomeName = ${nameForFileNames};
-      #my ($sampleName) = $sampleDataset;
-      my ($sampleName) = $dataset;
-      my ($bigwigFileName) = $sampleName =~ m/${organismAbbrev}_(.+)_ebi_rnaSeq_RSRC/;
-      my $keyName = $bigwigFileName;
-         $keyName =~ s/_/ /g;
-
-        my $bigWigRelativePath = "/var/www/Common/apiSiteFilesMirror/webServices/${projectName}/build-${buildNumber}/${nameForFileNames}/bulkrnaseq/bigwig/${sampleName}/mergedBigwigs/*";
-        my @bigwigFiles = glob($bigWigRelativePath);
-        my $shortAttribution = $rnaSeqDatasets->{$dataset}->{shortAttribution};
-        foreach(@bigwigFiles){
-                my $bigwigPath = $_;
-                my $bigwigName = (split '/', $bigwigPath)[-1];
-                my $shortBigwigName = $bigwigName;
-                my $shortBigwigName = substr($shortBigwigName,0, -3);
-                my $bigwigUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/bulkrnaseq/bigwig/${sampleName}/mergedBigwigs/${bigwigName}");
-                my $template = { url=>${bigwigUrl}, name=> ${shortBigwigName}, color=> 'black' };
-                push (@urlArray, $template);
-                push (@urlArrayProject, $template);
-                }
+  foreach my $dataset (@datasets) {
+    my $bigWigRelativePath = "${bigwigBaseDir}/${dataset}/mergedBigwigs/*";
+    my @bigwigFiles = glob($bigWigRelativePath);
+    foreach (@bigwigFiles) {
+      my $bigwigName = (split '/', $_)[-1];
+      my $shortBigwigName = substr($bigwigName, 0, -3);
+      my $bigwigUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/bulkrnaseq/bigwig/${dataset}/mergedBigwigs/${bigwigName}");
+      push @urlArray, { url => $bigwigUrl, name => $shortBigwigName, color => 'black' };
+    }
   }
-        ### Print out combinedRNAseq track for organism
-        my $arrayLength = @urlArray;
 
-    if ($arrayLength > 0){
-        my $alignment = {storeClass => "MultiBigWig/Store/SeqFeature/MultiBigWig",
-        urlTemplates => \@urlArray,
-        showTooltips => "true",
-        key => "${genomeName} combined RNAseq plot",
-        label => "${genomeName} combined RNAseq plot",
-        type  => "MultiBigWig/View/Track/MultiWiggle/MultiXYPlot",
-        category => "Transcriptomics",
-        autoscale => "local",
-        yScalePosition => "left",
-        style => {'height' => "40",
-        },
-                  metadata => {
-                    subcategory => "RNA-Seq",
-                    dataset => "Combined all RNA-Seq data for ${genomeName}",
-                    trackType => "Multi XY plot",
-                    alignment => "Unique", 
-                   },
-      };
-      push @{$result->{tracks}}, $alignment;
+  if (@urlArray) {
+    my $alignment = {
+      storeClass     => "MultiBigWig/Store/SeqFeature/MultiBigWig",
+      urlTemplates   => \@urlArray,
+      showTooltips   => "true",
+      key            => "${genomeName} combined RNAseq plot",
+      label          => "${genomeName} combined RNAseq plot",
+      type           => "MultiBigWig/View/Track/MultiWiggle/MultiXYPlot",
+      category       => "Transcriptomics",
+      autoscale      => "local",
+      yScalePosition => "left",
+      style          => { height => "40" },
+      metadata       => {
+        subcategory => "RNA-Seq",
+        dataset     => "Combined all RNA-Seq data for ${genomeName}",
+        trackType   => "Multi XY plot",
+        alignment   => "Unique",
+      },
+    };
+    push @{$result->{tracks}}, $alignment;
   }
 }
 
