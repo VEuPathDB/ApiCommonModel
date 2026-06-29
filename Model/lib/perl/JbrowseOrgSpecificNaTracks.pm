@@ -236,7 +236,7 @@ sub addMergedRnaSeq {
     my @bigwigFiles = glob($bigWigRelativePath);
     foreach (@bigwigFiles) {
       my $bigwigName = (split '/', $_)[-1];
-      my $shortBigwigName = substr($bigwigName, 0, -3);
+      my $shortBigwigName = "${dataset}_" . substr($bigwigName, 0, -3);
       my $bigwigUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/bulkrnaseq/bigwig/${dataset}/mergedBigwigs/${bigwigName}");
       push @urlArray, { url => $bigwigUrl, name => $shortBigwigName, color => 'black' };
     }
