@@ -2,11 +2,21 @@
 
 # cat kinases.txt | enrichmentAnalysis -10 4445 151 > /home/sfischer/junk/goenrich
 
-import sys, traceback 
+import sys, traceback
+import logging
+from datetime import datetime
 import scipy as sp # Open Source Library of Scientific Tools, including numpy
 from scipy import stats as sciStats # stats module of scipy/shortcut for ease of access contains fisher's exact test
 import statsmodels.sandbox.stats.multicomp as sm # statistical models package for python; contains multiple hypothesis testing
 import pandas as pd # Python Data Analysis Library; provides high performance data structures; data frames and sorting
+
+# Configure logging to stderr with human-readable timestamps
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    stream=sys.stderr
+)
 
 #=======================================================
 # usage: prints usage message
@@ -76,12 +86,15 @@ def processArgs(argv):
 
 #def fishersExactTest(data, rTotal, bTotal, threshold):
 def fishersExactTest(data, rTotal, bTotal):
+    logging.info(f"Starting Fisher's Exact Test for {len(data)} terms")
     fisherResults = {}
     for idx, row in data.iterrows():
+        if idx > 0 and idx % 100 == 0:
+ #           logging.info(f"  Processed {idx} terms...")
         termID = row[0]
         baCount = row[1] # background annotated
         raCount = row[2] # result annotated
-        
+
         bNotAnnotated = bTotal - baCount
         rNotAnnotated = rTotal - raCount
         percentAnnotated = (float(raCount) / float(rTotal)) * 100.0
@@ -89,6 +102,7 @@ def fishersExactTest(data, rTotal, bTotal):
         oddsRatio, pValue = sciStats.fisher_exact([[raCount, baCount-raCount],[rNotAnnotated, bNotAnnotated-rNotAnnotated]], alternative = 'greater') # looking for over-enrichment
         fisherResults[idx] = {'pValue' : pValue, 'percent' : "{0:.2f}".format(percentAnnotated), 'oddsRatio' : "{0:.2f}".format(oddsRatio), 'foldEnrichment' : "{0:.2f}".format(foldEnrichment)}
 
+    logging.info(f"Completed Fisher's Exact Test for {len(data)} terms")
     return (pd.DataFrame.from_dict(fisherResults, orient = 'index', dtype=float))
   
 #=======================================================
@@ -99,37 +113,49 @@ def main(argv = None):
 
     if argv is None:
         argv = sys.argv
- 
+
+    logging.info("Starting enrichment analysis")
+
     pValueCutoff, backgroundTotalCount, resultTotalCount = processArgs(argv)
-    
+
     try:
-        data = pd.read_table(sys.stdin, header=None ) # read data to a pandas data frame 
+        logging.info("Reading input data from stdin")
+        data = pd.read_table(sys.stdin, header=None ) # read data to a pandas data frame
+        logging.info(f"Read {len(data)} terms from input") 
       
         # Fisher Exact Test
         fisherResults = fishersExactTest(data, resultTotalCount, backgroundTotalCount)
         
         # Multiple Hypothesis Testing
+        logging.info("Starting Bonferroni correction")
         bonferroni = sm.multipletests(fisherResults['pValue'], method = 'bonferroni')
+        logging.info("Starting Benjamini-Hochberg FDR correction")
         benjamini = sm.multipletests(fisherResults['pValue'], method = 'fdr_bh')
 
         adjustedStats = pd.DataFrame({'bonferroni' : bonferroni[1], # second element of the tuple is the pvalues_corrected array
                                       'benjamini' : benjamini[1]}, index = fisherResults.index)
-     
+
         # combine DataFrames based on indexes
-        adjustedResults = pd.merge(fisherResults, adjustedStats, how="left", left_index = True, right_index = True) 
+        logging.info("Merging results with corrected p-values")
+        adjustedResults = pd.merge(fisherResults, adjustedStats, how="left", left_index = True, right_index = True)
         results = pd.merge(adjustedResults, data, how = "left", left_index = True, right_index = True)
 
-        #filter on pValue cutoff - use benjamini because it is corrected, unlike raw p-value
-        results = results[results.benjamini <= pValueCutoff]
+        #filter on pValue cutoff  - use benjamini because it is corrected, unlike raw p-value
+        logging.info(f"Filtering results with p-value <= {pValueCutoff}")
+        results = results[results.benjami <= pValueCutoff]
+        logging.info(f"Retained {len(results)} terms after filtering")
 
-        # sort asc - needed for word clouds 
-        results.sort_values(by = 'benjamini', ascending = True, inplace = True)
+        # sort on p-value asc
+        logging.info("Sorting results by p-value")
+        results.sort_values(by = 'benjami', ascending = True, inplace = True)
 
         # print results.shape
 
         inputCols = list(range(data.shape[1]))
         results = results[['foldEnrichment', 'oddsRatio', 'percent', 'pValue', 'benjamini', 'bonferroni'] + inputCols]
+        logging.info("Writing results to stdout")
         results.to_csv(sys.stdout, sep="\t", header = False, index = False)
+        logging.info("Enrichment analysis completed successfully")
 
     except:
         exc_type, exc_value, exc_traceback = sys.exc_info()
