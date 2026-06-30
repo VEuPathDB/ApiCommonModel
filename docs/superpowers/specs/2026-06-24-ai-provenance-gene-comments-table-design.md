@@ -24,7 +24,7 @@ design and `GetCommentAiProvenanceQuery.java` for the canonical join pattern
 
 This spec covers **one thing only**: showing users which rows in the gene-page
 User Comments table were AI-assisted, and whether the human reviewer edited the
-AI text or published it as-is.
+AI text or published it unedited.
 
 ## Goal
 
@@ -32,7 +32,7 @@ In the gene-page **User Comments** table (`CommentTables.GeneComments` →
 `UserComments` table in `geneRecord.xml`), each comment row should communicate:
 
 1. **Whether the comment was AI-assisted** (a `comment_ai_provenance` row exists).
-2. **If AI-assisted, whether it was edited or published as-is** (`is_edited`).
+2. **If AI-assisted, whether it was edited or published unedited** (`is_edited`).
 
 An AI-assisted comment is still published by a real, logged-in user who reviewed
 it — so the framing is "made by Dr So-and-so, **AI-assisted**", never "made by AI".
@@ -41,11 +41,11 @@ it — so the framing is "made by Dr So-and-so, **AI-assisted**", never "made by
 
 | # | Decision | Choice |
 |---|----------|--------|
-| 1 | What to show | AI-assisted yes/no **+** edited-vs-as-is |
+| 1 | What to show | AI-assisted yes/no **+** edited-vs-unedited |
 | 2 | Placement | Fold into the existing **"Made by"** column (no new column) |
 | 3 | Visual treatment | A small **styled teal pill** after the name (matches the FE "Beta" badge) |
 | 4 | Pill styling mechanism | **Inline CSS** in the SQL string (self-contained, single repo, matches `snp_context` precedent) |
-| 5 | Downloads / sort | Two-column split so downloads are **HTML-free plain text** carrying ` · AI-assisted (edited\|as-is)`, and sort keys off the plain name |
+| 5 | Downloads / sort | Two-column split so downloads are **HTML-free plain text** carrying ` · AI-assisted (edited\|unedited)`, and sort keys off the plain name |
 | 6 | Source paper | Fold `comment_ai_run.pubmed_id` into the **existing PubMed column** via a `UNION` in the `refs` subquery |
 | 7 | Records/scope | **Gene page only** (`GeneComments`); other comment tables untouched |
 
@@ -82,7 +82,7 @@ LEFT JOIN @REMOTE_COMMENT_SCHEMA@comment_ai_run r
        ON p.run_job_id = r.job_id
 ```
 
-`p.comment_id IS NOT NULL` ⇒ AI-assisted. `p.is_edited` ⇒ edited vs as-is.
+`p.comment_id IS NOT NULL` ⇒ AI-assisted. `p.is_edited` ⇒ edited vs unedited.
 
 **b. Replace the single `user_name_org` SELECT expression with two columns.**
 The current expression is:
@@ -100,7 +100,7 @@ CONCAT(
   CASE
     WHEN p.comment_id IS NULL THEN ''
     WHEN p.is_edited        THEN ' · AI-assisted (edited)'
-    ELSE                          ' · AI-assisted (as-is)'
+    ELSE                          ' · AI-assisted (unedited)'
   END
 ) AS user_name_org,
 
@@ -118,7 +118,7 @@ CONCAT(
       ' <span style="display:inline-block;margin-left:6px;padding:1px 6px;'
       || 'border-radius:8px;background-color:#0a7c8a;color:#fff;'
       || 'font-size:0.85em;font-weight:500;white-space:nowrap;">'
-      || 'AI-assisted · as-is</span>'
+      || 'AI-assisted · unedited</span>'
   END
 ) AS user_name_org_display
 ```
@@ -127,7 +127,7 @@ Notes:
 - Postgres string concatenation uses `||`; the existing query already mixes
   `CONCAT(...)` and `||` styles — match whichever the surrounding file prefers at
   implementation time (the `pmids_link` CASE uses `CONCAT`).
-- Both `edited` and `as-is` use the **same** teal (`#0a7c8a`); only the text
+- Both `edited` and `unedited` use the **same** teal (`#0a7c8a`); only the text
   differs. (Hex finalisable at implementation; chosen to read as a "Beta"-style
   teal pill.)
 - Add the new `<column name="user_name_org_display"/>` declaration to the
@@ -221,7 +221,7 @@ fail at query time.
 3. **AI comment, edited:** a published AI comment with `is_edited=true` shows the
    teal `AI-assisted · edited` pill after the name; its source PMID appears in the
    PubMed column (as a link) even though no `CommentReference` row exists.
-4. **AI comment, as-is:** `is_edited=false` shows `AI-assisted · as-is`.
+4. **AI comment, unedited:** `is_edited=false` shows `AI-assisted · unedited`.
 5. **Upload-source AI comment:** shows the pill; PubMed column empty (no PMID).
 6. **Download:** add the User Comments table to a report/download → "Made by"
    column contains plain text `Name, Org · AI-assisted (edited)` with **no HTML

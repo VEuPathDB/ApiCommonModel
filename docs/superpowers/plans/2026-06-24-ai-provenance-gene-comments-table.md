@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Show, in the gene-page User Comments table, which comments were AI-assisted and whether the reviewer edited the AI text or published it as-is — plus surface the AI source PMID in the existing PubMed column.
+**Goal:** Show, in the gene-page User Comments table, which comments were AI-assisted and whether the reviewer edited the AI text or published it unedited — plus surface the AI source PMID in the existing PubMed column.
 
 **Architecture:** Pure WDK-model change in one repo (`ApiCommonModel`). Extend the `GeneComments` SQL query to join the two AI sidecar tables, emit a styled-pill "display" copy of the `user_name_org` column alongside a plain-text copy, and `UNION` the AI run-row PMID into the PubMed aggregate. Wire the two copies into `geneRecord.xml` so the on-screen table shows the pill while downloads/sorting use clean text.
 
@@ -17,7 +17,7 @@
   - `comment_ai_run` — columns used: `job_id`, `source_kind`, `pubmed_id`.
 - **Join keys:** `comment_ai_provenance.comment_id = MappedComment.comment_id`; `comment_ai_provenance.run_job_id = comment_ai_run.job_id`. `comment_ai_provenance` is 1 row per `comment_id` (PK), so the join cannot multiply comment rows.
 - **Pill style (inline CSS, verbatim):** `display:inline-block;margin-left:6px;padding:1px 6px;border-radius:8px;background-color:#0a7c8a;color:#fff;font-size:0.85em;font-weight:500;white-space:nowrap;`
-- **Pill text:** `AI-assisted &middot; edited` or `AI-assisted &middot; as-is`. **Plain-text suffix** (download column): ` · AI-assisted (edited)` or ` · AI-assisted (as-is)`.
+- **Pill text:** `AI-assisted &middot; edited` or `AI-assisted &middot; unedited`. **Plain-text suffix** (download column): ` · AI-assisted (edited)` or ` · AI-assisted (unedited)`.
 - **Build prerequisite** (per project `CLAUDE.md`): `install/` and `WDK/` must already be built into `~/.m2` before building this module.
 
 ---
@@ -75,14 +75,14 @@ Replace with:
               CASE
                 WHEN aiprov.comment_id IS NULL THEN ''
                 WHEN aiprov.is_edited        THEN ' · AI-assisted (edited)'
-                ELSE                              ' · AI-assisted (as-is)'
+                ELSE                              ' · AI-assisted (unedited)'
               END) as user_name_org,
             CASE
               WHEN aiprov.comment_id IS NULL
                 THEN CONCAT(u.first_name , ' ' , u.last_name , ', ' , u.organization )
               ELSE CONCAT(u.first_name , ' ' , u.last_name , ', ' , u.organization ,
                 '<span style="display:inline-block;margin-left:6px;padding:1px 6px;border-radius:8px;background-color:#0a7c8a;color:#fff;font-size:0.85em;font-weight:500;white-space:nowrap;">AI-assisted &middot; ',
-                CASE WHEN aiprov.is_edited THEN 'edited' ELSE 'as-is' END,
+                CASE WHEN aiprov.is_edited THEN 'edited' ELSE 'unedited' END,
                 '</span>')
             END as user_name_org_display
           FROM
@@ -223,10 +223,10 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 These cannot be automated in this repo (no DB/model-runtime in the build). Run them on a deployed dev instance whose comment DB has the two sidecar tables exposed under `@REMOTE_COMMENT_SCHEMA@`. They mirror the spec's verification checklist.
 
 - [ ] **Coordination precheck:** confirm `comment_ai_run` and `comment_ai_provenance` are reachable under the schema that `@REMOTE_COMMENT_SCHEMA@` resolves to (the same place `CommentReference` lives). If not yet mapped, the query errors — escalate before deploying.
-- [ ] **Optional direct-SQL smoke test:** run the edited `GeneComments` SQL against the dev comment DB (substitute the real schema for `@REMOTE_COMMENT_SCHEMA@`, a real `org_abbrev`/`source_id`) for a gene known to have (a) a human comment, (b) an edited AI comment, (c) an as-is AI comment. Confirm `user_name_org`, `user_name_org_display`, and `pmids` come back as expected and the row count is unchanged vs the pre-change query (the provenance join must not multiply rows).
+- [ ] **Optional direct-SQL smoke test:** run the edited `GeneComments` SQL against the dev comment DB (substitute the real schema for `@REMOTE_COMMENT_SCHEMA@`, a real `org_abbrev`/`source_id`) for a gene known to have (a) a human comment, (b) an edited AI comment, (c) an unedited AI comment. Confirm `user_name_org`, `user_name_org_display`, and `pmids` come back as expected and the row count is unchanged vs the pre-change query (the provenance join must not multiply rows).
 - [ ] **Human comment (regression):** gene page shows "Made by" = name+org, **no pill**; PubMed column unchanged.
 - [ ] **AI comment, edited:** shows the teal `AI-assisted · edited` pill; its source PMID appears (linked) in the PubMed column even with no `CommentReference` row.
-- [ ] **AI comment, as-is:** shows `AI-assisted · as-is`.
+- [ ] **AI comment, unedited:** shows `AI-assisted · unedited`.
 - [ ] **Upload-source AI comment:** shows the pill; PubMed column empty (no PMID).
 - [ ] **Download:** add the User Comments table to a report → "Made by" column is plain text `Name, Org · AI-assisted (edited)` with **no `<span>` markup**; no separate display column appears.
 - [ ] **PMID dedupe:** an AI comment whose source PMID is also a manual `CommentReference` shows that PMID once.
