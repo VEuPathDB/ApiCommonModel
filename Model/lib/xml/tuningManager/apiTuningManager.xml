@@ -110,6 +110,15 @@
                 AND LOWER(TRIM(dgf.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
             ),
 
+            informative_arba AS (
+              SELECT gfp.na_feature_id, gfp.product, gfp.assigned_by, gfp.is_preferred
+              FROM genes gf
+              INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
+              WHERE LOWER(gfp.assigned_by) = 'arba'
+                AND gfp.product IS NOT NULL
+                AND TRIM(gfp.product) != ''
+            ),
+
             all_informative AS (
               SELECT na_feature_id AS gene_na_feature_id, NULL AS transcript_na_feature_id,
                      product, assigned_by, is_preferred, 'gene' AS source_type
@@ -126,6 +135,10 @@
               SELECT gene_na_feature_id, NULL AS transcript_na_feature_id,
                      product, genome_source AS assigned_by, 0 AS is_preferred, 'gene' AS source_type
               FROM informative_gf
+              UNION ALL
+              SELECT na_feature_id AS gene_na_feature_id, NULL AS transcript_na_feature_id,
+                     product, assigned_by, is_preferred, 'gene' AS source_type
+              FROM informative_arba
             ),
 
             all_noninformative AS (
@@ -470,6 +483,15 @@
                 AND LOWER(TRIM(dgf.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
             ),
 
+            informative_arba AS (
+              SELECT gfp.na_feature_id AS gene_na_feature_id, gfp.product, gfp.assigned_by, gfp.is_preferred
+              FROM genes gf
+              INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
+              WHERE LOWER(gfp.assigned_by) = 'arba'
+                AND gfp.product IS NOT NULL
+                AND TRIM(gfp.product) != ''
+            ),
+
             all_informative AS (
               SELECT tr.transcript_source_id AS source_id, itp.product, itp.assigned_by, itp.is_preferred, 'transcript' AS source_type
               FROM transcripts tr
@@ -486,6 +508,10 @@
               SELECT tr.transcript_source_id AS source_id, igf.product, igf.genome_source AS assigned_by, 0 AS is_preferred, 'gene' AS source_type
               FROM transcripts tr
               INNER JOIN informative_gf igf ON igf.gene_na_feature_id = tr.gene_na_feature_id
+              UNION ALL
+              SELECT tr.transcript_source_id AS source_id, iarba.product, iarba.assigned_by, iarba.is_preferred, 'gene' AS source_type
+              FROM transcripts tr
+              INNER JOIN informative_arba iarba ON iarba.gene_na_feature_id = tr.gene_na_feature_id
             ),
 
             all_noninformative AS (
@@ -3591,10 +3617,11 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
            select ga.source_id as source_id, gf.product, ga.project_id,
                   null as  is_alternate,
                   null as transcript_ids, null as reference, null as evidence_code,
-                  null as evidence_code_parameter, null as assigned_by,
+                  null as evidence_code_parameter, o.genome_source as assigned_by,
                   'dots.GeneFeature' as source, orgrecord.org_abbrev
-           from dots.GeneFeature gf, webready.GeneAttributes_p ga, TempGeneProduct gp
+           from dots.GeneFeature gf, webready.GeneAttributes_p ga, TempGeneProduct gp, apidb.Organism o
            where ga.na_feature_id = gf.na_feature_id
+             and o.abbrev = orgrecord.org_abbrev
              and gf.product is not null
              and TRIM(gf.product) != ''
              and gf.product !~* '(hypothetical[_ ]protein|unspecified product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
@@ -3620,9 +3647,10 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
                   null as is_alternate,
                   string_agg(ta.source_id, ', ' order by ta.source_id) as transcript_ids,
                   null as reference, null as evidence_code, null as evidence_code_parameter,
-                  null as assigned_by, 'dots.Transcript' as source, orgrecord.org_abbrev
-           from webready.TranscriptAttributes_p ta, dots.Transcript t
+                  o.genome_source as assigned_by, 'dots.Transcript' as source, orgrecord.org_abbrev
+           from webready.TranscriptAttributes_p ta, dots.Transcript t, apidb.Organism o
            where ta.na_feature_id = t.na_feature_id
+             and o.abbrev = ta.org_abbrev
              and t.product is not null
              and TRIM(t.product) != ''
              and t.product !~* '(hypothetical[_ ]protein|unspecified product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
