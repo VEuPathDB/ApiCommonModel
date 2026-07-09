@@ -168,9 +168,9 @@ sub addHydropathy {
   my $hydropathyTrack;
   my $relativePathToBigWigFile = "${nameForFileNames}/genomeAndProteome/bigwig/hydropathy.bw";
   my $summary = "Kyte-Doolittle hydropathy plot";
-  my $fullPathToGffFile = "${webservicesDir}/${projectName}/build-${buildNumber}/${relativePathToGffFile}";
+  my $fullPathToBigWigFile = "${webservicesDir}/${projectName}/build-${buildNumber}/$relativePathToBigWigFile";
   
-  return unless(-e $fullPathToGffFile);
+  return unless(-e $fullPathToBigWigFile);
 
   $hydropathyTrack = ApiCommonModel::Model::JBrowseTrackConfig::HydropathyTrackConfig->new({
                                                                                                 project_name => $projectName,
