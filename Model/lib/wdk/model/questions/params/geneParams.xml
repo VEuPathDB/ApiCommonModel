@@ -333,10 +333,10 @@
 
     <flatVocabParam name="geneListUserDataset"
                     queryRef="GeneVQ.geneListUserDataset"
-                    prompt="Your Gene List Dataset"
+                    prompt="Gene List User Dataset"
                     quote="false"
                     multiPick="false" >
-      <help>A Gene List dataset you have imported into your workspace, and that is installed in @PROJECT_ID@ </help>
+      <help>A public Gene List User Dataset, or a private one you have imported into your workspace, and that is installed in this website </help>
     </flatVocabParam>
 
 
@@ -6276,25 +6276,25 @@ products of your selected type (or types).<br><br>
 
     <flatVocabParam name="eda_dataset_id"
                     queryRef="GeneVQ.PhenotypeUserDataset"
-                    prompt="Your Phenotype Dataset"
+                    prompt="Phenotype User Dataset"
 	            quote="false"
                     multiPick="false" >
-      <help>An Phenotype dataset that you have imported into your workspace, and that is installed in this website </help>
+      <help>A public Phenotype User Dataset, or a private one you have imported into your workspace, and that is installed in this website </help>
     </flatVocabParam> 
 
 
     <flatVocabParam name="rna_seq_dataset"
                     queryRef="GeneVQ.RnaSeqUserDataset"
-                    prompt="Your RNA-Seq Dataset"
+                    prompt="(Normalized) RNA-Seq User Dataset"
                     multiPick="false" >
-      <help>An RNA-Seq dataset that you have imported into your workspace, and that is installed in this website </help>
+      <help>A public Normalized RNA-Seq User Dataset, or a private one you have imported into your workspace, and that is installed in this website </help>
     </flatVocabParam>
 
     <flatVocabParam name="profileset_generic"
                     queryRef="GeneVQ.rna_seq_profileset"
                     prompt="Experiment"
                     quote="false"
-                    multiPick="false"
+                    multiPick="false"   allowEmptyVocabulary="true" 
                     dependedParamRef="userDatasetParams.rna_seq_dataset">
       <help>Choose an Experiment. An Experiment consists of a set of samples that is defined by the data provider or the analytical method. The samples within an Experiment can be compared to each other. Datasets will have multiple Experiments if the samples are generated using different biological, experimental or analytical methods: sense vs. antisense, scaled vs. non-scaled, wild-type vs. mutant.</help>
     </flatVocabParam>
@@ -6304,7 +6304,7 @@ products of your selected type (or types).<br><br>
                     prompt="Reference Sample(s)"
                     quote="false"
                     displayType="checkBox"
-                    multiPick="true"
+                    multiPick="true" allowEmptyVocabulary="true" 
                     dependedParamRef="userDatasetParams.rna_seq_dataset,userDatasetParams.profileset_generic">
       <help>Choose one or more sample.  NOTE: if more than one is chosen the fold difference in coverage will be calculated using the specified operation applied to the samples within the group</help>
       <suggest selectMode="none" />
@@ -6315,7 +6315,7 @@ products of your selected type (or types).<br><br>
                     prompt="Comparison Sample(s)"
                     quote="false"
                     displayType="checkBox"
-                    multiPick="true"
+                    multiPick="true"  allowEmptyVocabulary="true" 
                     dependedParamRef="userDatasetParams.rna_seq_dataset,userDatasetParams.profileset_generic">
       <help>Choose one or more sample.  NOTE: if more than one is chosen the fold difference in coverage will be calculated using the specified operation applied to the samples within the group</help>
       <suggest selectMode="none" />
@@ -7255,13 +7255,14 @@ products of your selected type (or types).<br><br>
         <sql>
    --force 'Choose...' line to be first, then order by display name
    select  term, internal, display from (
-     select 'bla' as term, '1111' as internal, 'Choose a Gene List Dataset, if you have any' as display, 1 as num
+     select 'bla' as term, '1111' as internal, 'Choose a public or private Gene List User Dataset, or Upload one first' as display, 1 as num
      UNION
      select distinct aud.user_dataset_id as term, aud.user_dataset_id as internal, aud.name as display, 2 as num
       from @VDI_CONTROL_SCHEMA@.AvailableUserDatasets aud,
            @VDI_DATASETS_SCHEMA@.UD_GeneId g
-      where aud.user_id = $$user_id$$
+      where (aud.user_id = $$user_id$$ or aud.is_public = true)
       and g.user_dataset_id = aud.user_dataset_id
+      AND (project_id = '@PROJECT_ID@' or ('UniDB' = '@PROJECT_ID@' and 'ClinEpiDB' != project_id))
    ) order by num, display
        </sql>
        </sqlQuery>
@@ -7274,16 +7275,23 @@ products of your selected type (or types).<br><br>
           <column name="display"/>
           <sql>
             <![CDATA[
-              SELECT
-                CONCAT('EDAUD_', aud.user_dataset_id) as term
-              , CONCAT('EDAUD_', aud.user_dataset_id) as internal
-              , aud.name as display
-              FROM
-                @VDI_CONTROL_SCHEMA@.availableuserdatasets aud
-              WHERE
-                user_id = $$user_id$$
+             WITH primary_result AS (
+               SELECT
+                 CONCAT('EDAUD_', aud.user_dataset_id) as term
+                 , CONCAT('EDAUD_', aud.user_dataset_id) as internal
+                 , aud.name as display
+                FROM
+                  @VDI_CONTROL_SCHEMA@.availableuserdatasets aud
+               WHERE
+                  (user_id = $$user_id$$ or is_public = true)
                 AND type = 'phenotype'
+                AND (project_id = '@PROJECT_ID@' or ('UniDB' = '@PROJECT_ID@' and 'ClinEpiDB' != project_id))
               ORDER BY display
+            )
+            SELECT * FROM primary_result
+            UNION ALL
+            select 'EDAUD_slI5M0RwIg0Zw' as term, 'EDAUD_slI5M0RwIg0Zw' as internal, 'Upload a Phenotype User Dataset in My Workspace' as display
+            WHERE NOT EXISTS (SELECT 1 FROM primary_result)
             ]]>
           </sql>
   </sqlQuery>
@@ -7295,14 +7303,15 @@ products of your selected type (or types).<br><br>
           <column name="display"/>
           <sql>
             <![CDATA[
-              SELECT
+         WITH primary_result AS (
+             SELECT
                 aud.user_dataset_id as term
               , aud.user_dataset_id as internal
               , aud.name as display
-              FROM
+               FROM
                 @VDI_CONTROL_SCHEMA@.availableuserdatasets aud
-              WHERE
-                user_id = $$user_id$$
+              WHERE (user_id = $$user_id$$ or is_public = true)
+		AND (project_id = '@PROJECT_ID@' or ('UniDB' = '@PROJECT_ID@' and 'ClinEpiDB' != project_id))
                 AND exists(
                   SELECT 1
                   FROM
@@ -7313,12 +7322,19 @@ products of your selected type (or types).<br><br>
                       ON pan.protocol_app_node_id = nfe.protocol_app_node_id
                   WHERE
                     ps.user_dataset_id = aud.user_dataset_id
-                )
-              ORDER BY display
+                  )
+           ORDER BY display
+         )
+         SELECT * FROM primary_result
+         UNION ALL
+         select 'EDAUD_sII5gAU5QA0hg' as term, 'EDAUD_sII5gAU5QA0hg' as internal, 'Upload a RNA-Seq User Dataset in My Workspace' as display
+         WHERE NOT EXISTS (SELECT 1 FROM primary_result)
             ]]>
           </sql>
         </sqlQuery>
 
+
+	<!-- this query should be similar to RnaSeqUserDataset in how it uses da.is_public.  (is it missing a join to da) -->
         <sqlQuery name="StrandedRnaSeqUserDataset" isCacheable="false">
            <paramRef ref="InternalParams.user_id"/>
            <column name="internal"/>
@@ -7344,6 +7360,7 @@ products of your selected type (or types).<br><br>
                        and pan.protocol_app_node_id = nfe.protocol_app_node_id
                     )
              and (iud.is_invalid is null or iud.is_invalid = 0)
+	     AND (project_id = '@PROJECT_ID@' or ('UniDB' = '@PROJECT_ID@' and 'ClinEpiDB' != project_id))
         ) order by ordering, display
              ]]>
            </sql>
@@ -8089,29 +8106,42 @@ products of your selected type (or types).<br><br>
 
 
     <!-- removed BACI group because it has no species in it and screws up the search results -->
-    <sqlQuery name="PhyleticIndentMap" doNotTest="1" >
+    <!-- path-based ordering: species share parent's depth_first_index so ORDER BY DFI alone cannot
+         guarantee parents appear before children; compute a sort path from parent_id tree structure instead -->
+    <sqlQuery name="PhyleticIndentMap" doNotTest="1" isCacheable="false">
       <column name="internal" />
       <column name="term" />
       <column name="display" />
+      <column name="parentTerm" />
       <sql>
         <![CDATA[
-          WITH RECURSIVE cte AS (
-            SELECT depth_first_index, orthomcl_clade_id, 0 AS level, three_letter_abbrev
-            FROM apidb.orthomclClade
-            WHERE orthomcl_clade_id = (
-              SELECT min(orthomcl_clade_id)
-              FROM apidb.orthomclClade
+          WITH RECURSIVE
+          sib_ranks AS (
+            SELECT orthomcl_clade_id, parent_id, depth_first_index, three_letter_abbrev,
+                   ROW_NUMBER() OVER (PARTITION BY parent_id ORDER BY depth_first_index, three_letter_abbrev) AS sib_rank
+            FROM apidb.orthomclclade
+          ),
+          cte AS (
+            SELECT sr.orthomcl_clade_id, 0 AS level, sr.three_letter_abbrev,
+                   NULL::varchar AS parent_abbrev,
+                   LPAD(sr.sib_rank::text, 6, '0') AS sort_path
+            FROM sib_ranks sr
+            WHERE sr.orthomcl_clade_id = (
+              SELECT min(orthomcl_clade_id) FROM apidb.orthomclclade
             )
-            UNION
-            SELECT sub.depth_first_index, sub.orthomcl_clade_id, cte.level + 1, sub.three_letter_abbrev
-            FROM apidb.orthomclclade sub, cte
-            WHERE sub.parent_id = cte.orthomcl_clade_id
+            UNION ALL
+            SELECT sr.orthomcl_clade_id, cte.level + 1, sr.three_letter_abbrev,
+                   cte.three_letter_abbrev AS parent_abbrev,
+                   cte.sort_path || '.' || LPAD(sr.sib_rank::text, 6, '0')
+            FROM sib_ranks sr
+            JOIN cte ON sr.parent_id = cte.orthomcl_clade_id
           )
-          SELECT level AS internal, level AS display, three_letter_abbrev AS term
+          SELECT level AS internal, level AS display, three_letter_abbrev AS term,
+                 parent_abbrev AS parentTerm
           FROM cte
           WHERE level > 0
             AND three_letter_abbrev NOT IN ('BACI')
-          ORDER BY depth_first_index ASC, level ASC, three_letter_abbrev ASC
+          ORDER BY sort_path
         ]]>
       </sql>
     </sqlQuery>
@@ -8133,15 +8163,39 @@ products of your selected type (or types).<br><br>
 
 
     <!-- removed BACI group because it has no species in it and screws up the search results -->
-    <sqlQuery name="PhyleticTermMap" doNotTest="1">
+    <sqlQuery name="PhyleticTermMap" doNotTest="1" isCacheable="false">
       <column name="internal" />
       <column name="term" />
       <column name="display" />
+      <column name="parentTerm" />
       <sql>
-        SELECT three_letter_abbrev as term, name as internal, name as display
-        FROM apidb.orthomclclade
-        WHERE three_letter_abbrev not in ('BACI')
-        ORDER BY depth_first_index  ASC, three_letter_abbrev ASC
+        <![CDATA[
+          WITH RECURSIVE
+          sib_ranks AS (
+            SELECT orthomcl_clade_id, parent_id, depth_first_index, three_letter_abbrev, name,
+                   ROW_NUMBER() OVER (PARTITION BY parent_id ORDER BY depth_first_index, three_letter_abbrev) AS sib_rank
+            FROM apidb.orthomclclade
+          ),
+          cte AS (
+            SELECT sr.orthomcl_clade_id, 0 AS level, sr.three_letter_abbrev, sr.name,
+                   NULL::varchar AS parent_abbrev,
+                   LPAD(sr.sib_rank::text, 6, '0') AS sort_path
+            FROM sib_ranks sr
+            WHERE sr.orthomcl_clade_id = (SELECT min(orthomcl_clade_id) FROM apidb.orthomclclade)
+            UNION ALL
+            SELECT sr.orthomcl_clade_id, cte.level + 1, sr.three_letter_abbrev, sr.name,
+                   cte.three_letter_abbrev AS parent_abbrev,
+                   cte.sort_path || '.' || LPAD(sr.sib_rank::text, 6, '0')
+            FROM sib_ranks sr
+            JOIN cte ON sr.parent_id = cte.orthomcl_clade_id
+          )
+          SELECT three_letter_abbrev AS term, name AS internal, name AS display,
+                 CASE WHEN level = 1 THEN NULL ELSE parent_abbrev END AS parentTerm
+          FROM cte
+          WHERE level > 0
+            AND three_letter_abbrev NOT IN ('BACI')
+          ORDER BY sort_path
+        ]]>
       </sql>
     </sqlQuery>
     <!--
@@ -9428,6 +9482,8 @@ end as term
           name AS display
         FROM @VDI_DATASETS_SCHEMA@.ud_profileset
         WHERE user_dataset_id = $$rna_seq_dataset$$
+       UNION
+      SELECT  '1111' as term, '1111' as internal, 'Choose a RNA-Seq User Dataset' as display
       </sql>
     </sqlQuery>
 

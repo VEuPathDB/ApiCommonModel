@@ -855,6 +855,34 @@
       </sql>
     </sqlQuery>
 
+    <sqlQuery name="UserDatasetsEdaPhenotype">
+            <paramRef ref="InternalParams.user_id"/>
+	    <column name="source_id" />
+            <column name="project_id" />
+	    <column name="dataset_id" />
+	    <column name="name" />
+	    <column name="summary" />
+	    <column name="is_public" />
+            <column name="creation_date"/>
+	    <sql>
+
+
+                   select  ga.source_id
+                           ,ga.project_id
+                           ,aud.user_dataset_id as dataset_id,aud.name,aud.summary,aud.is_public, aud.creation_date
+                 FROM apidbtuning.GeneAttributes ga
+                     ,@VDI_CONTROL_SCHEMA@.availableuserdatasets aud
+                 WHERE  aud.project_id = '@PROJECT_ID@'
+                   and aud.type = 'phenotype'
+                   and aud.user_id = $$user_id$$
+                   and (ga.project_id = '@PROJECT_ID@' or 'UniDB' = '@PROJECT_ID@')
+                 ORDER BY ga.source_id
+
+       </sql>
+     </sqlQuery>
+
+
+
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- Host Response  Graphs -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
@@ -3249,7 +3277,11 @@ from (
 	    <column name="assigned_by"/>
             <sql>
             <![CDATA[
-             select ga.source_id,
+             select distinct on (ga.source_id,
+                                 coalesce(p.transcript_ids, ga.representative_transcript),
+                                 coalesce(p.product, ga.product),
+                                 p.assigned_by)
+                 ga.source_id,
                  coalesce(p.transcript_ids, ga.representative_transcript) as transcript_ids,
                  ga.project_id,
                  coalesce(p.product, ga.product) as product,
@@ -3261,6 +3293,10 @@ from (
              from apidbTuning.GeneAttributes ga
              left join apidbTuning.AllGeneProducts_p p on ga.source_id = p.source_id
              where ga.org_abbrev in (%%PARTITION_KEYS%%)
+             order by ga.source_id,
+                      coalesce(p.transcript_ids, ga.representative_transcript),
+                      coalesce(p.product, ga.product),
+                      p.assigned_by
             ]]>
             </sql>
         </sqlQuery> 
@@ -4407,6 +4443,7 @@ from (
                from webready.RefSynOrthologousGenes_p rso
                   , apidbtuning.Profile p
                where p.source_id = rso.ref_source_id
+               and p.dataset_name = 'tbruTREU927_RNAi_Horn_CDS_rnaSeq_RSRC'
                and rso.org_abbrev in (%%PARTITION_KEYS%%)
 	      ) ggp
           WHERE ga.na_feature_id = nfe.na_feature_id
@@ -4419,7 +4456,6 @@ from (
             AND r.external_database_id = d.external_database_id
             AND d.name = dd.name
             AND dd.dataset_presenter_id = 'DS_98fb258539' -- this is the TriTryp RNA-Seq phenotype dataset id
-            AND ps.study_id = smpl.study_id
             AND smpl.protocol_app_node_id = pan.protocol_app_node_id
             AND smpl.profile_type = 'values'
             AND ga.org_abbrev IN (%%PARTITION_KEYS%%)

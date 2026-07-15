@@ -4,248 +4,325 @@ create unlogged table :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp as
 (select gf.na_feature_id
       , gf.source_id
       , gf.product
+      , o.genome_source
  from dots.genefeature gf
     , dots.nasequence nas
+    , apidb.Organism o
  where gf.na_sequence_id = nas.na_sequence_id
- and nas.taxon_id = :TAXON_ID
+   and nas.taxon_id = :TAXON_ID
+   and o.taxon_id = nas.taxon_id
 )
 ;
-
-CREATE OR REPLACE FUNCTION pg_temp.is_uninformative(p_product TEXT) RETURNS BOOLEAN AS $$
-BEGIN
-    IF p_product IS NULL OR TRIM(p_product) = '' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product ~* '(hypothetical[_ ]protein|unspecified product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product ~* '^has domain\(s\) with predicted'
-       AND (p_product LIKE '%,%' OR p_product ~* ' and ') THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product NOT LIKE '% %' AND p_product LIKE 'XM%' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product ~ '^CAD\d+(\.\d+)?$' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product ~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product ~* 'uncharacterized\s+loc\d+' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product LIKE 'CSON%'
-       OR p_product LIKE 'hypothetical protein BGH%'
-       OR p_product LIKE 'DEHA2A%' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product NOT LIKE '% %' THEN
-        IF p_product ~ '^[A-Z]{2,4}\d{4,}$'
-           OR p_product ~ '^[A-Z]{3,5}_\d+$'
-           OR p_product ~ '^LOC\d+$'
-           OR p_product ~ '^[A-Z]+\d+\.[0-9]+$' THEN
-            RETURN TRUE;
-        END IF;
-    END IF;
-    IF p_product LIKE 'Similar to [%' THEN
-        RETURN TRUE;
-    END IF;
-    IF p_product LIKE '%Source:UniProt%' THEN
-        RETURN TRUE;
-    END IF;
-    IF LOWER(TRIM(p_product)) IN ('protein', 'gene product', 'gene', 'orf') THEN
-        RETURN TRUE;
-    END IF;
-    RETURN FALSE;
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
 
 
 :CREATE_AND_POPULATE
   WITH
-    -- Identify 1:1 gene:transcript relationships for this organism
-    one_to_one_genes AS (
-      SELECT gf.na_feature_id as gene_na_feature_id,
-             gf.source_id as gene_source_id,
-             MAX(t.na_feature_id) as transcript_na_feature_id
-      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
-      LEFT JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
-      GROUP BY gf.na_feature_id, gf.source_id
-      HAVING COUNT(t.na_feature_id) = 1
-    ),
-
-    -- Informative gene feature products (uninformative products excluded)
     informative_gfp AS (
       SELECT gfp.na_feature_id, gfp.product, gfp.assigned_by, gfp.is_preferred
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
       INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
       WHERE gfp.product IS NOT NULL
-        AND NOT pg_temp.is_uninformative(gfp.product)
+        AND TRIM(gfp.product) != ''
+        AND gfp.product !~* '(hypothetical[_ ]protein|unspecified product|unnamed protein product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+        AND NOT (gfp.product ~* '^has domain\(s\) with predicted' AND (gfp.product LIKE '%,%' OR gfp.product ~* ' and '))
+        AND NOT (gfp.product NOT LIKE '% %' AND gfp.product LIKE 'XM%')
+        AND gfp.product !~ '^CAD\d+(\.\d+)?$'
+        AND gfp.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+        AND gfp.product !~* 'uncharacterized\s+loc\d+'
+        AND gfp.product NOT LIKE 'CSON%'
+        AND gfp.product NOT LIKE 'hypothetical protein BGH%'
+        AND gfp.product NOT LIKE 'DEHA2A%'
+        AND NOT (gfp.product NOT LIKE '% %' AND (gfp.product ~ '^[A-Z]{2,4}\d{4,}$' OR gfp.product ~ '^[A-Z]{3,5}_\d+$' OR gfp.product ~ '^LOC\d+$' OR gfp.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+        AND gfp.product NOT LIKE 'Similar to [%'
+        AND gfp.product NOT LIKE '%UniProtKB%'
+        AND LOWER(TRIM(gfp.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
     ),
 
-    -- Informative transcript products (uninformative products excluded)
     informative_tp AS (
-      SELECT gf.na_feature_id as gene_na_feature_id, tp.product, tp.assigned_by, tp.is_preferred
+      SELECT gf.na_feature_id AS gene_na_feature_id,
+             tp.product, tp.assigned_by, tp.is_preferred
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
       INNER JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
       INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = t.na_feature_id
       WHERE tp.product IS NOT NULL
-        AND NOT pg_temp.is_uninformative(tp.product)
+        AND TRIM(tp.product) != ''
+        AND tp.product !~* '(hypothetical[_ ]protein|unspecified product|unnamed protein product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+        AND NOT (tp.product ~* '^has domain\(s\) with predicted' AND (tp.product LIKE '%,%' OR tp.product ~* ' and '))
+        AND NOT (tp.product NOT LIKE '% %' AND tp.product LIKE 'XM%')
+        AND tp.product !~ '^CAD\d+(\.\d+)?$'
+        AND tp.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+        AND tp.product !~* 'uncharacterized\s+loc\d+'
+        AND tp.product NOT LIKE 'CSON%'
+        AND tp.product NOT LIKE 'hypothetical protein BGH%'
+        AND tp.product NOT LIKE 'DEHA2A%'
+        AND NOT (tp.product NOT LIKE '% %' AND (tp.product ~ '^[A-Z]{2,4}\d{4,}$' OR tp.product ~ '^[A-Z]{3,5}_\d+$' OR tp.product ~ '^LOC\d+$' OR tp.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+        AND tp.product NOT LIKE 'Similar to [%'
+        AND tp.product NOT LIKE '%UniProtKB%'
+        AND LOWER(TRIM(tp.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
     ),
 
-    -- Priority 1: Preferred curated gene products
-    gene_curated_preferred AS (
-      SELECT gf.source_id,
-             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) as product,
-             1 as source_rule,
-             COUNT(DISTINCT igfp.product) as value_count,
-             'preferred_curated_gene' as rule_description
+    informative_dt AS (
+      SELECT gf.na_feature_id AS gene_na_feature_id, t.product, gf.genome_source
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
-      INNER JOIN informative_gfp igfp ON igfp.na_feature_id = gf.na_feature_id
-      WHERE igfp.assigned_by IN ('VEuPathDB', 'GeneDB', 'Hagai', 'Liverpool', 'BeverleyLab',
-                                  'KissingerLab', 'Robello_Lab', 'Sanger', 'SGD', 'CGD',
-                                  'PomBase', 'DictyBase', 'FlyBase', 'TAIR')
-        AND igfp.is_preferred = 1
-      GROUP BY gf.source_id
+      INNER JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
+      WHERE t.product IS NOT NULL
+        AND TRIM(t.product) != ''
+        AND t.product !~* '(hypothetical[_ ]protein|unspecified product|unnamed protein product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+        AND NOT (t.product ~* '^has domain\(s\) with predicted' AND (t.product LIKE '%,%' OR t.product ~* ' and '))
+        AND NOT (t.product NOT LIKE '% %' AND t.product LIKE 'XM%')
+        AND t.product !~ '^CAD\d+(\.\d+)?$'
+        AND t.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+        AND t.product !~* 'uncharacterized\s+loc\d+'
+        AND t.product NOT LIKE 'CSON%'
+        AND t.product NOT LIKE 'hypothetical protein BGH%'
+        AND t.product NOT LIKE 'DEHA2A%'
+        AND NOT (t.product NOT LIKE '% %' AND (t.product ~ '^[A-Z]{2,4}\d{4,}$' OR t.product ~ '^[A-Z]{3,5}_\d+$' OR t.product ~ '^LOC\d+$' OR t.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+        AND t.product NOT LIKE 'Similar to [%'
+        AND t.product NOT LIKE '%UniProtKB%'
+        AND LOWER(TRIM(t.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
     ),
 
-    -- Priority 2: Any curated gene products
-    gene_curated_any AS (
-      SELECT gf.source_id,
-             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) as product,
-             2 as source_rule,
-             COUNT(DISTINCT igfp.product) as value_count,
-             'curated_gene' as rule_description
-      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
-      INNER JOIN informative_gfp igfp ON igfp.na_feature_id = gf.na_feature_id
-      WHERE igfp.assigned_by IN ('VEuPathDB', 'GeneDB', 'Hagai', 'Liverpool', 'BeverleyLab',
-                                  'KissingerLab', 'Robello_Lab', 'Sanger', 'SGD', 'CGD',
-                                  'PomBase', 'DictyBase', 'FlyBase', 'TAIR')
-      GROUP BY gf.source_id
-    ),
-
-    -- Priority 3: 1:1 + Preferred curated transcript products
-    transcript_curated_preferred_one_to_one AS (
-      SELECT oto.gene_source_id as source_id,
-             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) as product,
-             3 as source_rule,
-             COUNT(DISTINCT itp.product) as value_count,
-             'preferred_curated_transcript_1to1' as rule_description
-      FROM one_to_one_genes oto
-      INNER JOIN informative_tp itp ON itp.gene_na_feature_id = oto.gene_na_feature_id
-      WHERE itp.assigned_by IN ('VEuPathDB', 'GeneDB', 'Hagai', 'Liverpool', 'BeverleyLab',
-                                 'KissingerLab', 'Robello_Lab', 'Sanger', 'SGD', 'CGD',
-                                 'PomBase', 'DictyBase', 'FlyBase', 'TAIR')
-        AND itp.is_preferred = 1
-      GROUP BY oto.gene_source_id
-    ),
-
-    -- Priority 4: 1:1 + Any curated transcript products
-    transcript_curated_any_one_to_one AS (
-      SELECT oto.gene_source_id as source_id,
-             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) as product,
-             4 as source_rule,
-             COUNT(DISTINCT itp.product) as value_count,
-             'curated_transcript_1to1' as rule_description
-      FROM one_to_one_genes oto
-      INNER JOIN informative_tp itp ON itp.gene_na_feature_id = oto.gene_na_feature_id
-      WHERE itp.assigned_by IN ('VEuPathDB', 'GeneDB', 'Hagai', 'Liverpool', 'BeverleyLab',
-                                 'KissingerLab', 'Robello_Lab', 'Sanger', 'SGD', 'CGD',
-                                 'PomBase', 'DictyBase', 'FlyBase', 'TAIR')
-      GROUP BY oto.gene_source_id
-    ),
-
-    -- Priority 5: ARBA annotations
-    gene_arba AS (
-      SELECT gf.source_id,
-             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) as product,
-             5 as source_rule,
-             COUNT(DISTINCT igfp.product) as value_count,
-             'arba_gene' as rule_description
-      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
-      INNER JOIN informative_gfp igfp ON igfp.na_feature_id = gf.na_feature_id
-      WHERE igfp.assigned_by = 'ARBA'
-      GROUP BY gf.source_id
-    ),
-
-    -- Priority 6: Preferred gene products (is_preferred=1, concatenated)
-    gene_preferred_all AS (
-      SELECT gf.source_id,
-             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) as product,
-             6 as source_rule,
-             COUNT(DISTINCT igfp.product) as value_count,
-             'preferred_gene' as rule_description
-      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
-      INNER JOIN informative_gfp igfp ON igfp.na_feature_id = gf.na_feature_id
-      WHERE igfp.is_preferred = 1
-      GROUP BY gf.source_id
-    ),
-
-    -- Priority 7: Preferred transcript products (is_preferred=1, concatenated)
-    transcript_preferred_all AS (
-      SELECT gf.source_id,
-             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) as product,
-             7 as source_rule,
-             COUNT(DISTINCT itp.product) as value_count,
-             'preferred_transcript' as rule_description
-      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
-      INNER JOIN informative_tp itp ON itp.gene_na_feature_id = gf.na_feature_id
-      WHERE itp.is_preferred = 1
-      GROUP BY gf.source_id
-    ),
-
-    -- Priority 8: All gene products (concatenated)
-    gene_all AS (
-      SELECT gf.source_id,
-             SUBSTR(STRING_AGG(DISTINCT igfp.product, ', ' ORDER BY igfp.product), 1, 4000) as product,
-             8 as source_rule,
-             COUNT(DISTINCT igfp.product) as value_count,
-             'all_gene' as rule_description
-      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
-      INNER JOIN informative_gfp igfp ON igfp.na_feature_id = gf.na_feature_id
-      GROUP BY gf.source_id
-    ),
-
-    -- Priority 9: All transcript products (concatenated)
-    transcript_all AS (
-      SELECT gf.source_id,
-             SUBSTR(STRING_AGG(DISTINCT itp.product, ', ' ORDER BY itp.product), 1, 4000) as product,
-             9 as source_rule,
-             COUNT(DISTINCT itp.product) as value_count,
-             'all_transcript' as rule_description
-      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
-      INNER JOIN informative_tp itp ON itp.gene_na_feature_id = gf.na_feature_id
-      GROUP BY gf.source_id
-    ),
-
-    -- Priority 10: Base gene product field
-    gene_base AS (
-      SELECT gf.source_id,
-             gf.product,
-             10 as source_rule,
-             1 as value_count,
-             'base_gene' as rule_description
+    informative_gf AS (
+      SELECT gf.na_feature_id, gf.product, gf.genome_source
       FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
       WHERE gf.product IS NOT NULL
-        AND NOT pg_temp.is_uninformative(gf.product)
+        AND TRIM(gf.product) != ''
+        AND gf.product !~* '(hypothetical[_ ]protein|unspecified product|unnamed protein product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+        AND NOT (gf.product ~* '^has domain\(s\) with predicted' AND (gf.product LIKE '%,%' OR gf.product ~* ' and '))
+        AND NOT (gf.product NOT LIKE '% %' AND gf.product LIKE 'XM%')
+        AND gf.product !~ '^CAD\d+(\.\d+)?$'
+        AND gf.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+        AND gf.product !~* 'uncharacterized\s+loc\d+'
+        AND gf.product NOT LIKE 'CSON%'
+        AND gf.product NOT LIKE 'hypothetical protein BGH%'
+        AND gf.product NOT LIKE 'DEHA2A%'
+        AND NOT (gf.product NOT LIKE '% %' AND (gf.product ~ '^[A-Z]{2,4}\d{4,}$' OR gf.product ~ '^[A-Z]{3,5}_\d+$' OR gf.product ~ '^LOC\d+$' OR gf.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+        AND gf.product NOT LIKE 'Similar to [%'
+        AND gf.product NOT LIKE '%UniProtKB%'
+        AND LOWER(TRIM(gf.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
     ),
 
-    -- Combine all priorities
+    informative_arba AS (
+      SELECT gfp.na_feature_id, gfp.product, gfp.assigned_by, gfp.is_preferred
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
+      WHERE LOWER(gfp.assigned_by) = 'arba'
+        AND gfp.product IS NOT NULL
+        AND TRIM(gfp.product) != ''
+    ),
+
+    all_informative AS (
+      SELECT na_feature_id AS gene_na_feature_id,
+             product, assigned_by, is_preferred, 'gene' AS source_type
+      FROM informative_gfp
+      UNION ALL
+      SELECT gene_na_feature_id,
+             product, assigned_by, is_preferred, 'transcript' AS source_type
+      FROM informative_tp
+      UNION ALL
+      SELECT gene_na_feature_id,
+             product, genome_source AS assigned_by, 0 AS is_preferred, 'transcript' AS source_type
+      FROM informative_dt
+      UNION ALL
+      SELECT na_feature_id AS gene_na_feature_id,
+             product, genome_source AS assigned_by, 0 AS is_preferred, 'gene' AS source_type
+      FROM informative_gf
+      UNION ALL
+      SELECT na_feature_id AS gene_na_feature_id,
+             product, assigned_by, is_preferred, 'gene' AS source_type
+      FROM informative_arba
+    ),
+
+    all_noninformative AS (
+      SELECT gf.na_feature_id AS gene_na_feature_id,
+             gfp.product, gfp.assigned_by, gfp.is_preferred, 'gene' AS source_type
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
+      WHERE gfp.product IS NOT NULL AND TRIM(gfp.product) != ''
+      UNION ALL
+      SELECT gf.na_feature_id AS gene_na_feature_id,
+             tp.product, tp.assigned_by, tp.is_preferred, 'transcript' AS source_type
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
+      INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = t.na_feature_id
+      WHERE tp.product IS NOT NULL AND TRIM(tp.product) != ''
+      UNION ALL
+      SELECT gf.na_feature_id AS gene_na_feature_id,
+             t.product, gf.genome_source AS assigned_by, 0 AS is_preferred, 'transcript' AS source_type
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
+      WHERE t.product IS NOT NULL AND TRIM(t.product) != ''
+      UNION ALL
+      SELECT gf.na_feature_id AS gene_na_feature_id,
+             gf.product, gf.genome_source AS assigned_by, 0 AS is_preferred, 'gene' AS source_type
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      WHERE gf.product IS NOT NULL AND TRIM(gf.product) != ''
+    ),
+
+    assigned_by_groups(assigned_by_val, group_name) AS (
+      VALUES
+        ('veupathdb',        'veupathdb'),
+        ('apollo',           'apollo'),
+        ('community',        'community'),
+        ('anderssonlab',     'lab'),
+        ('berna',            'lab'),
+        ('beverleylab',      'lab'),
+        ('corridalab',       'lab'),
+        ('flegontovlab',     'lab'),
+        ('franzen',          'lab'),
+        ('fritzlab',         'lab'),
+        ('hertzfowlerlab',   'lab'),
+        ('jcarltonlab',      'lab'),
+        ('kissingerlab',     'lab'),
+        ('liverpool',        'lab'),
+        ('lukeslab',         'lab'),
+        ('mcbridelab',       'lab'),
+        ('msu',              'lab'),
+        ('painlab',          'lab'),
+        ('requenalab',       'lab'),
+        ('siegelab',         'lab'),
+        ('siegellab',        'lab'),
+        ('stukenbrocklab',   'lab'),
+        ('tachezylab',       'lab'),
+        ('tarletonlab',      'lab'),
+        ('ubc',              'lab'),
+        ('ulaval',           'lab'),
+        ('valkiunaslab',     'lab'),
+        ('wittwer',          'lab'),
+        ('wittwerlab',       'lab'),
+        ('yurchenkolab',     'lab'),
+        ('dieterichlab',     'lab'),
+        ('widmerlab',        'lab'),
+        ('hammondkosacklab', 'lab'),
+        ('parkinsonlab',     'lab'),
+        ('saskatchewan',     'lab'),
+        ('bochum',           'lab'),
+        ('jcvi',             'genomedb'),
+        ('jgi',              'genomedb'),
+        ('sanger',           'genomedb'),
+        ('pombase',          'genomedb'),
+        ('dictybase',        'genomedb'),
+        ('aspgd',            'genomedb'),
+        ('cgd',              'genomedb'),
+        ('sgd',              'genomedb'),
+        ('genedb',           'genomedb'),
+        ('broad',            'genomedb'),
+        ('vectorbase',       'genomedb'),
+        ('gemo',             'genomedb'),
+        ('ensembl',          'ensembl'),
+        ('uniprot',          'uniprot'),
+        ('uniprotkb/trembl', 'uniprot'),
+        ('uniprot/pfam',     'uniprot'),
+        ('refseq',           'refseq'),
+        ('entrezgene',       'entrezgene'),
+        ('genbank',          'genbank'),
+        ('gb',               'genbank'),
+        ('pfam',             'pfam'),
+        ('arba',             'arba')
+    ),
+
+    rule_lookup(group_name, is_preferred, source_type, source_rule, rule_description) AS (
+      VALUES
+        ('veupathdb',   1, 'gene',        1,  'veupathdb_preferred_gene'),
+        ('apollo',      1, 'gene',        2,  'apollo_preferred_gene'),
+        ('community',   1, 'gene',        3,  'community_preferred_gene'),
+        ('lab',         1, 'gene',        4,  'lab_preferred_gene'),
+        ('genomedb',    1, 'gene',        5,  'genomedb_preferred_gene'),
+        ('ensembl',     1, 'gene',        6,  'ensembl_preferred_gene'),
+        ('uniprot',     1, 'gene',        7,  'uniprot_preferred_gene'),
+        ('refseq',      1, 'gene',        8,  'refseq_preferred_gene'),
+        ('entrezgene',  1, 'gene',        9,  'entrezgene_preferred_gene'),
+        ('genbank',     1, 'gene',       10,  'genbank_preferred_gene'),
+        ('pfam',        1, 'gene',       11,  'pfam_preferred_gene'),
+        ('veupathdb',   1, 'transcript', 12,  'veupathdb_preferred_transcript'),
+        ('apollo',      1, 'transcript', 13,  'apollo_preferred_transcript'),
+        ('community',   1, 'transcript', 14,  'community_preferred_transcript'),
+        ('lab',         1, 'transcript', 15,  'lab_preferred_transcript'),
+        ('genomedb',    1, 'transcript', 16,  'genomedb_preferred_transcript'),
+        ('ensembl',     1, 'transcript', 17,  'ensembl_preferred_transcript'),
+        ('uniprot',     1, 'transcript', 18,  'uniprot_preferred_transcript'),
+        ('refseq',      1, 'transcript', 19,  'refseq_preferred_transcript'),
+        ('entrezgene',  1, 'transcript', 20,  'entrezgene_preferred_transcript'),
+        ('genbank',     1, 'transcript', 21,  'genbank_preferred_transcript'),
+        ('pfam',        1, 'transcript', 22,  'pfam_preferred_transcript'),
+        ('veupathdb',   0, 'gene',       23,  'veupathdb_gene'),
+        ('apollo',      0, 'gene',       24,  'apollo_gene'),
+        ('community',   0, 'gene',       25,  'community_gene'),
+        ('lab',         0, 'gene',       26,  'lab_gene'),
+        ('genomedb',    0, 'gene',       27,  'genomedb_gene'),
+        ('ensembl',     0, 'gene',       28,  'ensembl_gene'),
+        ('uniprot',     0, 'gene',       29,  'uniprot_gene'),
+        ('refseq',      0, 'gene',       30,  'refseq_gene'),
+        ('entrezgene',  0, 'gene',       31,  'entrezgene_gene'),
+        ('genbank',     0, 'gene',       32,  'genbank_gene'),
+        ('pfam',        0, 'gene',       33,  'pfam_gene'),
+        ('veupathdb',   0, 'transcript', 34,  'veupathdb_transcript'),
+        ('apollo',      0, 'transcript', 35,  'apollo_transcript'),
+        ('community',   0, 'transcript', 36,  'community_transcript'),
+        ('lab',         0, 'transcript', 37,  'lab_transcript'),
+        ('genomedb',    0, 'transcript', 38,  'genomedb_transcript'),
+        ('ensembl',     0, 'transcript', 39,  'ensembl_transcript'),
+        ('uniprot',     0, 'transcript', 40,  'uniprot_transcript'),
+        ('refseq',      0, 'transcript', 41,  'refseq_transcript'),
+        ('entrezgene',  0, 'transcript', 42,  'entrezgene_transcript'),
+        ('genbank',     0, 'transcript', 43,  'genbank_transcript'),
+        ('pfam',        0, 'transcript', 44,  'pfam_transcript'),
+        ('arba',        0, 'gene',       46,  'arba_gene'),
+        ('arba',        1, 'gene',       46,  'arba_gene')
+    ),
+
     all_products AS (
-      SELECT * FROM gene_curated_preferred
-      UNION ALL SELECT * FROM gene_curated_any
-      UNION ALL SELECT * FROM transcript_curated_preferred_one_to_one
-      UNION ALL SELECT * FROM transcript_curated_any_one_to_one
-      UNION ALL SELECT * FROM gene_arba
-      UNION ALL SELECT * FROM gene_preferred_all
-      UNION ALL SELECT * FROM transcript_preferred_all
-      UNION ALL SELECT * FROM gene_all
-      UNION ALL SELECT * FROM transcript_all
-      UNION ALL SELECT * FROM gene_base
+      SELECT gf.source_id,
+             SUBSTR(STRING_AGG(DISTINCT ai.product, ', ' ORDER BY ai.product), 1, 4000) AS product,
+             rl.source_rule,
+             COUNT(DISTINCT ai.product) AS value_count,
+             rl.rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN all_informative ai ON ai.gene_na_feature_id = gf.na_feature_id
+      INNER JOIN assigned_by_groups abg ON abg.assigned_by_val = LOWER(ai.assigned_by)
+      INNER JOIN rule_lookup rl ON rl.group_name = abg.group_name
+                               AND rl.is_preferred = ai.is_preferred
+                               AND rl.source_type = ai.source_type
+      GROUP BY gf.source_id, rl.source_rule, rl.rule_description, rl.source_type
+      HAVING rl.source_type = 'gene' OR COUNT(DISTINCT ai.product) = 1
+      UNION ALL
+      SELECT gf.source_id,
+             SUBSTR(STRING_AGG(DISTINCT ai.product, ', ' ORDER BY ai.product), 1, 4000) AS product,
+             45                                                                            AS source_rule,
+             COUNT(DISTINCT ai.product)                                                    AS value_count,
+             'blank_assigned_by'                                                           AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN all_informative ai ON ai.gene_na_feature_id = gf.na_feature_id
+      WHERE (ai.assigned_by IS NULL OR TRIM(ai.assigned_by) = '')
+      GROUP BY gf.source_id
+      HAVING COUNT(DISTINCT ai.product) = 1
+      UNION ALL
+      SELECT gf.source_id,
+             SUBSTR(STRING_AGG(DISTINCT ani.product, ', ' ORDER BY ani.product), 1, 4000) AS product,
+             rl.source_rule + 47,
+             COUNT(DISTINCT ani.product)                                                    AS value_count,
+             rl.rule_description || '_uninformative'
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN all_noninformative ani ON ani.gene_na_feature_id = gf.na_feature_id
+      INNER JOIN assigned_by_groups abg ON abg.assigned_by_val = LOWER(ani.assigned_by)
+      INNER JOIN rule_lookup rl ON rl.group_name = abg.group_name
+                               AND rl.is_preferred = ani.is_preferred
+                               AND rl.source_type = ani.source_type
+      GROUP BY gf.source_id, rl.source_rule, rl.rule_description, rl.source_type
+      HAVING rl.source_type = 'gene' OR COUNT(DISTINCT ani.product) = 1
+      UNION ALL
+      SELECT gf.source_id,
+             SUBSTR(STRING_AGG(DISTINCT ani.product, ', ' ORDER BY ani.product), 1, 4000) AS product,
+             92                                                                             AS source_rule,
+             COUNT(DISTINCT ani.product)                                                    AS value_count,
+             'blank_assigned_by_uninformative'                                              AS rule_description
+      FROM :SCHEMA.:CLEAN_ORG_ABBREVGeneFeatureProductTmp gf
+      INNER JOIN all_noninformative ani ON ani.gene_na_feature_id = gf.na_feature_id
+      WHERE (ani.assigned_by IS NULL OR TRIM(ani.assigned_by) = '')
+      GROUP BY gf.source_id
+      HAVING COUNT(DISTINCT ani.product) = 1
     ),
 
-    -- Select highest priority product per gene
     ranked_products AS (
       SELECT source_id, product, source_rule, value_count, rule_description,
              ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY source_rule) as rank
@@ -254,7 +331,7 @@ $$ LANGUAGE plpgsql IMMUTABLE;
   SELECT gf.source_id,
          COALESCE(rp.product, 'unspecified product') as product,
          COALESCE(rp.value_count, 0) as value_count,
-         COALESCE(rp.source_rule, 11) as source_rule,
+         COALESCE(rp.source_rule, 94) as source_rule,
          COALESCE(rp.rule_description, 'unspecified') as source_rule_description,
          ':PROJECT_ID' as project_id,
          ':ORG_ABBREV' as org_abbrev,
@@ -263,19 +340,6 @@ $$ LANGUAGE plpgsql IMMUTABLE;
   LEFT JOIN ranked_products rp ON gf.source_id = rp.source_id AND rp.rank = 1;
 :DECLARE_PARTITION;
 
-
-/*
-
-
-Dependent Step
-  gene/protein_id -> uniprot accession and product
-
-This step will assume it has all uniprot accessions assined to the protein and uniprot product name and have pfams in our hand
-
-
-
-
-*/
 
 delete from :SCHEMA.GeneProduct_p  where product is null and org_abbrev = ':ORG_ABBREV';
 

@@ -3,6 +3,735 @@
 
   <import file="tuningManager.xml"/>
 
+  <tuningTable name="TempGeneProduct">
+    <externalDependency name="dots.GeneFeature"/>
+    <externalDependency name="dots.NaSequence"/>
+    <externalDependency name="apidb.Organism"/>
+    <externalDependency name="apidb.GeneFeatureProduct"/>
+    <externalDependency name="dots.Transcript"/>
+    <externalDependency name="apidb.TranscriptProduct"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE TempGeneProduct&1 AS
+        WITH
+            genes AS (
+              SELECT gf.na_feature_id,
+                     gf.source_id,
+                     o.abbrev AS org_abbrev,
+                     o.genome_source
+              FROM dots.GeneFeature gf
+              INNER JOIN dots.NaSequence nas ON nas.na_sequence_id = gf.na_sequence_id
+              INNER JOIN apidb.Organism o ON o.taxon_id = nas.taxon_id
+            ),
+
+            informative_gfp AS (
+              SELECT gfp.na_feature_id, gfp.product, gfp.assigned_by, gfp.is_preferred
+              FROM genes gf
+              INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
+              WHERE gfp.product IS NOT NULL
+                AND TRIM(gfp.product) != ''
+                AND gfp.product !~* '(hypothetical[_ ]protein|unspecified product|unnamed protein product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+                AND NOT (gfp.product ~* '^has domain\(s\) with predicted' AND (gfp.product LIKE '%,%' OR gfp.product ~* ' and '))
+                AND NOT (gfp.product NOT LIKE '% %' AND gfp.product LIKE 'XM%')
+                AND gfp.product !~ '^CAD\d+(\.\d+)?$'
+                AND gfp.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+                AND gfp.product !~* 'uncharacterized\s+loc\d+'
+                AND gfp.product NOT LIKE 'CSON%'
+                AND gfp.product NOT LIKE 'hypothetical protein BGH%'
+                AND gfp.product NOT LIKE 'DEHA2A%'
+                AND NOT (gfp.product NOT LIKE '% %' AND (gfp.product ~ '^[A-Z]{2,4}\d{4,}$' OR gfp.product ~ '^[A-Z]{3,5}_\d+$' OR gfp.product ~ '^LOC\d+$' OR gfp.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+                AND gfp.product NOT LIKE 'Similar to [%'
+                AND gfp.product NOT LIKE '%UniProtKB%'
+                AND LOWER(TRIM(gfp.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
+            ),
+
+            informative_tp AS (
+              SELECT gf.na_feature_id AS gene_na_feature_id, t.na_feature_id AS transcript_na_feature_id,
+                     tp.product, tp.assigned_by, tp.is_preferred
+              FROM genes gf
+              INNER JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
+              INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = t.na_feature_id
+              WHERE tp.product IS NOT NULL
+                AND TRIM(tp.product) != ''
+                AND tp.product !~* '(hypothetical[_ ]protein|unspecified product|unnamed protein product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+                AND NOT (tp.product ~* '^has domain\(s\) with predicted' AND (tp.product LIKE '%,%' OR tp.product ~* ' and '))
+                AND NOT (tp.product NOT LIKE '% %' AND tp.product LIKE 'XM%')
+                AND tp.product !~ '^CAD\d+(\.\d+)?$'
+                AND tp.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+                AND tp.product !~* 'uncharacterized\s+loc\d+'
+                AND tp.product NOT LIKE 'CSON%'
+                AND tp.product NOT LIKE 'hypothetical protein BGH%'
+                AND tp.product NOT LIKE 'DEHA2A%'
+                AND NOT (tp.product NOT LIKE '% %' AND (tp.product ~ '^[A-Z]{2,4}\d{4,}$' OR tp.product ~ '^[A-Z]{3,5}_\d+$' OR tp.product ~ '^LOC\d+$' OR tp.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+                AND tp.product NOT LIKE 'Similar to [%'
+                AND tp.product NOT LIKE '%UniProtKB%'
+                AND LOWER(TRIM(tp.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
+            ),
+
+            informative_dt AS (
+              SELECT gf.na_feature_id AS gene_na_feature_id, t.na_feature_id AS transcript_na_feature_id, t.product, gf.genome_source
+              FROM genes gf
+              INNER JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
+              WHERE t.product IS NOT NULL
+                AND TRIM(t.product) != ''
+                AND t.product !~* '(hypothetical[_ ]protein|unspecified product|unnamed protein product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+                AND NOT (t.product ~* '^has domain\(s\) with predicted' AND (t.product LIKE '%,%' OR t.product ~* ' and '))
+                AND NOT (t.product NOT LIKE '% %' AND t.product LIKE 'XM%')
+                AND t.product !~ '^CAD\d+(\.\d+)?$'
+                AND t.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+                AND t.product !~* 'uncharacterized\s+loc\d+'
+                AND t.product NOT LIKE 'CSON%'
+                AND t.product NOT LIKE 'hypothetical protein BGH%'
+                AND t.product NOT LIKE 'DEHA2A%'
+                AND NOT (t.product NOT LIKE '% %' AND (t.product ~ '^[A-Z]{2,4}\d{4,}$' OR t.product ~ '^[A-Z]{3,5}_\d+$' OR t.product ~ '^LOC\d+$' OR t.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+                AND t.product NOT LIKE 'Similar to [%'
+                AND t.product NOT LIKE '%UniProtKB%'
+                AND LOWER(TRIM(t.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
+            ),
+
+            informative_gf AS (
+              SELECT gf.na_feature_id AS gene_na_feature_id, dgf.product, gf.genome_source
+              FROM genes gf
+              INNER JOIN dots.GeneFeature dgf ON dgf.na_feature_id = gf.na_feature_id
+              WHERE dgf.product IS NOT NULL
+                AND TRIM(dgf.product) != ''
+                AND dgf.product !~* '(hypothetical[_ ]protein|unspecified product|unnamed protein product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+                AND NOT (dgf.product ~* '^has domain\(s\) with predicted' AND (dgf.product LIKE '%,%' OR dgf.product ~* ' and '))
+                AND NOT (dgf.product NOT LIKE '% %' AND dgf.product LIKE 'XM%')
+                AND dgf.product !~ '^CAD\d+(\.\d+)?$'
+                AND dgf.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+                AND dgf.product !~* 'uncharacterized\s+loc\d+'
+                AND dgf.product NOT LIKE 'CSON%'
+                AND dgf.product NOT LIKE 'hypothetical protein BGH%'
+                AND dgf.product NOT LIKE 'DEHA2A%'
+                AND NOT (dgf.product NOT LIKE '% %' AND (dgf.product ~ '^[A-Z]{2,4}\d{4,}$' OR dgf.product ~ '^[A-Z]{3,5}_\d+$' OR dgf.product ~ '^LOC\d+$' OR dgf.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+                AND dgf.product NOT LIKE 'Similar to [%'
+                AND dgf.product NOT LIKE '%UniProtKB%'
+                AND LOWER(TRIM(dgf.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
+            ),
+
+            informative_arba AS (
+              SELECT gfp.na_feature_id, gfp.product, gfp.assigned_by, gfp.is_preferred
+              FROM genes gf
+              INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
+              WHERE LOWER(gfp.assigned_by) = 'arba'
+                AND gfp.product IS NOT NULL
+                AND TRIM(gfp.product) != ''
+            ),
+
+            all_informative AS (
+              SELECT na_feature_id AS gene_na_feature_id, NULL AS transcript_na_feature_id,
+                     product, assigned_by, is_preferred, 'gene' AS source_type
+              FROM informative_gfp
+              UNION ALL
+              SELECT gene_na_feature_id, transcript_na_feature_id,
+                     product, assigned_by, is_preferred, 'transcript' AS source_type
+              FROM informative_tp
+              UNION ALL
+              SELECT gene_na_feature_id, transcript_na_feature_id,
+                     product, genome_source AS assigned_by, 0 AS is_preferred, 'transcript' AS source_type
+              FROM informative_dt
+              UNION ALL
+              SELECT gene_na_feature_id, NULL AS transcript_na_feature_id,
+                     product, genome_source AS assigned_by, 0 AS is_preferred, 'gene' AS source_type
+              FROM informative_gf
+              UNION ALL
+              SELECT na_feature_id AS gene_na_feature_id, NULL AS transcript_na_feature_id,
+                     product, assigned_by, is_preferred, 'gene' AS source_type
+              FROM informative_arba
+            ),
+
+            all_noninformative AS (
+              SELECT gf.na_feature_id AS gene_na_feature_id, NULL AS transcript_na_feature_id,
+                     gfp.product, gfp.assigned_by, gfp.is_preferred, 'gene' AS source_type
+              FROM genes gf
+              INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
+              WHERE gfp.product IS NOT NULL AND TRIM(gfp.product) != ''
+              UNION ALL
+              SELECT gf.na_feature_id AS gene_na_feature_id, t.na_feature_id AS transcript_na_feature_id,
+                     tp.product, tp.assigned_by, tp.is_preferred, 'transcript' AS source_type
+              FROM genes gf
+              INNER JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
+              INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = t.na_feature_id
+              WHERE tp.product IS NOT NULL AND TRIM(tp.product) != ''
+              UNION ALL
+              SELECT gf.na_feature_id AS gene_na_feature_id, t.na_feature_id AS transcript_na_feature_id,
+                     t.product, gf.genome_source AS assigned_by, 0 AS is_preferred, 'transcript' AS source_type
+              FROM genes gf
+              INNER JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
+              WHERE t.product IS NOT NULL AND TRIM(t.product) != ''
+              UNION ALL
+              SELECT gf.na_feature_id AS gene_na_feature_id, NULL AS transcript_na_feature_id,
+                     dgf.product, gf.genome_source AS assigned_by, 0 AS is_preferred, 'gene' AS source_type
+              FROM genes gf
+              INNER JOIN dots.GeneFeature dgf ON dgf.na_feature_id = gf.na_feature_id
+              WHERE dgf.product IS NOT NULL AND TRIM(dgf.product) != ''
+            ),
+
+            assigned_by_groups(assigned_by_val, group_name) AS (
+              VALUES
+                ('veupathdb',        'veupathdb'),
+                ('apollo',           'apollo'),
+                ('community',        'community'),
+                ('anderssonlab',     'lab'),
+                ('berna',            'lab'),
+                ('beverleylab',      'lab'),
+                ('corridalab',       'lab'),
+                ('flegontovlab',     'lab'),
+                ('franzen',          'lab'),
+                ('fritzlab',         'lab'),
+                ('hertzfowlerlab',   'lab'),
+                ('jcarltonlab',      'lab'),
+                ('kissingerlab',     'lab'),
+                ('liverpool',        'lab'),
+                ('lukeslab',         'lab'),
+                ('mcbridelab',       'lab'),
+                ('msu',              'lab'),
+                ('painlab',          'lab'),
+                ('requenalab',       'lab'),
+                ('siegelab',         'lab'),
+                ('stukenbrocklab',   'lab'),
+                ('tachezylab',       'lab'),
+                ('tarletonlab',      'lab'),
+                ('ubc',              'lab'),
+                ('ulaval',           'lab'),
+                ('valkiunaslab',     'lab'),
+                ('wittwerlab',       'lab'),
+                ('yurchenkolab',     'lab'),
+                ('jcvi',             'genomedb'),
+                ('jgi',              'genomedb'),
+                ('sanger',           'genomedb'),
+                ('pombase',          'genomedb'),
+                ('dictybase',        'genomedb'),
+                ('aspgd',            'genomedb'),
+                ('cgd',              'genomedb'),
+                ('sgd',              'genomedb'),
+                ('genedb',           'genomedb'),
+                ('ensembl',          'ensembl'),
+                ('uniprot',          'uniprot'),
+                ('uniprotkb/trembl', 'uniprot'),
+                ('uniprot/pfam',     'uniprot'),
+                ('refseq',           'refseq'),
+                ('entrezgene',       'entrezgene'),
+                ('genbank',          'genbank'),
+                ('gb',               'genbank'),
+                ('pfam',             'pfam'),
+                ('dieterichlab',     'lab'),
+                ('widmerlab',        'lab'),
+                ('hammondkosacklab', 'lab'),
+                ('parkinsonlab',     'lab'),
+                ('siegellab',        'lab'),
+                ('wittwer',          'lab'),
+                ('saskatchewan',     'lab'),
+                ('bochum',           'lab'),
+                ('broad',            'genomedb'),
+                ('vectorbase',       'genomedb'),
+                ('gemo',             'genomedb'),
+                ('arba',             'arba')
+            ),
+
+            rule_lookup(group_name, is_preferred, source_type, source_rule, rule_description) AS (
+              VALUES
+                -- preferredGeneCurated (rules 1-11)
+                ('veupathdb',   1, 'gene',        1,  'veupathdb_preferred_gene'),
+                ('apollo',      1, 'gene',        2,  'apollo_preferred_gene'),
+                ('community',   1, 'gene',        3,  'community_preferred_gene'),
+                ('lab',         1, 'gene',        4,  'lab_preferred_gene'),
+                ('genomedb',    1, 'gene',        5,  'genomedb_preferred_gene'),
+                ('ensembl',     1, 'gene',        6,  'ensembl_preferred_gene'),
+                ('uniprot',     1, 'gene',        7,  'uniprot_preferred_gene'),
+                ('refseq',      1, 'gene',        8,  'refseq_preferred_gene'),
+                ('entrezgene',  1, 'gene',        9,  'entrezgene_preferred_gene'),
+                ('genbank',     1, 'gene',       10,  'genbank_preferred_gene'),
+                ('pfam',        1, 'gene',       11,  'pfam_preferred_gene'),
+                -- preferredTranscriptCurated (rules 12-22)
+                ('veupathdb',   1, 'transcript', 12,  'veupathdb_preferred_transcript'),
+                ('apollo',      1, 'transcript', 13,  'apollo_preferred_transcript'),
+                ('community',   1, 'transcript', 14,  'community_preferred_transcript'),
+                ('lab',         1, 'transcript', 15,  'lab_preferred_transcript'),
+                ('genomedb',    1, 'transcript', 16,  'genomedb_preferred_transcript'),
+                ('ensembl',     1, 'transcript', 17,  'ensembl_preferred_transcript'),
+                ('uniprot',     1, 'transcript', 18,  'uniprot_preferred_transcript'),
+                ('refseq',      1, 'transcript', 19,  'refseq_preferred_transcript'),
+                ('entrezgene',  1, 'transcript', 20,  'entrezgene_preferred_transcript'),
+                ('genbank',     1, 'transcript', 21,  'genbank_preferred_transcript'),
+                ('pfam',        1, 'transcript', 22,  'pfam_preferred_transcript'),
+                -- nonPreferredGeneCurated (rules 23-33)
+                ('veupathdb',   0, 'gene',       23,  'veupathdb_gene'),
+                ('apollo',      0, 'gene',       24,  'apollo_gene'),
+                ('community',   0, 'gene',       25,  'community_gene'),
+                ('lab',         0, 'gene',       26,  'lab_gene'),
+                ('genomedb',    0, 'gene',       27,  'genomedb_gene'),
+                ('ensembl',     0, 'gene',       28,  'ensembl_gene'),
+                ('uniprot',     0, 'gene',       29,  'uniprot_gene'),
+                ('refseq',      0, 'gene',       30,  'refseq_gene'),
+                ('entrezgene',  0, 'gene',       31,  'entrezgene_gene'),
+                ('genbank',     0, 'gene',       32,  'genbank_gene'),
+                ('pfam',        0, 'gene',       33,  'pfam_gene'),
+                -- nonPreferredTranscriptCurated (rules 34-44)
+                ('veupathdb',   0, 'transcript', 34,  'veupathdb_transcript'),
+                ('apollo',      0, 'transcript', 35,  'apollo_transcript'),
+                ('community',   0, 'transcript', 36,  'community_transcript'),
+                ('lab',         0, 'transcript', 37,  'lab_transcript'),
+                ('genomedb',    0, 'transcript', 38,  'genomedb_transcript'),
+                ('ensembl',     0, 'transcript', 39,  'ensembl_transcript'),
+                ('uniprot',     0, 'transcript', 40,  'uniprot_transcript'),
+                ('refseq',      0, 'transcript', 41,  'refseq_transcript'),
+                ('entrezgene',  0, 'transcript', 42,  'entrezgene_transcript'),
+                ('genbank',     0, 'transcript', 43,  'genbank_transcript'),
+                ('pfam',        0, 'transcript', 44,  'pfam_transcript'),
+                -- arba gene (rule 46)
+                ('arba',        0, 'gene',       46,  'arba_gene'),
+                ('arba',        1, 'gene',       46,  'arba_gene')
+            ),
+
+            all_products AS (
+              SELECT gf.source_id,
+                     SUBSTR(STRING_AGG(DISTINCT ai.product, ', ' ORDER BY ai.product), 1, 4000) AS product,
+                     rl.source_rule,
+                     COUNT(DISTINCT ai.product) AS value_count,
+                     rl.rule_description
+              FROM genes gf
+              INNER JOIN all_informative ai ON ai.gene_na_feature_id = gf.na_feature_id
+              INNER JOIN assigned_by_groups abg ON abg.assigned_by_val = LOWER(ai.assigned_by)
+              INNER JOIN rule_lookup rl ON rl.group_name = abg.group_name
+                                       AND rl.is_preferred = ai.is_preferred
+                                       AND rl.source_type = ai.source_type
+              GROUP BY gf.source_id, rl.source_rule, rl.rule_description, rl.source_type
+              HAVING rl.source_type = 'gene' OR COUNT(DISTINCT ai.product) = 1
+              UNION ALL
+              -- blank/null assigned_by products (rule 45); ranks above ARBA; all such products for the gene must agree
+              SELECT gf.source_id,
+                     SUBSTR(STRING_AGG(DISTINCT ai.product, ', ' ORDER BY ai.product), 1, 4000) AS product,
+                     45                                                                            AS source_rule,
+                     COUNT(DISTINCT ai.product)                                                    AS value_count,
+                     'blank_assigned_by'                                                           AS rule_description
+              FROM genes gf
+              INNER JOIN all_informative ai ON ai.gene_na_feature_id = gf.na_feature_id
+              WHERE (ai.assigned_by IS NULL OR TRIM(ai.assigned_by) = '')
+              GROUP BY gf.source_id
+              HAVING COUNT(DISTINCT ai.product) = 1
+              UNION ALL
+              -- uninformative products via same priority hierarchy (rules 48-93)
+              SELECT gf.source_id,
+                     SUBSTR(STRING_AGG(DISTINCT ani.product, ', ' ORDER BY ani.product), 1, 4000) AS product,
+                     rl.source_rule + 47,
+                     COUNT(DISTINCT ani.product)                                                    AS value_count,
+                     rl.rule_description || '_uninformative'
+              FROM genes gf
+              INNER JOIN all_noninformative ani ON ani.gene_na_feature_id = gf.na_feature_id
+              INNER JOIN assigned_by_groups abg ON abg.assigned_by_val = LOWER(ani.assigned_by)
+              INNER JOIN rule_lookup rl ON rl.group_name = abg.group_name
+                                       AND rl.is_preferred = ani.is_preferred
+                                       AND rl.source_type = ani.source_type
+              GROUP BY gf.source_id, rl.source_rule, rl.rule_description, rl.source_type
+              HAVING rl.source_type = 'gene' OR COUNT(DISTINCT ani.product) = 1
+              UNION ALL
+              -- blank/null assigned_by uninformative products (rule 92)
+              SELECT gf.source_id,
+                     SUBSTR(STRING_AGG(DISTINCT ani.product, ', ' ORDER BY ani.product), 1, 4000) AS product,
+                     92                                                                             AS source_rule,
+                     COUNT(DISTINCT ani.product)                                                    AS value_count,
+                     'blank_assigned_by_uninformative'                                              AS rule_description
+              FROM genes gf
+              INNER JOIN all_noninformative ani ON ani.gene_na_feature_id = gf.na_feature_id
+              WHERE (ani.assigned_by IS NULL OR TRIM(ani.assigned_by) = '')
+              GROUP BY gf.source_id
+              HAVING COUNT(DISTINCT ani.product) = 1
+            ),
+
+            ranked_products AS (
+              SELECT source_id, product, source_rule, value_count, rule_description,
+                     ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY source_rule) AS rank
+              FROM all_products
+            )
+        SELECT gf.source_id,
+               COALESCE(rp.product, 'unspecified product')  AS product,
+               COALESCE(rp.value_count, 0)                  AS value_count,
+               COALESCE(rp.source_rule, 94)                 AS source_rule,
+               COALESCE(rp.rule_description, 'unspecified') AS source_rule_description,
+               gf.org_abbrev,
+               current_timestamp                            AS modification_date
+        FROM genes gf
+        LEFT JOIN ranked_products rp ON rp.source_id = gf.source_id AND rp.rank = 1
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX ON TempGeneProduct&1 (source_id)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX ON TempGeneProduct&1 (org_abbrev, source_id)
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <tuningTable name="TempTranscriptProduct">
+    <externalDependency name="dots.GeneFeature"/>
+    <externalDependency name="dots.NaSequence"/>
+    <externalDependency name="apidb.Organism"/>
+    <externalDependency name="dots.Transcript"/>
+    <externalDependency name="apidb.GeneFeatureProduct"/>
+    <externalDependency name="apidb.TranscriptProduct"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE TempTranscriptProduct&1 AS
+        WITH
+            genes AS (
+              SELECT gf.na_feature_id,
+                     gf.source_id,
+                     o.abbrev AS org_abbrev,
+                     o.genome_source
+              FROM dots.GeneFeature gf
+              INNER JOIN dots.NaSequence nas ON nas.na_sequence_id = gf.na_sequence_id
+              INNER JOIN apidb.Organism o ON o.taxon_id = nas.taxon_id
+            ),
+
+            transcripts AS (
+              SELECT t.na_feature_id  AS transcript_na_feature_id,
+                     t.source_id      AS transcript_source_id,
+                     gf.na_feature_id AS gene_na_feature_id,
+                     gf.org_abbrev,
+                     gf.genome_source
+              FROM genes gf
+              INNER JOIN dots.Transcript t ON t.parent_id = gf.na_feature_id
+            ),
+
+            informative_gfp AS (
+              SELECT gfp.na_feature_id AS gene_na_feature_id, gfp.product, gfp.assigned_by, gfp.is_preferred
+              FROM genes gf
+              INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
+              WHERE gfp.product IS NOT NULL
+                AND TRIM(gfp.product) != ''
+                AND gfp.product !~* '(hypothetical[_ ]protein|unspecified product|unnamed protein product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+                AND NOT (gfp.product ~* '^has domain\(s\) with predicted' AND (gfp.product LIKE '%,%' OR gfp.product ~* ' and '))
+                AND NOT (gfp.product NOT LIKE '% %' AND gfp.product LIKE 'XM%')
+                AND gfp.product !~ '^CAD\d+(\.\d+)?$'
+                AND gfp.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+                AND gfp.product !~* 'uncharacterized\s+loc\d+'
+                AND gfp.product NOT LIKE 'CSON%'
+                AND gfp.product NOT LIKE 'hypothetical protein BGH%'
+                AND gfp.product NOT LIKE 'DEHA2A%'
+                AND NOT (gfp.product NOT LIKE '% %' AND (gfp.product ~ '^[A-Z]{2,4}\d{4,}$' OR gfp.product ~ '^[A-Z]{3,5}_\d+$' OR gfp.product ~ '^LOC\d+$' OR gfp.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+                AND gfp.product NOT LIKE 'Similar to [%'
+                AND gfp.product NOT LIKE '%UniProtKB%'
+                AND LOWER(TRIM(gfp.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
+            ),
+
+            informative_tp AS (
+              SELECT tp.na_feature_id AS transcript_na_feature_id, tp.product, tp.assigned_by, tp.is_preferred
+              FROM transcripts tr
+              INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = tr.transcript_na_feature_id
+              WHERE tp.product IS NOT NULL
+                AND TRIM(tp.product) != ''
+                AND tp.product !~* '(hypothetical[_ ]protein|unspecified product|unnamed protein product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+                AND NOT (tp.product ~* '^has domain\(s\) with predicted' AND (tp.product LIKE '%,%' OR tp.product ~* ' and '))
+                AND NOT (tp.product NOT LIKE '% %' AND tp.product LIKE 'XM%')
+                AND tp.product !~ '^CAD\d+(\.\d+)?$'
+                AND tp.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+                AND tp.product !~* 'uncharacterized\s+loc\d+'
+                AND tp.product NOT LIKE 'CSON%'
+                AND tp.product NOT LIKE 'hypothetical protein BGH%'
+                AND tp.product NOT LIKE 'DEHA2A%'
+                AND NOT (tp.product NOT LIKE '% %' AND (tp.product ~ '^[A-Z]{2,4}\d{4,}$' OR tp.product ~ '^[A-Z]{3,5}_\d+$' OR tp.product ~ '^LOC\d+$' OR tp.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+                AND tp.product NOT LIKE 'Similar to [%'
+                AND tp.product NOT LIKE '%UniProtKB%'
+                AND LOWER(TRIM(tp.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
+            ),
+
+            informative_dt AS (
+              SELECT t.na_feature_id AS transcript_na_feature_id, t.product, tr.genome_source
+              FROM transcripts tr
+              INNER JOIN dots.Transcript t ON t.na_feature_id = tr.transcript_na_feature_id
+              WHERE t.product IS NOT NULL
+                AND TRIM(t.product) != ''
+                AND t.product !~* '(hypothetical[_ ]protein|unspecified product|unnamed protein product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+                AND NOT (t.product ~* '^has domain\(s\) with predicted' AND (t.product LIKE '%,%' OR t.product ~* ' and '))
+                AND NOT (t.product NOT LIKE '% %' AND t.product LIKE 'XM%')
+                AND t.product !~ '^CAD\d+(\.\d+)?$'
+                AND t.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+                AND t.product !~* 'uncharacterized\s+loc\d+'
+                AND t.product NOT LIKE 'CSON%'
+                AND t.product NOT LIKE 'hypothetical protein BGH%'
+                AND t.product NOT LIKE 'DEHA2A%'
+                AND NOT (t.product NOT LIKE '% %' AND (t.product ~ '^[A-Z]{2,4}\d{4,}$' OR t.product ~ '^[A-Z]{3,5}_\d+$' OR t.product ~ '^LOC\d+$' OR t.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+                AND t.product NOT LIKE 'Similar to [%'
+                AND t.product NOT LIKE '%UniProtKB%'
+                AND LOWER(TRIM(t.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
+            ),
+
+            informative_gf AS (
+              SELECT DISTINCT tr.gene_na_feature_id, dgf.product, tr.genome_source
+              FROM transcripts tr
+              INNER JOIN dots.GeneFeature dgf ON dgf.na_feature_id = tr.gene_na_feature_id
+              WHERE dgf.product IS NOT NULL
+                AND TRIM(dgf.product) != ''
+                AND dgf.product !~* '(hypothetical[_ ]protein|unspecified product|unnamed protein product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+                AND NOT (dgf.product ~* '^has domain\(s\) with predicted' AND (dgf.product LIKE '%,%' OR dgf.product ~* ' and '))
+                AND NOT (dgf.product NOT LIKE '% %' AND dgf.product LIKE 'XM%')
+                AND dgf.product !~ '^CAD\d+(\.\d+)?$'
+                AND dgf.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+                AND dgf.product !~* 'uncharacterized\s+loc\d+'
+                AND dgf.product NOT LIKE 'CSON%'
+                AND dgf.product NOT LIKE 'hypothetical protein BGH%'
+                AND dgf.product NOT LIKE 'DEHA2A%'
+                AND NOT (dgf.product NOT LIKE '% %' AND (dgf.product ~ '^[A-Z]{2,4}\d{4,}$' OR dgf.product ~ '^[A-Z]{3,5}_\d+$' OR dgf.product ~ '^LOC\d+$' OR dgf.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+                AND dgf.product NOT LIKE 'Similar to [%'
+                AND dgf.product NOT LIKE '%UniProtKB%'
+                AND LOWER(TRIM(dgf.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
+            ),
+
+            informative_arba AS (
+              SELECT gfp.na_feature_id AS gene_na_feature_id, gfp.product, gfp.assigned_by, gfp.is_preferred
+              FROM genes gf
+              INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = gf.na_feature_id
+              WHERE LOWER(gfp.assigned_by) = 'arba'
+                AND gfp.product IS NOT NULL
+                AND TRIM(gfp.product) != ''
+            ),
+
+            all_informative AS (
+              SELECT tr.transcript_source_id AS source_id, itp.product, itp.assigned_by, itp.is_preferred, 'transcript' AS source_type
+              FROM transcripts tr
+              INNER JOIN informative_tp itp ON itp.transcript_na_feature_id = tr.transcript_na_feature_id
+              UNION ALL
+              SELECT tr.transcript_source_id AS source_id, igfp.product, igfp.assigned_by, igfp.is_preferred, 'gene' AS source_type
+              FROM transcripts tr
+              INNER JOIN informative_gfp igfp ON igfp.gene_na_feature_id = tr.gene_na_feature_id
+              UNION ALL
+              SELECT tr.transcript_source_id AS source_id, idt.product, idt.genome_source AS assigned_by, 0 AS is_preferred, 'transcript' AS source_type
+              FROM transcripts tr
+              INNER JOIN informative_dt idt ON idt.transcript_na_feature_id = tr.transcript_na_feature_id
+              UNION ALL
+              SELECT tr.transcript_source_id AS source_id, igf.product, igf.genome_source AS assigned_by, 0 AS is_preferred, 'gene' AS source_type
+              FROM transcripts tr
+              INNER JOIN informative_gf igf ON igf.gene_na_feature_id = tr.gene_na_feature_id
+              UNION ALL
+              SELECT tr.transcript_source_id AS source_id, iarba.product, iarba.assigned_by, iarba.is_preferred, 'gene' AS source_type
+              FROM transcripts tr
+              INNER JOIN informative_arba iarba ON iarba.gene_na_feature_id = tr.gene_na_feature_id
+            ),
+
+            all_noninformative AS (
+              SELECT tr.transcript_source_id AS source_id, tp.product, tp.assigned_by, tp.is_preferred, 'transcript' AS source_type
+              FROM transcripts tr
+              INNER JOIN apidb.TranscriptProduct tp ON tp.na_feature_id = tr.transcript_na_feature_id
+              WHERE tp.product IS NOT NULL AND TRIM(tp.product) != ''
+              UNION ALL
+              SELECT tr.transcript_source_id AS source_id, gfp.product, gfp.assigned_by, gfp.is_preferred, 'gene' AS source_type
+              FROM transcripts tr
+              INNER JOIN apidb.GeneFeatureProduct gfp ON gfp.na_feature_id = tr.gene_na_feature_id
+              WHERE gfp.product IS NOT NULL AND TRIM(gfp.product) != ''
+              UNION ALL
+              SELECT tr.transcript_source_id AS source_id, t.product, tr.genome_source AS assigned_by, 0 AS is_preferred, 'transcript' AS source_type
+              FROM transcripts tr
+              INNER JOIN dots.Transcript t ON t.na_feature_id = tr.transcript_na_feature_id
+              WHERE t.product IS NOT NULL AND TRIM(t.product) != ''
+              UNION ALL
+              SELECT tr.transcript_source_id AS source_id, dgf.product, tr.genome_source AS assigned_by, 0 AS is_preferred, 'gene' AS source_type
+              FROM transcripts tr
+              INNER JOIN dots.GeneFeature dgf ON dgf.na_feature_id = tr.gene_na_feature_id
+              WHERE dgf.product IS NOT NULL AND TRIM(dgf.product) != ''
+            ),
+
+            assigned_by_groups(assigned_by_val, group_name) AS (
+              VALUES
+                ('veupathdb',        'veupathdb'),
+                ('apollo',           'apollo'),
+                ('community',        'community'),
+                ('anderssonlab',     'lab'),
+                ('berna',            'lab'),
+                ('beverleylab',      'lab'),
+                ('corridalab',       'lab'),
+                ('flegontovlab',     'lab'),
+                ('franzen',          'lab'),
+                ('fritzlab',         'lab'),
+                ('hertzfowlerlab',   'lab'),
+                ('jcarltonlab',      'lab'),
+                ('kissingerlab',     'lab'),
+                ('liverpool',        'lab'),
+                ('lukeslab',         'lab'),
+                ('mcbridelab',       'lab'),
+                ('msu',              'lab'),
+                ('painlab',          'lab'),
+                ('requenalab',       'lab'),
+                ('siegelab',         'lab'),
+                ('stukenbrocklab',   'lab'),
+                ('tachezylab',       'lab'),
+                ('tarletonlab',      'lab'),
+                ('ubc',              'lab'),
+                ('ulaval',           'lab'),
+                ('valkiunaslab',     'lab'),
+                ('wittwerlab',       'lab'),
+                ('yurchenkolab',     'lab'),
+                ('jcvi',             'genomedb'),
+                ('jgi',              'genomedb'),
+                ('sanger',           'genomedb'),
+                ('pombase',          'genomedb'),
+                ('dictybase',        'genomedb'),
+                ('aspgd',            'genomedb'),
+                ('cgd',              'genomedb'),
+                ('sgd',              'genomedb'),
+                ('genedb',           'genomedb'),
+                ('ensembl',          'ensembl'),
+                ('uniprot',          'uniprot'),
+                ('uniprotkb/trembl', 'uniprot'),
+                ('uniprot/pfam',     'uniprot'),
+                ('refseq',           'refseq'),
+                ('entrezgene',       'entrezgene'),
+                ('genbank',          'genbank'),
+                ('gb',               'genbank'),
+                ('pfam',             'pfam'),
+                ('dieterichlab',     'lab'),
+                ('widmerlab',        'lab'),
+                ('hammondkosacklab', 'lab'),
+                ('parkinsonlab',     'lab'),
+                ('siegellab',        'lab'),
+                ('wittwer',          'lab'),
+                ('saskatchewan',     'lab'),
+                ('bochum',           'lab'),
+                ('broad',            'genomedb'),
+                ('vectorbase',       'genomedb'),
+                ('gemo',             'genomedb'),
+                ('arba',             'arba')
+            ),
+
+            rule_lookup(group_name, is_preferred, source_type, source_rule, rule_description) AS (
+              VALUES
+                -- preferredTranscriptCurated (rules 1-11)
+                ('veupathdb',   1, 'transcript',  1,  'veupathdb_preferred_transcript'),
+                ('apollo',      1, 'transcript',  2,  'apollo_preferred_transcript'),
+                ('community',   1, 'transcript',  3,  'community_preferred_transcript'),
+                ('lab',         1, 'transcript',  4,  'lab_preferred_transcript'),
+                ('genomedb',    1, 'transcript',  5,  'genomedb_preferred_transcript'),
+                ('ensembl',     1, 'transcript',  6,  'ensembl_preferred_transcript'),
+                ('uniprot',     1, 'transcript',  7,  'uniprot_preferred_transcript'),
+                ('refseq',      1, 'transcript',  8,  'refseq_preferred_transcript'),
+                ('entrezgene',  1, 'transcript',  9,  'entrezgene_preferred_transcript'),
+                ('genbank',     1, 'transcript', 10,  'genbank_preferred_transcript'),
+                ('pfam',        1, 'transcript', 11,  'pfam_preferred_transcript'),
+                -- nonPreferredTranscriptCurated (rules 12-22)
+                ('veupathdb',   0, 'transcript', 12,  'veupathdb_transcript'),
+                ('apollo',      0, 'transcript', 13,  'apollo_transcript'),
+                ('community',   0, 'transcript', 14,  'community_transcript'),
+                ('lab',         0, 'transcript', 15,  'lab_transcript'),
+                ('genomedb',    0, 'transcript', 16,  'genomedb_transcript'),
+                ('ensembl',     0, 'transcript', 17,  'ensembl_transcript'),
+                ('uniprot',     0, 'transcript', 18,  'uniprot_transcript'),
+                ('refseq',      0, 'transcript', 19,  'refseq_transcript'),
+                ('entrezgene',  0, 'transcript', 20,  'entrezgene_transcript'),
+                ('genbank',     0, 'transcript', 21,  'genbank_transcript'),
+                ('pfam',        0, 'transcript', 22,  'pfam_transcript'),
+                -- preferredGeneCurated (rules 23-33)
+                ('veupathdb',   1, 'gene',       23,  'veupathdb_preferred_gene'),
+                ('apollo',      1, 'gene',       24,  'apollo_preferred_gene'),
+                ('community',   1, 'gene',       25,  'community_preferred_gene'),
+                ('lab',         1, 'gene',       26,  'lab_preferred_gene'),
+                ('genomedb',    1, 'gene',       27,  'genomedb_preferred_gene'),
+                ('ensembl',     1, 'gene',       28,  'ensembl_preferred_gene'),
+                ('uniprot',     1, 'gene',       29,  'uniprot_preferred_gene'),
+                ('refseq',      1, 'gene',       30,  'refseq_preferred_gene'),
+                ('entrezgene',  1, 'gene',       31,  'entrezgene_preferred_gene'),
+                ('genbank',     1, 'gene',       32,  'genbank_preferred_gene'),
+                ('pfam',        1, 'gene',       33,  'pfam_preferred_gene'),
+                -- nonPreferredGeneCurated (rules 34-44)
+                ('veupathdb',   0, 'gene',       34,  'veupathdb_gene'),
+                ('apollo',      0, 'gene',       35,  'apollo_gene'),
+                ('community',   0, 'gene',       36,  'community_gene'),
+                ('lab',         0, 'gene',       37,  'lab_gene'),
+                ('genomedb',    0, 'gene',       38,  'genomedb_gene'),
+                ('ensembl',     0, 'gene',       39,  'ensembl_gene'),
+                ('uniprot',     0, 'gene',       40,  'uniprot_gene'),
+                ('refseq',      0, 'gene',       41,  'refseq_gene'),
+                ('entrezgene',  0, 'gene',       42,  'entrezgene_gene'),
+                ('genbank',     0, 'gene',       43,  'genbank_gene'),
+                ('pfam',        0, 'gene',       44,  'pfam_gene'),
+                -- arba gene (rule 46)
+                ('arba',        0, 'gene',       46,  'arba_gene'),
+                ('arba',        1, 'gene',       46,  'arba_gene')
+            ),
+
+            all_products AS (
+              SELECT ai.source_id,
+                     SUBSTR(STRING_AGG(DISTINCT ai.product, ', ' ORDER BY ai.product), 1, 4000) AS product,
+                     rl.source_rule,
+                     COUNT(DISTINCT ai.product) AS value_count,
+                     rl.rule_description
+              FROM all_informative ai
+              INNER JOIN assigned_by_groups abg ON abg.assigned_by_val = LOWER(ai.assigned_by)
+              INNER JOIN rule_lookup rl ON rl.group_name = abg.group_name
+                                       AND rl.is_preferred = ai.is_preferred
+                                       AND rl.source_type = ai.source_type
+              GROUP BY ai.source_id, rl.source_rule, rl.rule_description
+              HAVING COUNT(DISTINCT ai.product) = 1
+              UNION ALL
+              -- blank/null assigned_by products (rule 45); ranks above ARBA; all such products for the transcript must agree
+              SELECT ai.source_id,
+                     SUBSTR(STRING_AGG(DISTINCT ai.product, ', ' ORDER BY ai.product), 1, 4000) AS product,
+                     45                                                                            AS source_rule,
+                     COUNT(DISTINCT ai.product)                                                    AS value_count,
+                     'blank_assigned_by'                                                           AS rule_description
+              FROM all_informative ai
+              WHERE (ai.assigned_by IS NULL OR TRIM(ai.assigned_by) = '')
+              GROUP BY ai.source_id
+              HAVING COUNT(DISTINCT ai.product) = 1
+              UNION ALL
+              -- uninformative products via same priority hierarchy (rules 48-93)
+              SELECT ani.source_id,
+                     SUBSTR(STRING_AGG(DISTINCT ani.product, ', ' ORDER BY ani.product), 1, 4000) AS product,
+                     rl.source_rule + 47,
+                     COUNT(DISTINCT ani.product)                                                    AS value_count,
+                     rl.rule_description || '_uninformative'
+              FROM all_noninformative ani
+              INNER JOIN assigned_by_groups abg ON abg.assigned_by_val = LOWER(ani.assigned_by)
+              INNER JOIN rule_lookup rl ON rl.group_name = abg.group_name
+                                       AND rl.is_preferred = ani.is_preferred
+                                       AND rl.source_type = ani.source_type
+              GROUP BY ani.source_id, rl.source_rule, rl.rule_description
+              HAVING COUNT(DISTINCT ani.product) = 1
+              UNION ALL
+              -- blank/null assigned_by uninformative products (rule 92)
+              SELECT ani.source_id,
+                     SUBSTR(STRING_AGG(DISTINCT ani.product, ', ' ORDER BY ani.product), 1, 4000) AS product,
+                     92                                                                             AS source_rule,
+                     COUNT(DISTINCT ani.product)                                                    AS value_count,
+                     'blank_assigned_by_uninformative'                                              AS rule_description
+              FROM all_noninformative ani
+              WHERE (ani.assigned_by IS NULL OR TRIM(ani.assigned_by) = '')
+              GROUP BY ani.source_id
+              HAVING COUNT(DISTINCT ani.product) = 1
+            ),
+
+            ranked_products AS (
+              SELECT source_id, product, source_rule, value_count, rule_description,
+                     ROW_NUMBER() OVER (PARTITION BY source_id ORDER BY source_rule) AS rank
+              FROM all_products
+            )
+        SELECT tr.transcript_source_id                      AS source_id,
+               COALESCE(rp.product, 'unspecified product')  AS product,
+               COALESCE(rp.value_count, 0)                  AS value_count,
+               COALESCE(rp.source_rule, 94)                 AS source_rule,
+               COALESCE(rp.rule_description, 'unspecified') AS source_rule_description,
+               tr.org_abbrev,
+               current_timestamp                            AS modification_date
+        FROM transcripts tr
+        LEFT JOIN ranked_products rp ON rp.source_id = tr.transcript_source_id AND rp.rank = 1
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX ON TempTranscriptProduct&1 (source_id)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX ON TempTranscriptProduct&1 (org_abbrev, source_id)
+      ]]>
+    </sql>
+  </tuningTable>
+
   <!-- unpartitioned version of this table -->
  <tuningTable name="GeneAttributes">
     <externalDependency name="webready.GeneAttributes_p"/>
@@ -47,7 +776,7 @@
  <tuningTable name="TranscriptAttributes">
     <externalDependency name="webready.TranscriptAttributes_p"/>
     <externalDependency name="webready.GeneProduct_p"/>
-    <!--externalDependency name="webready.TranscriptProduct_p"/-->
+    <externalDependency name="webready.TranscriptProduct_p"/>
     <sql>
       <![CDATA[
        create table transcriptattributes&1 as select * from webready.transcriptattributes_p;
@@ -62,7 +791,7 @@
           AND gp.product IS NOT NULL
       ]]>
     </sql>
-    <!--sql>
+    <sql>
       <![CDATA[
         UPDATE transcriptattributes&1 ta
         SET transcript_product = tp.product
@@ -70,7 +799,7 @@
         WHERE ta.source_id = tp.source_id
           AND tp.product IS NOT NULL
       ]]>
-    </sql-->
+    </sql>
     <sql>
       <![CDATA[
         CREATE UNIQUE INDEX transcriptattr_sourceId&1 ON TranscriptAttributes&1  (source_id);
@@ -674,7 +1403,7 @@
         FROM Geneattributes
         WHERE (source_id, project_id) IN (
               SELECT distinct stable_id, project_name
-              FROM usercomments_userdb_devn.mappedComment
+              FROM usercomments_userdb_betan.mappedComment
               WHERE is_visible = '1'
                 AND comment_target_id = 'gene'
           )
@@ -1891,7 +2620,10 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     <externalDependency name="study.ProtocolAppNode"/>
     <externalDependency name="study.NodeSet"/>
     <externalDependency name="sres.OntologyTerm"/>
+<!--
+    NOTE: webready.CompoundAttributes has no modification_date column; so cannot check for update to this dependency
     <externalDependency name="webready.CompoundAttributes"/>
+-->
     <internalDependency name="NodeSetOutputNode"/>
     <internalDependency name="GeneAttributes"/>
     <intermediateTable name="profile_nafeatureexp_summary"/>
@@ -2807,7 +3539,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     <externalDependency name="webready.GeneAttributes_p"/>
     <externalDependency name="webready.TranscriptAttributes_p"/>
     <externalDependency name="webready.OrganismAbbreviation_p"/>
-    <externalDependency name="webready.GeneProduct_p"/>
+    <internalDependency name="TempGeneProduct"/>
     <externalDependency name="dots.GoAssocInstEvidCode"/>
     <externalDependency name="dots.Transcript"/>
     <externalDependency name="sres.OntologyTerm"/>
@@ -2860,13 +3592,14 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
                   string_agg(ta.source_id, ', ' order by ta.source_id) as transcript_ids,
                 string_agg(tp.publication, ', ' order by ta.source_id) as reference,
                   e.name as evidence_code, tp.with_from as evidence_code_parameter,
-                  tp.assigned_by, 'apidb.TranscriptProduct' as source, orgrecord.org_abbrev
+                  COALESCE(tp.assigned_by, o.genome_source) as assigned_by, 'apidb.TranscriptProduct' as source, orgrecord.org_abbrev
            from webready.TranscriptAttributes_p ta
               INNER JOIN apidb.TranscriptProduct tp ON ta.na_feature_id = tp.na_feature_id
+              INNER JOIN apidb.Organism o ON o.abbrev = ta.org_abbrev
               LEFT JOIN all_gene_product_evids e ON tp.evidence_code = e.go_evidence_code_id
            where ta.org_abbrev = orgrecord.org_abbrev
            group by ta.gene_source_id, ta.project_id, tp.product, tp.is_preferred, e.name,
-                 tp.with_from, tp.assigned_by;
+                 tp.with_from, tp.assigned_by, o.genome_source;
 
            insert into &prefixAllGeneProducts_p&1
            select ga.source_id as source_id, gfp.product, ga.project_id,
@@ -2874,10 +3607,11 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
                   null as transcript_ids,
                   gfp.publication as reference,
                   e.name as evidence_code, gfp.with_from as evidence_code_parameter,
-                  gfp.assigned_by,
+                  COALESCE(gfp.assigned_by, o.genome_source) as assigned_by,
                   'apidb.GeneFeatureProduct' as source, orgrecord.org_abbrev
            from apidb.GeneFeatureProduct gfp
            INNER JOIN webready.GeneAttributes_p ga ON ga.na_feature_id = gfp.na_feature_id
+           INNER JOIN apidb.Organism o ON o.abbrev = ga.org_abbrev
            LEFT JOIN all_gene_product_evids e ON gfp.evidence_code = e.go_evidence_code_id
            WHERE ga.org_abbrev = orgrecord.org_abbrev;
 
@@ -2885,44 +3619,82 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
            select ga.source_id as source_id, gf.product, ga.project_id,
                   null as  is_alternate,
                   null as transcript_ids, null as reference, null as evidence_code,
-                  null as evidence_code_parameter, null as assigned_by,
+                  null as evidence_code_parameter, o.genome_source as assigned_by,
                   'dots.GeneFeature' as source, orgrecord.org_abbrev
-           from dots.GeneFeature gf, webready.GeneAttributes_p ga, webready.GeneProduct_p gp
+           from dots.GeneFeature gf, webready.GeneAttributes_p ga, TempGeneProduct gp, apidb.Organism o
            where ga.na_feature_id = gf.na_feature_id
+             and o.abbrev = orgrecord.org_abbrev
              and gf.product is not null
+             and TRIM(gf.product) != ''
+             and gf.product !~* '(hypothetical[_ ]protein|unspecified product|unnamed protein product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+             and NOT (gf.product ~* '^has domain\(s\) with predicted' AND (gf.product LIKE '%,%' OR gf.product ~* ' and '))
+             and NOT (gf.product NOT LIKE '% %' AND gf.product LIKE 'XM%')
+             and gf.product !~ '^CAD\d+(\.\d+)?$'
+             and gf.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+             and gf.product !~* 'uncharacterized\s+loc\d+'
+             and gf.product NOT LIKE 'CSON%'
+             and gf.product NOT LIKE 'hypothetical protein BGH%'
+             and gf.product NOT LIKE 'DEHA2A%'
+             and NOT (gf.product NOT LIKE '% %' AND (gf.product ~ '^[A-Z]{2,4}\d{4,}$' OR gf.product ~ '^[A-Z]{3,5}_\d+$' OR gf.product ~ '^LOC\d+$' OR gf.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+             and gf.product NOT LIKE 'Similar to [%'
+             and gf.product NOT LIKE '%UniProtKB%'
+             and LOWER(TRIM(gf.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
              and ga.source_id = gp.source_id
              and gp.org_abbrev = orgrecord.org_abbrev
              and ga.org_abbrev = orgrecord.org_abbrev
-             and gp.source_rule >= 3; -- no product in apidb.GeneFeatureProduct
+             and gp.source_rule >= 11; -- no product from curated sources (tiers 1-5, rules 1-10)
 
            insert into &prefixAllGeneProducts_p&1
            select ta.gene_source_id AS source_id, t.product, ta.project_id,
                   null as is_alternate,
                   string_agg(ta.source_id, ', ' order by ta.source_id) as transcript_ids,
                   null as reference, null as evidence_code, null as evidence_code_parameter,
-                  null as assigned_by, 'dots.Transcript' as source, orgrecord.org_abbrev
-           from webready.TranscriptAttributes_p ta, dots.Transcript t
+                  o.genome_source as assigned_by, 'dots.Transcript' as source, orgrecord.org_abbrev
+           from webready.TranscriptAttributes_p ta, dots.Transcript t, apidb.Organism o
            where ta.na_feature_id = t.na_feature_id
+             and o.abbrev = ta.org_abbrev
              and t.product is not null
+             and TRIM(t.product) != ''
+             and t.product !~* '(hypothetical[_ ]protein|unspecified product|unnamed protein product|conserved hypothetical protein|predicted protein|protein of unknown function|uncharacterized protein|conserved protein,\s*unknown function|---na---|contig)'
+             and NOT (t.product ~* '^has domain\(s\) with predicted' AND (t.product LIKE '%,%' OR t.product ~* ' and '))
+             and NOT (t.product NOT LIKE '% %' AND t.product LIKE 'XM%')
+             and t.product !~ '^CAD\d+(\.\d+)?$'
+             and t.product !~* 'conserved\s+\w+\s+protein,?\s*unknown\s+function'
+             and t.product !~* 'uncharacterized\s+loc\d+'
+             and t.product NOT LIKE 'CSON%'
+             and t.product NOT LIKE 'hypothetical protein BGH%'
+             and t.product NOT LIKE 'DEHA2A%'
+             and NOT (t.product NOT LIKE '% %' AND (t.product ~ '^[A-Z]{2,4}\d{4,}$' OR t.product ~ '^[A-Z]{3,5}_\d+$' OR t.product ~ '^LOC\d+$' OR t.product ~ '^[A-Z]+\d+\.[0-9]+$'))
+             and t.product NOT LIKE 'Similar to [%'
+             and t.product NOT LIKE '%UniProtKB%'
+             and LOWER(TRIM(t.product)) NOT IN ('protein', 'gene product', 'gene', 'orf')
              and ta.org_abbrev = orgrecord.org_abbrev
              and ta.gene_source_id
                  not in (select source_id
-                     from webready.GeneProduct_p
-                     where source_rule < 6
+                     from TempGeneProduct
+                     where source_rule < 23
                        and org_abbrev = orgrecord.org_abbrev) -- product only in dots.Transcript
-           group by ta.gene_source_id, ta.project_id, t.product;
+           group by ta.gene_source_id, ta.project_id, t.product, o.genome_source;
 
            insert into &prefixAllGeneProducts_p&1
-           select gp.source_id as source_id, gp.product, ga.project_id,
-                  null as  is_alternate,
+           select gp.source_id, gp.product, ga.project_id,
+                  null as is_alternate,
                   null as transcript_ids, null as reference, null as evidence_code,
-                  null as evidence_code_parameter, null as assigned_by,
-                  'unspecified product' as source, orgrecord.org_abbrev
-           from webready.GeneProduct_p gp, webready.GeneAttributes_p ga
-           where gp.source_rule = 7
-             and gp.source_id = ga.source_id
-             and ga.org_abbrev = orgrecord.org_abbrev
-             and gp.org_abbrev = orgrecord.org_abbrev;
+                  null as evidence_code_parameter, o.genome_source as assigned_by,
+                  gp.source_rule_description as source, orgrecord.org_abbrev
+           from TempGeneProduct gp
+           inner join webready.GeneAttributes_p ga on ga.source_id = gp.source_id
+                                                   and ga.org_abbrev = orgrecord.org_abbrev
+           inner join apidb.Organism o on o.abbrev = orgrecord.org_abbrev
+           where gp.source_rule < 94
+             and gp.org_abbrev = orgrecord.org_abbrev
+             and not exists (
+               select 1 from &prefixAllGeneProducts_p&1 agp
+               where agp.source_id = gp.source_id
+                 and agp.product = gp.product
+                 and agp.org_abbrev = orgrecord.org_abbrev
+             );
+
          end loop;
        end $$;
        ]]>
@@ -3057,8 +3829,11 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
       <![CDATA[
         CREATE TABLE DatasetCategoricalValue&1 (
             dataset_id            varchar(200),
-            variable_source_id    varchar(255),
-            value                 varchar(4000)
+            study_id              numeric,
+            stable_id             varchar(255),
+            entity_stable_id      varchar(255),
+            variable_source_id    varchar(255), -- remove this after bld 70. redundant for bkwd compat
+            value                 text
         )
       ]]>
     </sql>
@@ -3073,7 +3848,9 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
                 SELECT DISTINCT
                     COALESCE(dds.dataset_presenter_id, s.stable_id) AS dataset_id,
                     s.internal_abbrev                               AS study_abbrev,
-                    e.internal_abbrev                               AS entity_abbrev
+                    e.internal_abbrev                               AS entity_abbrev,
+                    e.stable_id                                     AS entity_stable_id,
+                    e.study_id                                      AS study_id
                 FROM eda.study s
                 JOIN eda.entitytypegraph e ON s.study_id = e.study_id
                 LEFT JOIN eda.studyexternaldatabaserelease sedr ON s.study_id = sedr.study_id
@@ -3089,17 +3866,21 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
                 END IF;
 
                 EXECUTE format(
-                    'INSERT INTO DatasetCategoricalValue&1 (dataset_id, variable_source_id, value)
-                     SELECT %L, ag.stable_id, v.value
-                     FROM %s ag
+                    'INSERT INTO DatasetCategoricalValue&1 (dataset_id, study_id, variable_source_id, stable_id, entity_stable_id, value)
+                     SELECT %L, etg.study_id, ag.stable_id, ag.stable_id, etg.stable_id as entity_stable_id, v.value
+                     FROM %s ag, eda.entitytypegraph etg
                      CROSS JOIN LATERAL jsonb_array_elements_text(ag.vocabulary::jsonb) AS v(value)
                      WHERE ag.data_shape = %L
+                       AND etg.stable_id = %L
+                       AND etg.study_id = %L
                        AND ag.vocabulary IS NOT NULL
                        AND ag.stable_id != %L',
                     rec.dataset_id,  -- %L: literal dataset_id value
                     ag_table,        -- %s: attributegraph table
-                    'categorical',   -- %L: data_shape filter
-                    'VEUPATHDB_GENE_ID'  -- %L: exclude gene id variable
+                    'categorical',   -- %L
+                    rec.entity_stable_id,  -- %L: literal entity_stable_id value
+                    rec.study_id,          -- %L: literal study_id value
+                    'VEUPATHDB_GENE_ID'    -- %L: exclude gene id variable
                 );
             END LOOP;
         END $$;
@@ -3125,10 +3906,22 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     <sql>
       <![CDATA[
         CREATE TABLE DatasetVariable&1 (
-            dataset_id            varchar(200),
-            variable_source_id    varchar(255),
-            variable_definition   text,
-            variable_display_name varchar(200)
+            dataset_id character varying(255) NOT NULL,
+            study_id numeric,
+            stable_id character varying(255) NOT NULL,
+            entity_stable_id character varying(255) NOT NULL,
+            variable_source_id    varchar(255), -- remove this after bld 70. redundant for bkwd compat
+            variable_definition   text,         -- remove this after bld 70. redundant for bkwd compat
+            variable_display_name varchar(200), -- remove this after bld 70. redundant for bkwd compat
+            data_shape text,
+            data_type text,
+            definition text,
+            display_name text,
+            display_range_max text,
+            display_range_min text,
+            display_type text,
+            provider_label text,
+            hidden text   
         )
       ]]>
     </sql>
@@ -3143,7 +3936,9 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
                 SELECT DISTINCT
                     COALESCE(dds.dataset_presenter_id, s.stable_id) AS dataset_id,
                     s.internal_abbrev                               AS study_abbrev,
-                    e.internal_abbrev                               AS entity_abbrev
+                    s.study_id                                      AS study_id,
+                    e.internal_abbrev                               AS entity_abbrev,
+                    e.stable_id                                     AS entity_stable_id
                 FROM eda.study s
                 JOIN eda.entitytypegraph e ON s.study_id = e.study_id
                 LEFT JOIN eda.studyexternaldatabaserelease sedr ON s.study_id = sedr.study_id
@@ -3159,13 +3954,17 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
                 END IF;
 
                 EXECUTE format(
-                    'INSERT INTO DatasetVariable&1 (dataset_id, variable_source_id, variable_display_name, variable_definition)
-                     SELECT %L, ag.stable_id, ag.display_name, ag.definition
-                     FROM %s ag
-                     WHERE ag.stable_id != %L',
+                    'INSERT INTO DatasetVariable&1 (dataset_id, study_id, entity_stable_id, variable_source_id, variable_display_name, variable_definition, stable_id, display_name, definition,  data_shape, data_type, display_range_max, display_range_min, display_type, provider_label, hidden)
+                     SELECT %L, etg.study_id, etg.stable_id as entity_stable_id, ag.stable_id, ag.display_name, ag.definition, ag.stable_id, ag.display_name, ag.definition,  data_shape, data_type, display_range_max, display_range_min, display_type, ag.provider_label, ag.hidden
+                     FROM %s ag, eda.entitytypegraph etg
+                     WHERE ag.stable_id != %L
+		     AND etg.stable_id = %L
+		     AND etg.study_id = %L',
                     rec.dataset_id,  -- %L: literal dataset_id value
                     ag_table,        -- %s: attributegraph table
-                    'VEUPATHDB_GENE_ID'  -- %L: exclude gene id variable
+                    'VEUPATHDB_GENE_ID',  -- %L: exclude gene id variable
+                    rec.entity_stable_id,  -- %L: literal entity_stable_id value
+                    rec.study_id           -- %L: literal study_id
                 );
             END LOOP;
         END $$;
