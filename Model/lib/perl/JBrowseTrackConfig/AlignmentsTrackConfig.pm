@@ -89,6 +89,8 @@ sub getHistograms {
     my $store = $self->getStore();
 
     my $bigwigUrl = $store->getBigwigUrl();
+    $bigwigUrl = "/a/service/jbrowse/store?data=" . $bigwigUrl;
+
 
     my $histograms = {};
     #$histograms->{color} = $self->getColor();
