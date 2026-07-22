@@ -5773,6 +5773,85 @@ select distinct ta.gene_source_id
       </sql>
     </sqlQuery>
 
+    <sqlQuery name="GenesBySecondaryMetabolites" includeProjects="FungiDB,UniDB">
+      <paramRef ref="organismParams.antismash_organism"/>
+      <paramRef ref="geneParams.antismash_category"/>
+      <paramRef ref="geneParams.antismash_annotation"/>
+      <column name="source_id"/>
+      <column name="gene_source_id"/>
+      <column name="project_id"/>
+      <column name="wdk_weight"/>
+      <column name="matched_result"/>
+      <column name="category"/>
+      <column name="antismash_annotation"/>
+      <column name="cluster_start"/>
+      <column name="cluster_end"/>
+      <column name="sequence_id"/>
+      <column name="org_abbrev"/>
+      <column name="cluster_context_start"/>
+      <column name="cluster_context_end"/>
+      <column name="overlapping_clusters"/>
+      <sql>
+        <![CDATA[
+        WITH gene_clusters AS (
+          SELECT DISTINCT
+            ta.source_id, ta.gene_source_id, ta.project_id, ta.sequence_id,
+            ta.org_abbrev,
+            ac.antismash_cluster_id, ac.category, af.antismash_annotation,
+            ac.cluster_start, ac.cluster_end,
+            (ac.cluster_end - ac.cluster_start) AS cluster_length
+          FROM apidb.antismashcluster ac
+          JOIN apidb.antismashclusterfeature acf ON acf.antismash_cluster_id = ac.antismash_cluster_id
+          JOIN apidb.antismashfeature af ON af.antismash_feature_id = acf.antismash_feature_id
+          JOIN apidbtuning.transcriptattributes ta ON ta.gene_na_feature_id = af.na_feature_id
+          WHERE ta.project_id = 'FungiDB'
+          AND ta.org_abbrev IN ($$antismash_organism$$)
+          AND ac.category IN ($$antismash_category$$)
+          AND (af.antismash_annotation IN ($$antismash_annotation$$)
+              OR ('unknown' IN ($$antismash_annotation$$) AND af.antismash_annotation IS NULL)
+          )
+        ),
+        ranked AS (
+          SELECT gc.*,
+            ROW_NUMBER() OVER (
+              PARTITION BY gc.source_id
+              ORDER BY gc.cluster_length DESC, gc.antismash_cluster_id
+            ) AS rn
+          FROM gene_clusters gc
+        ),
+        gene_overlaps AS (
+          SELECT r.source_id,
+            STRING_AGG(
+              CONCAT(
+                '<a href="@JBROWSE_WEBPAGE_URL@?loc=', gc2.sequence_id, ':',
+                GREATEST(gc2.cluster_start - 500, 1), '..', gc2.cluster_end + 500,
+                '&data=@JBROWSE_SERVICE_URL@/tracks/', gc2.org_abbrev,
+                '&tracks=gene%2Cantibiotics%20and%20Secondary%20Metabolites%20Analysis%20SHell%20(antiSMASH)">',
+                gc2.sequence_id, ':', gc2.cluster_start, '-', gc2.cluster_end, '</a>'
+              ),
+              ', ' ORDER BY gc2.cluster_start
+            ) AS overlapping_clusters
+          FROM ranked r
+          JOIN gene_clusters gc2
+            ON gc2.source_id = r.source_id
+            AND gc2.antismash_cluster_id != r.antismash_cluster_id
+          WHERE r.rn = 1
+          GROUP BY r.source_id
+        )
+        SELECT r.source_id, r.gene_source_id, r.project_id,
+          10 AS wdk_weight, 'Y' AS matched_result,
+          r.category, r.antismash_annotation, r.cluster_start, r.cluster_end, r.sequence_id,
+          r.org_abbrev,
+          GREATEST(r.cluster_start - 1000, 1) AS cluster_context_start,
+          r.cluster_end + 1000 AS cluster_context_end,
+          COALESCE(go.overlapping_clusters, 'No') AS overlapping_clusters
+        FROM ranked r
+        LEFT JOIN gene_overlaps go ON go.source_id = r.source_id
+        WHERE r.rn = 1
+        ]]>
+      </sql>
+    </sqlQuery>
+
 
 
   </querySet>
