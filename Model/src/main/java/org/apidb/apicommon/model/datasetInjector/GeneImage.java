@@ -8,6 +8,8 @@ public class GeneImage extends DatasetInjector {
   public void injectTemplates() {
       String projectName = getPropValue("projectName");
       setPropValue("includeProjects", projectName + ",UniDB");
+      // expose org abbrev so the question template can prune the webready partition
+      setPropValue("organismAbbrev", getOrganismAbbrevFromDatasetName());
 
       injectTemplate("geneImageGoTermQuestion");
       injectTemplate("geneImageGoTermOntology");
