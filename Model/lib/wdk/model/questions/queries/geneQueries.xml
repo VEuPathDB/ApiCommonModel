@@ -1110,10 +1110,10 @@
                              WHERE source_id = qr.source_id)
             where wdk_instance_id = ##WDK_CACHE_INSTANCE_ID##
               and source_id in (SELECT source_id
-                                FROM webready.ProteinAttributes
+                                FROM apidbtuning.ProteinAttributes
                                 )
               and source_id not in (SELECT source_id
-                                    FROM webready.TranscriptAttributes
+                                    FROM apidbtuning.TranscriptAttributes
                                 )
           ]]>
         </sql>
@@ -1845,12 +1845,16 @@
       </postCacheUpdateSql>
 
       <testParamValues>
+        <paramValue name="organismAbbrev">tbruTREU927</paramValue>
         <paramValue name="cellularLocImageDataset">TrypTag</paramValue>
+        <paramValue name="cellularLocImageType">Any</paramValue>
         <paramValue name="go_typeahead_cl">N/A</paramValue>
         <paramValue name="go_term">binding</paramValue>
       </testParamValues>
 
+      <paramRef ref="organismParams.organismAbbrev"/>
       <paramRef ref="geneParams.cellularLocImageDataset"/>
+      <paramRef ref="geneParams.cellularLocImageType"/>
       <paramRef ref="geneParams.go_typeahead_cl"/>
       <paramRef ref="geneParams.go_term"/>
       <column name="project_id"/>
@@ -1862,6 +1866,15 @@
       <column name="image"/>
       <sql>
         <![CDATA[
+          -- webready.transcriptattributes_p and gotermsummary_p are partitioned by
+          -- org_abbrev; filtering on $$organismAbbrev$$ (set per-dataset from
+          -- the template's ${organismAbbrev}) prunes to a single organism partition, which
+          -- is what keeps this fast (the apidbtuning views have no na_feature_id-leading
+          -- index and were catastrophically slow here).
+          -- Images (apidb.nafeatureimage) for these datasets always attach to the GENE
+          -- feature (verified: 100% GeneFeature for both TrypTag and the Giardia DawsonLab
+          -- set), so a single equality join on gene_na_feature_id suffices -- no
+          -- gene-vs-transcript OR needed.
           SELECT gs.transcript_source_id AS source_id
             , gs.gene_source_id
             , ta.project_id
@@ -1869,16 +1882,20 @@
             , string_agg(DISTINCT gs.evidence_code, ', ') AS evidence_code
             , string_agg(regexp_replace(fi.note, ' <a href.+$', NULL), '; ') AS note
             , max(fi.image_uri) AS image
-          FROM apidbtuning.TranscriptAttributes ta
-            , apidbtuning.GoTermSummary gs
+          FROM webready.transcriptattributes_p ta
+            , webready.gotermsummary_p gs
             , apidb.nafeatureimage fi
             , sres.externaldatabaserelease r
             , sres.externaldatabase d
-          WHERE ta.aa_sequence_id = gs.aa_sequence_id
+          WHERE ta.org_abbrev = $$organismAbbrev$$
+            AND gs.org_abbrev = $$organismAbbrev$$
+            AND ta.aa_sequence_id = gs.aa_sequence_id
             -- Join to external database to filter by dataset
             AND fi.external_database_release_id = r.external_database_release_id
             AND r.external_database_id = d.external_database_id
             AND d.name = $$cellularLocImageDataset$$
+            -- Filter by image type / tag location (LIKE pattern from vocab; 'Any' -> '%')
+            AND fi.image_type LIKE $$cellularLocImageType$$
             -- Filter by GO term
             AND (
               gs.go_id IN ($$go_typeahead_cl$$)
@@ -1888,7 +1905,8 @@
                 OR CONCAT(gs.go_id, ' : ', gs.go_term_name) LIKE REPLACE($$go_term$$, '*', '%')
               )
             )
-            AND (fi.na_feature_id = ta.gene_na_feature_id OR fi.na_feature_id = ta.na_feature_id)
+            -- Images attach to the gene feature (see note above)
+            AND fi.na_feature_id = ta.gene_na_feature_id
           GROUP BY gs.transcript_source_id, gs.gene_source_id, ta.project_id
         ]]>
       </sql>

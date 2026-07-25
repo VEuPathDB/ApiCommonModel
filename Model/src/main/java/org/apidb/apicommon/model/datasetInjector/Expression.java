@@ -57,7 +57,6 @@ public abstract class Expression extends DatasetInjector {
         setPropValue("isLogged", "1"); 
     }
 
-
     /***
      *   list of key value pairs
      *      key1=value1;key2=value2
@@ -76,7 +75,7 @@ public abstract class Expression extends DatasetInjector {
         for(int i = 0; i < pairs.length; i++) {
             String[] profileMap = pairs[i].split("=");
 
-            decode = decode + "'" + profileMap[0] + "', '" + profileMap[1] + "',\n";
+	    decode = decode + "WHEN '" + profileMap[0] + "' THEN '" + profileMap[1] + "'\n";
         }
 
         return decode;

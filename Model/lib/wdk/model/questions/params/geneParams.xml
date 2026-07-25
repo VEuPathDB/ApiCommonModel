@@ -58,6 +58,17 @@
       <help>Cellular Localization Image Dataset</help>
     </flatVocabParam>
 
+    <flatVocabParam name="cellularLocImageType"
+                    queryRef="GeneVQ.CellularLocImageType"
+                    prompt="Tag location / image type"
+                    quote="true"
+                    visible="true"
+                    multiPick="false"
+                    displayType="checkBox"
+                    dependedParamRef="geneParams.cellularLocImageDataset" >
+      <suggest default="Any"/>
+      <help><![CDATA[Choose which cellular-localization images to view. For TrypTag, select the N- or C-terminal endogenous tag; other datasets list their available image types. "Any" shows all.]]></help>
+    </flatVocabParam>
     <!--
     <flatVocabParam name="phenotypeDataset"
                     queryRef="GeneVQ.PhenotypeDataset"
@@ -333,10 +344,10 @@
 
     <flatVocabParam name="geneListUserDataset"
                     queryRef="GeneVQ.geneListUserDataset"
-                    prompt="Your Gene List Dataset"
+                    prompt="Gene List User Dataset"
                     quote="false"
                     multiPick="false" >
-      <help>A Gene List dataset you have imported into your workspace, and that is installed in @PROJECT_ID@ </help>
+      <help>A public Gene List User Dataset, or a private one you have imported into your workspace, and that is installed in this website </help>
     </flatVocabParam>
 
 
@@ -6276,25 +6287,25 @@ products of your selected type (or types).<br><br>
 
     <flatVocabParam name="eda_dataset_id"
                     queryRef="GeneVQ.PhenotypeUserDataset"
-                    prompt="Your Phenotype Dataset"
+                    prompt="Phenotype User Dataset"
 	            quote="false"
                     multiPick="false" >
-      <help>An Phenotype dataset that you have imported into your workspace, and that is installed in this website </help>
+      <help>A public Phenotype User Dataset, or a private one you have imported into your workspace, and that is installed in this website </help>
     </flatVocabParam> 
 
 
     <flatVocabParam name="rna_seq_dataset"
                     queryRef="GeneVQ.RnaSeqUserDataset"
-                    prompt="Your RNA-Seq Dataset"
+                    prompt="(Normalized) RNA-Seq User Dataset"
                     multiPick="false" >
-      <help>An RNA-Seq dataset that you have imported into your workspace, and that is installed in this website </help>
+      <help>A public Normalized RNA-Seq User Dataset, or a private one you have imported into your workspace, and that is installed in this website </help>
     </flatVocabParam>
 
     <flatVocabParam name="profileset_generic"
                     queryRef="GeneVQ.rna_seq_profileset"
                     prompt="Experiment"
                     quote="false"
-                    multiPick="false"
+                    multiPick="false"   allowEmptyVocabulary="true" 
                     dependedParamRef="userDatasetParams.rna_seq_dataset">
       <help>Choose an Experiment. An Experiment consists of a set of samples that is defined by the data provider or the analytical method. The samples within an Experiment can be compared to each other. Datasets will have multiple Experiments if the samples are generated using different biological, experimental or analytical methods: sense vs. antisense, scaled vs. non-scaled, wild-type vs. mutant.</help>
     </flatVocabParam>
@@ -6304,7 +6315,7 @@ products of your selected type (or types).<br><br>
                     prompt="Reference Sample(s)"
                     quote="false"
                     displayType="checkBox"
-                    multiPick="true"
+                    multiPick="true" allowEmptyVocabulary="true" 
                     dependedParamRef="userDatasetParams.rna_seq_dataset,userDatasetParams.profileset_generic">
       <help>Choose one or more sample.  NOTE: if more than one is chosen the fold difference in coverage will be calculated using the specified operation applied to the samples within the group</help>
       <suggest selectMode="none" />
@@ -6315,7 +6326,7 @@ products of your selected type (or types).<br><br>
                     prompt="Comparison Sample(s)"
                     quote="false"
                     displayType="checkBox"
-                    multiPick="true"
+                    multiPick="true"  allowEmptyVocabulary="true" 
                     dependedParamRef="userDatasetParams.rna_seq_dataset,userDatasetParams.profileset_generic">
       <help>Choose one or more sample.  NOTE: if more than one is chosen the fold difference in coverage will be calculated using the specified operation applied to the samples within the group</help>
       <suggest selectMode="none" />
@@ -6991,6 +7002,40 @@ products of your selected type (or types).<br><br>
     </sqlQuery>
 
 
+    <!-- Distinct image types available for one gene-image dataset, as LIKE patterns.
+         Generic: term = internal = the raw image_type. Special-cased for TrypTag,
+         whose 6 raw image_types collapse to two termini: term "N-terminal"/"C-terminal"
+         shown to the user, internal "N terminal%"/"C terminal%" used by the LIKE filter.
+         The leading 'Any' -> '%' row is the default (no filtering). -->
+    <sqlQuery name="CellularLocImageType" isCacheable="false" doNotTest="1">
+      <paramRef ref="geneParams.cellularLocImageDataset"/>
+      <column name="term"/>
+      <column name="internal"/>
+      <sql>
+        <![CDATA[
+          SELECT 'Any' AS term, '%' AS internal
+          UNION
+          SELECT DISTINCT
+              CASE WHEN d.name LIKE '%TrypTag%'
+                   THEN regexp_replace(fi.image_type, '^([NC]) terminal tag.*$', '\1-terminal')
+                   ELSE fi.image_type
+              END AS term
+            , CASE WHEN d.name LIKE '%TrypTag%'
+                   THEN regexp_replace(fi.image_type, '^([NC]) terminal tag.*$', '\1 terminal%')
+                   ELSE fi.image_type
+              END AS internal
+          FROM sres.externaldatabase d
+              , sres.externaldatabaserelease r
+              , apidb.nafeatureimage fi
+          WHERE d.external_database_id = r.external_database_id
+            AND r.external_database_release_id = fi.external_database_release_id
+            AND d.name = $$cellularLocImageDataset$$
+          ORDER BY term
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
     <sqlQuery name="MetadataQuery_PhenotypeScore" doNotTest="1">
       <paramRef ref="geneParams.phenotypeScoreDataset"/>
       <column name="ontology_term_name"/>
@@ -7255,7 +7300,7 @@ products of your selected type (or types).<br><br>
         <sql>
    --force 'Choose...' line to be first, then order by display name
    select  term, internal, display from (
-     select 'bla' as term, '1111' as internal, 'Choose a Gene List Dataset, if you have any' as display, 1 as num
+     select 'bla' as term, '1111' as internal, 'Choose a public or private Gene List User Dataset, or Upload one first' as display, 1 as num
      UNION
      select distinct aud.user_dataset_id as term, aud.user_dataset_id as internal, aud.name as display, 2 as num
       from @VDI_CONTROL_SCHEMA@.AvailableUserDatasets aud,
@@ -7275,17 +7320,23 @@ products of your selected type (or types).<br><br>
           <column name="display"/>
           <sql>
             <![CDATA[
-              SELECT
-                CONCAT('EDAUD_', aud.user_dataset_id) as term
-              , CONCAT('EDAUD_', aud.user_dataset_id) as internal
-              , aud.name as display
-              FROM
-                @VDI_CONTROL_SCHEMA@.availableuserdatasets aud
-              WHERE
-                (user_id = $$user_id$$ or is_public = true)
+             WITH primary_result AS (
+               SELECT
+                 CONCAT('EDAUD_', aud.user_dataset_id) as term
+                 , CONCAT('EDAUD_', aud.user_dataset_id) as internal
+                 , aud.name as display
+                FROM
+                  @VDI_CONTROL_SCHEMA@.availableuserdatasets aud
+               WHERE
+                  (user_id = $$user_id$$ or is_public = true)
                 AND type = 'phenotype'
-		AND (project_id = '@PROJECT_ID@' or ('UniDB' = '@PROJECT_ID@' and 'ClinEpiDB' != project_id))
+                AND (project_id = '@PROJECT_ID@' or ('UniDB' = '@PROJECT_ID@' and 'ClinEpiDB' != project_id))
               ORDER BY display
+            )
+            SELECT * FROM primary_result
+            UNION ALL
+            select 'EDAUD_slI5M0RwIg0Zw' as term, 'EDAUD_slI5M0RwIg0Zw' as internal, 'Upload a Phenotype User Dataset in My Workspace' as display
+            WHERE NOT EXISTS (SELECT 1 FROM primary_result)
             ]]>
           </sql>
   </sqlQuery>
@@ -7297,11 +7348,12 @@ products of your selected type (or types).<br><br>
           <column name="display"/>
           <sql>
             <![CDATA[
-              SELECT
+         WITH primary_result AS (
+             SELECT
                 aud.user_dataset_id as term
               , aud.user_dataset_id as internal
               , aud.name as display
-              FROM
+               FROM
                 @VDI_CONTROL_SCHEMA@.availableuserdatasets aud
               WHERE (user_id = $$user_id$$ or is_public = true)
 		AND (project_id = '@PROJECT_ID@' or ('UniDB' = '@PROJECT_ID@' and 'ClinEpiDB' != project_id))
@@ -7315,8 +7367,13 @@ products of your selected type (or types).<br><br>
                       ON pan.protocol_app_node_id = nfe.protocol_app_node_id
                   WHERE
                     ps.user_dataset_id = aud.user_dataset_id
-                )
-		ORDER BY display
+                  )
+           ORDER BY display
+         )
+         SELECT * FROM primary_result
+         UNION ALL
+         select 'EDAUD_sII5gAU5QA0hg' as term, 'EDAUD_sII5gAU5QA0hg' as internal, 'Upload a RNA-Seq User Dataset in My Workspace' as display
+         WHERE NOT EXISTS (SELECT 1 FROM primary_result)
             ]]>
           </sql>
         </sqlQuery>
@@ -9470,6 +9527,8 @@ end as term
           name AS display
         FROM @VDI_DATASETS_SCHEMA@.ud_profileset
         WHERE user_dataset_id = $$rna_seq_dataset$$
+       UNION
+      SELECT  '1111' as term, '1111' as internal, 'Choose a RNA-Seq User Dataset' as display
       </sql>
     </sqlQuery>
 

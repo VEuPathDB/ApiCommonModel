@@ -16,4 +16,9 @@ public class FunctionalGeneList extends  GeneList {
     public String questionTemplateName() {
         return("geneListFunctional");
     }
+    @Override
+    public void addModelReferences() {
+	super.addModelReferences();
+	addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "FunctionPredictionGeneLists");
+    }
 }

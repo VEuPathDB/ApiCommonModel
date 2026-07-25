@@ -15,4 +15,9 @@ public class SubcellularGeneList extends  GeneList {
     public String questionTemplateName() {
         return("geneListSubcellular");
     }
+    @Override
+    public void addModelReferences() {
+	super.addModelReferences();
+	addWdkReference("GeneRecordClasses.GeneRecordClass", "table", "SubcellularLocationGeneLists");
+    }
 }
