@@ -1086,6 +1086,109 @@
     </sql>
   </tuningTable>
 
+ <tuningTable name="VariationAttributes">
+    <comment>
+      One row per variant locus, for the "variation" WDK record. Holds ONLY columns that
+      are derived, aggregated, or require a join; intrinsic per-locus facts are read
+      directly from apidb.VariationFeature by the WDK attribute query, since that table
+      is already one row per locus with a unique source_id.
+
+      Both internalDependency elements are load-bearing: built before
+      TranscriptAttributes the gene aggregate is silently empty rather than an error, and
+      built before GenomicSeqAttributes the project_id/organism join drops every row.
+
+      See docs/superpowers/specs/2026-07-30-variation-record-design.md in
+      agentic-veupath-dev.
+    </comment>
+    <internalDependency name="TranscriptAttributes"/>
+    <internalDependency name="GenomicSeqAttributes"/>
+    <externalDependency name="apidb.VariationFeature"/>
+    <externalDependency name="apidb.VariationTranscriptProduct"/>
+    <externalDependency name="apidb.VariationEffect"/>
+    <externalDependency name="sres.ExternalDatabaseRelease"/>
+    <externalDependency name="sres.ExternalDatabase"/>
+    <sql>
+      <![CDATA[
+        CREATE TABLE VariationAttributes&1 AS
+        WITH gene_agg AS (
+          SELECT sequence_source_id, location,
+                 string_agg(DISTINCT gene_source_id, ', ' ORDER BY gene_source_id) AS gene_ids,
+                 count(DISTINCT gene_source_id)                                    AS gene_count
+          FROM (
+            SELECT e.sequence_source_id, e.location, t.gene_source_id
+            FROM apidb.VariationEffect e
+            JOIN TranscriptAttributes t ON t.na_feature_id = e.na_feature_id
+            UNION
+            SELECT p.sequence_source_id, p.location, t.gene_source_id
+            FROM apidb.VariationTranscriptProduct p
+            JOIN TranscriptAttributes t ON t.na_feature_id = p.na_feature_id
+          ) g
+          GROUP BY sequence_source_id, location
+        ),
+        effect_agg AS (
+          SELECT sequence_source_id, location,
+                 max(CASE WHEN source = 'snpeff' THEN
+                       CASE impact WHEN 'HIGH' THEN 4 WHEN 'MODERATE' THEN 3
+                                   WHEN 'LOW' THEN 2 WHEN 'MODIFIER' THEN 1 END END) AS rank_snpeff,
+                 max(CASE WHEN source = 'product_call' THEN
+                       CASE impact WHEN 'HIGH' THEN 4 WHEN 'MODERATE' THEN 3
+                                   WHEN 'LOW' THEN 2 WHEN 'MODIFIER' THEN 1 END END) AS rank_pc,
+                 string_agg(DISTINCT CASE WHEN source = 'snpeff'       THEN effect END, ', ') AS effect_summary_snpeff,
+                 string_agg(DISTINCT CASE WHEN source = 'product_call' THEN effect END, ', ') AS effect_summary_product_call
+          FROM apidb.VariationEffect
+          GROUP BY sequence_source_id, location
+        )
+        SELECT v.source_id,
+               g.project_id,
+               v.sequence_source_id,
+               v.location,
+               trim(to_char(v.location, '99,999,999')) AS location_text,
+               g.organism,
+               g.ncbi_tax_id,
+               g.chromosome_order_num,
+               coalesce(dp.display_name, d.name)       AS dataset,
+               ga.gene_ids,
+               coalesce(ga.gene_count, 0)              AS gene_count,
+               CASE ea.rank_snpeff WHEN 4 THEN 'HIGH' WHEN 3 THEN 'MODERATE'
+                                   WHEN 2 THEN 'LOW'  WHEN 1 THEN 'MODIFIER' END AS most_severe_impact_snpeff,
+               CASE ea.rank_pc     WHEN 4 THEN 'HIGH' WHEN 3 THEN 'MODERATE'
+                                   WHEN 2 THEN 'LOW'  WHEN 1 THEN 'MODIFIER' END AS most_severe_impact_product_call,
+               ea.effect_summary_snpeff,
+               ea.effect_summary_product_call,
+               concat_ws('; ',
+                 CASE WHEN v.snp_minor_allele   IS NOT NULL THEN concat(v.snp_ref_allele,   '>', v.snp_minor_allele)   END,
+                 CASE WHEN v.indel_minor_allele IS NOT NULL THEN concat(v.indel_ref_allele, '>', v.indel_minor_allele) END
+               )                                       AS collapsed_allele,
+               CASE WHEN v.snp_minor_allele_frequency IS NULL
+                     AND v.indel_minor_allele_frequency IS NULL THEN NULL
+                    ELSE greatest(coalesce(v.snp_minor_allele_frequency,   0),
+                                  coalesce(v.indel_minor_allele_frequency, 0)) END AS collapsed_minor_allele_frequency
+        FROM apidb.VariationFeature v
+        JOIN GenomicSeqAttributes g           ON g.source_id = v.sequence_source_id
+        JOIN sres.ExternalDatabaseRelease r   ON r.external_database_release_id = v.external_database_release_id
+        JOIN sres.ExternalDatabase d          ON d.external_database_id = r.external_database_id
+        LEFT JOIN DatasetPresenter dp         ON dp.name = d.name
+        LEFT JOIN gene_agg   ga ON ga.sequence_source_id = v.sequence_source_id AND ga.location = v.location
+        LEFT JOIN effect_agg ea ON ea.sequence_source_id = v.sequence_source_id AND ea.location = v.location
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE UNIQUE INDEX VariationAttr_pk&1 ON VariationAttributes&1 (source_id, project_id)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX VariationAttr_loc&1 ON VariationAttributes&1 (sequence_source_id, location)
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        CREATE INDEX VariationAttr_sort&1 ON VariationAttributes&1 (chromosome_order_num, location)
+      ]]>
+    </sql>
+  </tuningTable>
+
  <tuningTable name="GenomicSeqOrgAbbrev">
     <internalDependency name="GenomicSeqAttributes"/>
     <sql>
