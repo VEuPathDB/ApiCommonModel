@@ -311,7 +311,13 @@ bash ~/workspaces/agentic-veupath-dev/bin/veup-git-sync.sh fungidb
 
 The strain list must come from `apidb.indel` (the requirement) and be scoped to the selected organism. There is no strain column on `apidb.indel`; strain is `study.protocolappnode.name` minus a `_Indel` suffix. All 6,119 names carry that suffix, none contains a colon, and none contains any other underscore — so both the strip and the later `<strain>_<refSeq>` concatenation are unambiguous.
 
-The organism param's internal value is `org_abbrev`, which is also the partition key of every `webready.*_p` table. `sharedParams.ChromosomeOrderNumSeq` (`questions/params/sharedParams.xml:2697`) is the working template for an organism-dependent vocabulary query.
+> **REVISED after review — there is no organism param.** An earlier draft made this
+> vocabulary depend on an organism param and scope itself with `org_abbrev`. That was
+> redundant: the search is handed a sequence ID, which already determines its organism.
+> The vocabulary is now **global** (6,119 strains, 2.9s, cached once rather than once per
+> organism), and relevance is enforced by the ID query's `EXISTS` gate instead. See spec
+> §5.1.1 for why, including the tree-vocabulary trap that made the organism-scoped version
+> silently return nothing. The Step 1 content below is the revised version.
 
 **Files:**
 - Create: `ApiCommonModel/Model/lib/wdk/model/questions/params/strainSegmentParams.xml`
@@ -419,6 +425,37 @@ input yields zero records rather than a broken download — the failure mode
 straight into the PK with no `CASE`. `end_point_segment` documents `0 = end`, which the
 `CASE` below honours.
 
+**Do not add `queryRef="organismVQ.withStrainsChromosome"` to the organism `paramRef`**,
+even though `DynSpansBySourceId` does. That query is declared for only 10 projects, so
+referencing it forces an `includeProjects` guard onto everything that depends on it — and
+this record is meant to work on all projects. Worse, its SQL selects from
+`apidbtuning.GenomicSeqAttributes`, which **does not exist in this database** (verified
+2026-07-31; the same absence that stops DynSpan's `Bfmv` query from running here). Let
+`organismParams.organismSinglePick` use its own default vocab query, `organismVQ.withGenes`,
+which carries no `includeProjects`.
+
+Note `organismSinglePick` is declared `multiPick="true" maxSelectedCount="1"`
+(`organismParams.xml:256-262`), so WDK substitutes a quoted comma-separated list even
+though only one value can be chosen. `IN (...)` is therefore required and `=` would be a
+bug.
+
+**Param quoting — write params UNQUOTED in the SQL.** This codebase quotes enum and vocab
+params by default; `spanQueries.xml:303` has to say `quote="false"` explicitly to turn it
+off. So `$$sequence_strand$$` and `$$strain$$` arrive already wrapped in single quotes, and
+adding your own would produce `''f''`. Set `quote="true"` on the `strain` paramRef to make
+the intent explicit, then reference both bare.
+
+The codebase is genuinely inconsistent here (`spanQueries.xml:400` uses bare
+`$$liberal_conservative$$` while `:417` writes `'$$any_or_all_DynSeg$$'`), so this cannot be
+settled by reading alone. **Task 5 Step 5 is where it gets confirmed**: `wdkQuery -showQuery`
+renders the assembled SQL, and doubled quotes will be visible there. If they appear, remove
+the `quote="true"` rather than adding literal quotes.
+
+Also prefer `pan.name = CONCAT($$strain$$, '_Indel')` over `regexp_replace(pan.name, ...)
+= $$strain$$` in the EXISTS gate. Same lesson as Task 2: comparing a plain string lets the
+database use an index on `name`, whereas applying `regexp_replace` to every candidate row
+forces a scan and computes a function per row to reach the same answer.
+
 **One `<sql>` block, no project variants.** Do not add `includeProjects` or
 `excludeProjects` to anything in this task. `project_id` is selected from
 `webready.GenomicSeqAttributes_p`, not from `@PROJECT_ID@`, so it is correct on every
@@ -445,10 +482,9 @@ avoids rather than a pattern to copy.
          names map to more than one organism. -->
     <sqlQuery name="StrainSegmentsByRefSegment" doNotTest="true">
       <paramRef ref="organismParams.organismSinglePick"
-                queryRef="organismVQ.withStrainsChromosome"
                 displayType="select"
                 quote="true"/>
-      <paramRef ref="StrainSegmentParams.strain"/>
+      <paramRef ref="StrainSegmentParams.strain" quote="true"/>
       <paramRef ref="sharedParams.sequenceId"/>
       <paramRef ref="sharedParams.start_point" default="1"/>
       <paramRef ref="sharedParams.end_point_segment"/>
@@ -461,7 +497,7 @@ avoids rather than a pattern to copy.
         <![CDATA[
           SELECT CONCAT($$strain$$, ':', seg.ref_seq, ':',
                         seg.ref_start, '-', seg.ref_end, ':',
-                        '$$sequence_strand$$')            AS source_id
+                        $$sequence_strand$$)              AS source_id
                , seg.project_id
           FROM (
             SELECT gsa.source_id                           AS ref_seq
@@ -486,7 +522,7 @@ avoids rather than a pattern to copy.
                      , study.protocolappnode pan
                   WHERE i.protocol_app_node_id = pan.protocol_app_node_id
                     AND i.na_sequence_id = seg.na_sequence_id
-                    AND regexp_replace(pan.name, '_Indel$', '') = $$strain$$
+                    AND pan.name = CONCAT($$strain$$, '_Indel')
                 )
         ]]>
       </sql>

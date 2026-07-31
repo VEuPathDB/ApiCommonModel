@@ -88,6 +88,12 @@ corruption.
 > is `org_abbrev`, not `organism_abbrev`. Omitting it scans all partitions (831 on
 > `organismabbreviation_p`) and uses no index.
 
+**As it turns out, this design touches no `webready.*_p` table at all** — see §5.1.1. Both
+the ID query and the attribute query resolve sequences through unpartitioned
+`dots.ExternalNaSequence`, so the partition-key rule above never binds. It is recorded
+because it drove an earlier draft and because anyone extending this record needs to know it
+applies the moment they reach for a `_p` table.
+
 `organism -> org_abbrev` comes from `webready.organismabbreviation_p`
 (`organism`, `org_abbrev`, `project_id`, `sanitized_org_abbrev`, `name_for_filenames`).
 
@@ -192,39 +198,89 @@ Input is a **single reference location**, modeled on `DynSpansByLocation`
 (`spanQueries.xml:266`), not a `datasetParam` — so `SpanParams.span_id` and its
 `recordClassRef` to DynSpan are not involved.
 
-Params: `organism` (single pick), `strain` (enum, **dependent on organism**),
-`sequenceId`, `start`, `end`, `strand`.
+Params: `strain`, `sequenceId`, `start`, `end`, `strand`. **There is no organism param.**
 
-The organism param's **internal value is `org_abbrev`**, so the partition key is
-available directly to every query without an extra lookup. Precedent:
-`organismParams.organism_span` is compared straight against `org_abbrev` columns at
-`spanQueries.xml:203-205`. The display organism name, when needed for a defline or a
-join, comes from `webready.organismabbreviation_p` keyed on the same `org_abbrev`.
+### 5.1.1 Why no organism input
 
-Three gates, all as joins/filters so bad input yields **zero records** rather than a
-broken download:
+An earlier draft took an organism as a first param, used it to prune the `org_abbrev`
+partition key and to check that the reference sequence belonged to it. That was redundant
+input: **a reference sequence ID already determines its organism.** Being handed an
+organism as well only creates a consistency question the query then has to answer.
 
-1. `strain` is in the vocabulary for the chosen organism (§5.2 query);
-2. `refSeq` belongs to the chosen organism — join `webready.genomicseqattributes_p`
-   constraining `org_abbrev` to the chosen organism, which is both the partition key and
-   the organism-membership check that `DynSpansBySourceId` omits;
-3. `1 <= refStart <= refEnd <= gsa.length`.
+Dropping it removes three problems at once:
 
-### 5.2 Strain vocabulary (dependent param)
+- **No partition-key concern.** Resolve the sequence through unpartitioned
+  `dots.ExternalNaSequence` (`source_id_uniq` index; carries `na_sequence_id`, `taxon_id`,
+  `length`) rather than `webready.GenomicSeqAttributes_p`. Same table path §5.3 already
+  uses, so the two queries become consistent instead of divergent.
+- **No `@PROJECT_ID@`.** `project_id` for the PK comes from `apidb.organism.project_name`
+  via `taxon_id` — unpartitioned, correct on every project, still one query.
+- **No vocabulary-shape trap.** See the note below; this is the defect that prompted the
+  redesign.
+
+> **The trap, recorded because it cost a round of rework.** With an organism param, the
+> obvious `org_abbrev IN ($$organismSinglePick$$)` is wrong. That param defaults to
+> `organismVQ.withGenes` (`organismParams.xml:677`), a *tree* vocabulary projecting
+> `string_agg(fq.abbrev, ', ') AS internal` grouped by `term, parentTerm` — so a leaf term
+> gives one abbrev but any grouping node gives `'afumAf293, afumA1163'`. Quoted, that is a
+> single literal matching **nothing**: verified, `org_abbrev IN ('afumAf293, afumA1163')`
+> returns 0 rows, with no error and no log line. Most of the model dodges this by overriding
+> `queryRef` to a flat abbrev vocabulary, but every such vocabulary carries
+> `includeProjects`/`excludeProjects`, which this record may not have. Not taking an
+> organism at all sidesteps the whole question.
+
+Three gates, all as filters so bad input yields **zero records** rather than a broken
+download:
+
+1. the reference sequence exists — `dots.ExternalNaSequence.source_id = $$sequenceId$$`;
+2. `1 <= refStart <= refEnd <= ens.length`;
+3. the strain has indel data on **this** sequence — an `EXISTS` over `apidb.indel` joined to
+   `study.protocolappnode`, matched on `na_sequence_id`.
+
+Gate 3 subsumes the organism check the earlier draft did explicitly: if the strain has indel
+rows on that sequence, strain and sequence are consistent **by construction**. That is a
+stronger guarantee than validating against a user-supplied organism, and it is what the
+original requirement ("validate the reference sequence against the reference organism")
+actually wanted.
+
+Strain membership itself is enforced by WDK, which validates a `flatVocabParam` value
+against its vocabulary — that is what makes strain names a controlled vocabulary sourced
+from `apidb.indel`, as required.
+
+### 5.2 Strain vocabulary (global, not organism-dependent)
+
+With no organism param there is nothing to depend on, so the vocabulary is global:
 
 ```sql
-SELECT DISTINCT regexp_replace(pan.name, '_Indel$', '') AS strain
-FROM apidb.indel i
-  JOIN study.protocolappnode pan ON pan.protocol_app_node_id = i.protocol_app_node_id
-  JOIN webready.genomicseqattributes_p gsa ON gsa.na_sequence_id = i.na_sequence_id
-WHERE gsa.org_abbrev = $$organism$$             -- partition key; param's internal value
+SELECT strain AS internal, strain AS term, strain AS display
+FROM (
+  SELECT DISTINCT regexp_replace(pan.name, '_Indel$', '') AS strain
+  FROM (SELECT DISTINCT protocol_app_node_id FROM apidb.indel) x
+     , study.protocolappnode pan
+  WHERE pan.protocol_app_node_id = x.protocol_app_node_id
+    AND pan.name LIKE '%\_Indel'
+) t
+ORDER BY strain
 ```
 
-(`$$organism$$` is the `org_abbrev` internal value per §5.1, so this both scopes the
-vocabulary to the chosen organism and hits the partition.)
+**6,119 strains in 2.9s**, measured 2026-07-31. Cached once globally rather than once per
+organism, so cheaper in aggregate than the per-organism version it replaces (2.66s each).
+
+Two shape details carried over from review, both load-bearing:
+
+- Dedupe on the numeric `protocol_app_node_id` (6,249 values) **before** computing
+  `regexp_replace`, not after. Deduping on the regexp'd string instead runs the function
+  across all 43.6M indel rows and hash-aggregates text keys — measured 12,085ms versus
+  2,681ms for identical output.
+- `pan.name LIKE '%\_Indel'` makes the suffix invariant executable rather than merely
+  documented; `regexp_replace` silently passes a non-conforming name through, which would
+  become a bogus strain option. The backslash escape matters — `_` is a single-character
+  wildcard in `LIKE`.
 
 This is the controlled vocabulary required by the brief: strain names come from
-`apidb.indel`, scoped per organism. No tuning table exists for it.
+`apidb.indel` (via `study.protocolappnode`, which is where the name actually lives). No
+tuning table exists for it. Scoping to a *relevant* strain is not the vocabulary's job —
+gate 3 of §5.1 rejects a strain with no data on the requested sequence.
 
 ### 5.3 Attribute query: `StrainSegmentAttributes.Coords`
 
