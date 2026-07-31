@@ -1,0 +1,88 @@
+<wdkModel>
+
+  <querySet name="StrainSegmentAttributes" queryType="attribute" isCacheable="false">
+
+    <sqlQuery name="Coords" doNotTest="true">
+      <column name="source_id" ignoreCase="true" columnType="string"/>
+      <column name="project_id" ignoreCase="true" columnType="string"/>
+      <column name="strain" columnType="string"/>
+      <column name="ref_seq" columnType="string"/>
+      <column name="ref_start" columnType="number"/>
+      <column name="ref_end" columnType="number"/>
+      <column name="strain_seq_id" columnType="string"/>
+      <column name="strain_start" columnType="number"/>
+      <column name="strain_end" columnType="number"/>
+      <column name="strain_length" columnType="number"/>
+      <column name="organism" columnType="string"/>
+
+      <!-- Reference coordinates come in via the PK; strain coordinates are derived here
+           by prefix-summing apidb.indel.shift.  Deliberately avoids webready.*_p: an
+           attribute query has only PK columns, so no org_abbrev is available to prune
+           the partition key, and every index on those tables is org_abbrev-prefixed.
+           dots.ExternalNaSequence is unpartitioned and indexed on source_id.
+
+           split_part, not positional regexp_substr: it does not silently renumber
+           fields when one is empty.  Strain names contain '-', which is safe only
+           because the coordinate range is its own colon-delimited field. -->
+      <sql>
+        <![CDATA[
+          SELECT ids.source_id
+               , ids.project_id
+               , ids.strain
+               , ids.ref_seq
+               , ids.ref_start
+               , ids.ref_end
+               , ids.strain || '_' || ids.ref_seq                    AS strain_seq_id
+               , ids.ref_start + COALESCE(off.offset_start, 0)        AS strain_start
+               , ids.ref_end   + COALESCE(off.offset_end,   0)        AS strain_end
+               , (ids.ref_end   + COALESCE(off.offset_end,   0))
+                 - (ids.ref_start + COALESCE(off.offset_start, 0)) + 1 AS strain_length
+               , tn.name                                             AS organism
+          FROM (
+            SELECT t.source_id
+                 , t.project_id
+                 , split_part(t.source_id, ':', 1)                              AS strain
+                 , split_part(t.source_id, ':', 2)                              AS ref_seq
+                 , split_part(split_part(t.source_id, ':', 3), '-', 1)::integer  AS ref_start
+                 , split_part(split_part(t.source_id, ':', 3), '-', 2)::integer  AS ref_end
+            FROM (##WDK_ID_SQL##) t
+          ) ids
+          JOIN dots.ExternalNaSequence ens ON ens.source_id = ids.ref_seq
+          JOIN sres.TaxonName tn           ON tn.taxon_id = ens.taxon_id
+                                          AND tn.name_class = 'scientific name'
+          LEFT JOIN (
+            SELECT seg.strain
+                 , seg.ref_start
+                 , seg.ref_end
+                 , SUM(CASE WHEN i.location <  seg.ref_start THEN i.shift ELSE 0 END) AS offset_start
+                 , SUM(CASE WHEN i.location <= seg.ref_end   THEN i.shift ELSE 0 END) AS offset_end
+            FROM apidb.indel i
+               , study.protocolappnode pan
+               , dots.ExternalNaSequence ens2
+               , (
+                   SELECT DISTINCT
+                          split_part(t.source_id, ':', 1)                              AS strain
+                        , split_part(t.source_id, ':', 2)                              AS ref_seq
+                        , split_part(split_part(t.source_id, ':', 3), '-', 1)::integer  AS ref_start
+                        , split_part(split_part(t.source_id, ':', 3), '-', 2)::integer  AS ref_end
+                   FROM (##WDK_ID_SQL##) t
+                 ) seg
+            WHERE pan.protocol_app_node_id = i.protocol_app_node_id
+              AND ens2.source_id = seg.ref_seq
+              AND i.na_sequence_id = ens2.na_sequence_id
+              AND pan.name = CONCAT(seg.strain, '_Indel')
+              AND i.location <= seg.ref_end
+            GROUP BY seg.strain
+                   , seg.ref_start
+                   , seg.ref_end
+                   , i.protocol_app_node_id
+          ) off ON off.strain    = ids.strain
+               AND off.ref_start = ids.ref_start
+               AND off.ref_end   = ids.ref_end
+        ]]>
+      </sql>
+    </sqlQuery>
+
+  </querySet>
+
+</wdkModel>
