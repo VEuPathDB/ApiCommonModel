@@ -3,7 +3,7 @@
   <paramSet name="StrainSegmentParams">
 
     <flatVocabParam name="strain"
-                    queryRef="StrainSegmentVQ.StrainsByOrganism"
+                    queryRef="StrainSegmentVQ.StrainsWithIndelData"
                     prompt="Strain / isolate"
                     multiPick="false">
       <help>
@@ -24,8 +24,18 @@
          no strain column on apidb.indel.  The vocabulary is global: the search
          takes no organism param, and relevance is enforced instead by the ID
          query's EXISTS gate, which scopes a chosen strain to the specific reference
-         sequence it has indel data on. -->
-    <sqlQuery name="StrainsByOrganism" doNotTest="true">
+         sequence it has indel data on.
+
+         Driven from study.protocolappnode (61,512 rows) with an EXISTS probe into
+         apidb.indel, rather than the reverse: an earlier revision derived the
+         candidate set from a DISTINCT scan of all 43.6M apidb.indel rows, which
+         dominated its cost. Probing indel from the protocolappnode side lets the
+         planner use indel's protocol_app_node_id index instead of scanning it.
+         That also means regexp_replace now runs over only the rows matching the
+         name pattern rather than the full indel row count, so the earlier
+         requirement to dedupe on protocol_app_node_id before applying
+         regexp_replace no longer applies here. -->
+    <sqlQuery name="StrainsWithIndelData">
       <column name="internal"/>
       <column name="term"/>
       <column name="display"/>
@@ -34,10 +44,10 @@
           SELECT strain AS internal, strain AS term, strain AS display
           FROM (
             SELECT DISTINCT regexp_replace(pan.name, '_Indel$', '') AS strain
-            FROM (SELECT DISTINCT protocol_app_node_id FROM apidb.indel) x
-               , study.protocolappnode pan
-            WHERE pan.protocol_app_node_id = x.protocol_app_node_id
-              AND pan.name LIKE '%\_Indel'
+            FROM study.protocolappnode pan
+            WHERE pan.name LIKE '%\_Indel'
+              AND EXISTS (SELECT 1 FROM apidb.indel i
+                          WHERE i.protocol_app_node_id = pan.protocol_app_node_id)
           ) t
           ORDER BY strain
         ]]>

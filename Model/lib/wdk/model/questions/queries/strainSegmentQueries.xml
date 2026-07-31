@@ -2,21 +2,32 @@
 
   <querySet name="StrainSegmentId" queryType="id" isCacheable="true">
 
-    <!-- Three gates, all as filters so bad input returns zero rows:
+    <!-- Four gates, all as filters so bad input returns zero rows:
            1. source_id  - the reference sequence exists (dots.ExternalNaSequence.source_id)
-           2. range      - 1 <= start <= end <= ens.length
-           3. EXISTS     - the strain has indel data on this very sequence, matched
+           2. organism   - the sequence's taxon_id has a matching apidb.organism row
+                           (inner join, not just a project_id source; see below)
+           3. range      - 1 <= start <= end <= ens.length (end=0 means "to end of
+                           sequence" and is normalized to ens.length in the
+                           derived table, before this gate ever sees it)
+           4. EXISTS     - the strain has indel data on this very sequence, matched
                            on na_sequence_id
-         Gate 3 subsumes the organism check the old version did explicitly: if the
-         strain has indel rows on that sequence then strain and sequence are
-         consistent by construction, which is stronger than validating against a
-         supplied organism. It is scoped by na_sequence_id, never by strain name
-         alone: 126 strain names map to more than one organism.
 
-         project_id comes from apidb.organism.project_name rather than
-         @PROJECT_ID@: it is unpartitioned, correct on every project, and avoids
-         the per-project query duplication that forces DynSpan to maintain
-         UniDB-specific variants. -->
+         Indel rows recorded on a sequence make strain and sequence consistent by
+         construction, so gate 4 needs no separate organism input to validate
+         against. It is scoped by na_sequence_id, never by strain name alone:
+         126 strain names map to more than one organism.
+
+         The apidb.organism join is also a gate, not just a project_id source: it
+         is an inner join, so a sequence whose taxon_id has no apidb.organism row
+         yields no record at all. That is intended - such a sequence sits outside
+         every project and so has no project_id to key a record on - and it does
+         not need to be a LEFT JOIN, since a NULL project_id would produce a
+         malformed primary key.
+
+         project_id comes from apidb.organism.project_name because it is
+         unpartitioned and correct on every project, avoiding the per-project
+         query duplication that forces DynSpan to maintain UniDB-specific
+         variants. -->
     <sqlQuery name="StrainSegmentsByRefSegment" doNotTest="true">
       <paramRef ref="StrainSegmentParams.strain" quote="true"/>
       <paramRef ref="sharedParams.sequenceId"/>
@@ -51,6 +62,11 @@
           WHERE seg.ref_start >= 1
             AND seg.ref_end   >= seg.ref_start
             AND seg.ref_end   <= seg.seq_length
+            -- The suffix is appended to the parameter (CONCAT($$strain$$, '_Indel'))
+            -- rather than stripped from the column (regexp_replace(pan.name, ...)),
+            -- so pan_named_ix (name, protocol_app_node_id, ...) can still be used as
+            -- an Index Only Scan; applying a function to pan.name instead would force
+            -- a scan of protocolappnode per row.
             AND EXISTS (
                   SELECT 1
                   FROM apidb.indel i
