@@ -306,6 +306,56 @@ shifts into one plausible-looking wrong answer with nothing to detect it.
 segment, so it shifts the end but not the start — hence `<` for start, `<=` for end. An
 off-by-one here is silent and yields sequence that looks correct.
 
+### 5.3.1 Group and join on the primary key, not on coordinates
+
+An earlier implementation grouped the offsets subquery on `(strain, ref_start, ref_end)`
+and joined on the same triple. **That silently corrupted every multi-record answer set.**
+One `protocol_app_node_id` spans *all* of a strain's sequences (one Af293 node carries
+indels on all 8 chromosomes), so two segments of the same strain on different sequences
+collapsed into a single group whose `SUM` spanned both, and the join handed that conflated
+row to both records. Measured on two 1-100000 segments of `NRZ-2016-071`, whose true
+offsets are 12 (Chr1) and 14 (Chr2): both reported `strain_end = 100026`, i.e. 100000 + 26.
+No error, no duplicate row, and `strain_seq_id` stayed correct — so the BED line pointed at
+the right contig with another chromosome's indel budget applied to its coordinates. A
+single-record test cannot see this; a reporter over a multi-segment result set is the
+normal case.
+
+Adding `ref_seq` to the grouping would fix the symptom. Instead **group and join on
+`source_id`** — the whole primary key — so "one row per input PK" holds by construction
+rather than by an argument about which coordinate fields happen to discriminate. Verified
+after the change: 100012 and 100014 respectively, and a third id differing only in strand
+yields 3 rows rather than 6 (strand correctly does not discriminate, since offsets do not
+depend on it).
+
+`i.protocol_app_node_id` stays in the `GROUP BY` alongside `source_id`, still absent from
+the `SELECT` — that is the collision detector described above, and it is now the only
+grouping column that is not the PK.
+
+`##WDK_ID_SQL##` is expanded **once**, into a `WITH ids AS (...)` CTE referenced twice.
+Precedent: `transcriptAttributeQueries.xml:209`. Postgres materializes it (confirmed: a
+single `CTE ids` node with two `CTE Scan` references), so the id set is scanned once and
+the four `split_part` expressions exist in one place.
+
+### 5.3.2 A segment inside a deletion inverts, deliberately
+
+The boundary asymmetry means a deletion at `refStart` shifts the end but not the start, so
+a short segment lying inside a deletion produces `strain_end < strain_start`. This is
+reachable with ordinary input, not a torture case: `apidb.indel` has 180,998 rows with
+`shift <= -20` and the ID query permits `start = end`. Real example — PK
+`366.1:Pf3D7_10_v3:331757-331757:f`, a 1-bp segment on a `shift = -54` event, gives
+`strain_start = 331658`, `strain_end = 331604`.
+
+That arithmetic is *correct*: the reference base does not exist in that strain, so the
+range maps to nothing. So:
+
+- `strain_start` and `strain_end` report the true, possibly inverted values — **not**
+  clamped, because the reporter needs to see the inversion;
+- `strain_length` is `GREATEST(..., 0)`, since a negative length is not a defensible
+  attribute value;
+- the BED feature provider (§7) rejects `strain_end < strain_start` with an explicit
+  error. That is the right place for it — a malformed BED interval must fail loudly rather
+  than reach a FASTA lookup.
+
 ## 6. Record class (`ApiCommonModel`)
 
 `StrainSegmentRecordClasses.StrainSegmentRecordClass`,
