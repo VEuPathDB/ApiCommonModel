@@ -72,6 +72,15 @@ One responsibility each. The grammar class is the only piece with no WDK depende
 
 ## Task 1: The PK grammar class
 
+> **COMPLETE — and amended after code review.** Commits `19defeba2` (as written below)
+> and `3ead3adac` (review fixes). The code block in Step 3 is what was *planned*; the
+> shipped version differs in three ways, all worth knowing if you touch this class:
+> the regex is `^([^:_]+):([^:]+):(\d+)-(\d+):(f|r)$` (strain excludes `_`, because
+> `<strain>_<refSeq>` would otherwise be ambiguous — sequence IDs contain underscores);
+> validation lives in the private constructor rather than `parse()`, and adds a
+> `refStart < 1` check; and both `parseInt` calls rethrow with the full ID in the
+> message. 14 tests, not 12. See spec §3.1 for the reasoning.
+
 The `ApiCommonWebsite/Model` module has JUnit 4 on its classpath but no `src/test/java` tree yet. You are creating it. Standard Maven layout means Surefire picks it up with no POM change.
 
 **Files:**

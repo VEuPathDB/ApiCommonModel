@@ -151,6 +151,28 @@ feature provider. On the SQL side use `split_part(source_id, ':', N)`, not posit
 contain `-` (`A17-48H-7`), which is safe only because the range is its own colon field;
 the range must never be parsed out of the whole string positionally.
 
+**As implemented** (commits `19defeba2`, `3ead3adac`):
+
+```
+^([^:_]+):([^:]+):(\d+)-(\d+):(f|r)$
+```
+
+Two details of that pattern are load-bearing:
+
+- Fields are `[^:]+`, not DynSpan's greedy `(.*)`, so an ID carrying an extra colon is
+  **rejected** rather than mis-parsed into a different segment.
+- The **strain** group additionally excludes `_`, because the FASTA key is
+  `<strain>_<refSeq>` and reference sequence IDs legitimately contain underscores
+  (`Pf3D7_01_v3`). Without that exclusion, strain `A_B` + sequence `C` and strain `A` +
+  sequence `B_C` would both yield the key `A_B_C`. No current strain name contains an
+  underscore (0 of 6,119), so this is inert today and converts a future ambiguous key
+  into a loud parse failure. Group 2 stays `[^:]+`.
+
+Validation lives in the private constructor, not in `parse()`, so that any later
+from-parts factory cannot bypass it. It rejects `refStart < 1` (a 0 start would reach
+`BedLine.locationToZeroBased()` and emit `chromStart = -1`, a malformed BED line),
+`refEnd < refStart`, and any strand other than forward or reverse.
+
 ## 4. Where DynSpan gets validation wrong
 
 Recorded because the new search must not repeat it.
