@@ -252,13 +252,24 @@ Dropping it removes three problems at once:
 > `includeProjects`/`excludeProjects`, which this record may not have. Not taking an
 > organism at all sidesteps the whole question.
 
-Three gates, all as filters so bad input yields **zero records** rather than a broken
+Four gates, all as filters so bad input yields **zero records** rather than a broken
 download:
 
 1. the reference sequence exists — `dots.ExternalNaSequence.source_id = $$sequenceId$$`;
 2. `1 <= refStart <= refEnd <= ens.length`;
 3. the strain has indel data on **this** sequence — an `EXISTS` over `apidb.indel` joined to
-   `study.protocolappnode`, matched on `na_sequence_id`.
+   `study.protocolappnode`, matched on `na_sequence_id`;
+4. the reference sequence ID contains no `':'` — `seg.ref_seq NOT LIKE '%:%'`.
+
+Gate 4 exists because `':'` is the only delimiter in the minted primary key, so a
+colon-bearing `source_id` yields an ID that §5.3 mis-parses and then dies on
+(`'ncRNA'::integer` aborts the *entire* attribute query, every row on the page). 10,704
+`dots.ExternalNaSequence` source_ids do contain a colon — `bld68_Tb927.1.05:mRNA` and
+similar transcript-level features — while **0** of the 20,823 indel-bearing sequences do.
+That makes the gate unreachable today, which is exactly why it is worth having: the
+grammar's soundness should not rest on which features happen to get indel-called. Verified
+the gate costs nothing real — it refuses 0 indel-bearing sequences and all 8 Af293
+chromosomes still pass.
 
 Gate 3 subsumes the organism check the earlier draft did explicitly: if the strain has indel
 rows on that sequence, strain and sequence are consistent **by construction**. That is a
