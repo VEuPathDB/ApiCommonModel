@@ -136,9 +136,10 @@ included.
 This is a deliberate departure from DynSpan, which carries an `excludeProjects="UniDB"` PK
 column *and* duplicated UniDB `<sql>` variants (`dynSpanAttributeQueries.xml:16-33`). That
 fork exists because DynSpan derives `project_id` from `@PROJECT_ID@`, which is meaningless
-on the portal. This record instead takes `project_id` from the data
-(`webready.GenomicSeqAttributes_p.project_id`), so it is populated correctly on every
-project including UniDB and needs no fork. One query, one PK, no variants.
+on the portal. This record instead takes `project_id` from the data — `apidb.organism.project_name`,
+joined on `taxon_id` (an earlier draft of this line named `webready.GenomicSeqAttributes_p.project_id`;
+§5.1.1 explains why the implementation uses the unpartitioned `apidb.organism` instead) — so it is
+populated correctly on every project including UniDB and needs no fork. One query, one PK, no variants.
 
 Note this is separate from the requirement to add UniDB to the **existing**
 genomic-segment `includeProjects` lists where absent — that concerns pre-existing
@@ -169,25 +170,29 @@ feature provider. On the SQL side use `split_part(source_id, ':', N)`, not posit
 contain `-` (`A17-48H-7`), which is safe only because the range is its own colon field;
 the range must never be parsed out of the whole string positionally.
 
-**As implemented** (commits `19defeba2`, `3ead3adac`):
+**As implemented** (commits `19defeba2`, `3ead3adac`, corrected by `65126443a`):
 
 ```
-^([^:_]+):([^:]+):(\d+)-(\d+):(f|r)$
+^([^:]+):([^:]+):(\d+)-(\d+):(f|r)$
 ```
 
-One detail of that pattern is load-bearing and one is **a defect that must be fixed**:
+Every field is `[^:]+`, not DynSpan's greedy `(.*)`, so an ID carrying an extra colon is
+**rejected** rather than mis-parsed into a different segment. `':'` is the only excluded
+character because it is the only delimiter.
 
-- Load-bearing: fields are `[^:]+`, not DynSpan's greedy `(.*)`, so an ID carrying an extra
-  colon is **rejected** rather than mis-parsed into a different segment.
-- **Defect — the strain group's `_` exclusion (`[^:_]+`) must be relaxed to `[^:]+`.** It was
-  added on the belief that no strain name contains an underscore ("0 of 6,119"), making the
-  exclusion inert insurance against an ambiguous `<strain>_<refSeq>` FASTA key. That belief
-  is false: **1,494 of the 6,119** strain names contain an underscore (§2, re-measured
-  2026-07-31). As written, `parse()` therefore rejects roughly a quarter of all legitimate
-  strain segment IDs — e.g. `Af293_resequence2:Chr1_A_fumigatus_Af293:1-100:f`. This is not a
-  documentation nit; it is a live bug in Task 1's deliverable
-  (`ApiCommonWebsite/.../report/bed/util/StrainSegmentId.java:22`, plus whatever
-  `StrainSegmentIdTest` asserts about it) and blocks Task 6/7.
+**Defect found and fixed in review — the strain group was originally `[^:_]+`.** The `_`
+exclusion was added on the belief that no strain name contains an underscore ("0 of
+6,119"), as inert insurance against an ambiguous `<strain>_<refSeq>` FASTA key. That belief
+was **false**: 1,494 of the 6,119 strain names contain an underscore (§2, re-measured
+2026-07-31), so `parse()` was silently rejecting roughly a quarter of all legitimate strain
+segment IDs — e.g. `Af293_resequence2:Chr1_A_fumigatus_Af293:1-100:f`. Fixed in
+`65126443a`, with regression tests over the real underscore-bearing names; those five tests
+fail against the old pattern and pass against the new one.
+
+The lesson is worth keeping, because the exclusion could not have worked anyway: narrowing
+the grammar cannot make `<strain>_<refSeq>` reversible, since reference sequence IDs contain
+underscores too (`Chr1_A_fumigatus_Af293`), so `A_B`+`C` is indistinguishable from
+`A`+`B_C`. The real defense is never reversing the key — see §3.1.
 
   The ambiguity the exclusion was meant to prevent is real (strain `A_B` + sequence `C` and
   strain `A` + sequence `B_C` both yield the key `A_B_C`) but cannot be prevented by

@@ -50,10 +50,10 @@ bash ~/workspaces/agentic-veupath-dev/bin/veup-logs.sh fungidb since t1
 
 | File | Responsibility |
 |---|---|
-| `model/questions/params/strainSegmentParams.xml` | *new* — the `strain` flat-vocab param and its organism-dependent vocabulary query |
+| `model/questions/params/strainSegmentParams.xml` | *new* — the `strain` flat-vocab param and its **global** vocabulary query (not organism-dependent; there is no organism param — spec §5.1.1) |
 | `model/questions/queries/strainSegmentQueries.xml` | *new* — the ID query; all four validation gates live here |
 | `model/records/strainSegmentAttributeQueries.xml` | *new* — the reference-to-strain coordinate conversion |
-| `model/records/strainSegmentRecord.xml` | *new* — record class, attributes, BED reporter registration |
+| `model/records/strainSegmentRecord.xml` | *new* — record class and attributes. The BED `<reporter>` element is added in **Task 6**, not Task 5: WDK's `ReporterRef.resolveReferences` does `Class.forName` at model-load time, so registering it before the Java class exists hard-fails the build |
 | `model/questions/strainSegmentQuestions.xml` | *new* — the question that binds query to record class |
 | `apiCommonModel.xml` | *modify* — five `<import>` lines near the existing span imports at 419-423 |
 
@@ -72,14 +72,19 @@ One responsibility each. The grammar class is the only piece with no WDK depende
 
 ## Task 1: The PK grammar class
 
-> **COMPLETE — and amended after code review.** Commits `19defeba2` (as written below)
-> and `3ead3adac` (review fixes). The code block in Step 3 is what was *planned*; the
-> shipped version differs in three ways, all worth knowing if you touch this class:
-> the regex is `^([^:_]+):([^:]+):(\d+)-(\d+):(f|r)$` (strain excludes `_`, because
-> `<strain>_<refSeq>` would otherwise be ambiguous — sequence IDs contain underscores);
-> validation lives in the private constructor rather than `parse()`, and adds a
-> `refStart < 1` check; and both `parseInt` calls rethrow with the full ID in the
-> message. 14 tests, not 12. See spec §3.1 for the reasoning.
+> **COMPLETE — amended twice after code review.** Commits `19defeba2` (as written below),
+> `3ead3adac` (review fixes), `65126443a` (bug fix). The code block in Step 3 is what was
+> *planned*; the shipped version differs, all worth knowing if you touch this class:
+> the regex is `^([^:]+):([^:]+):(\d+)-(\d+):(f|r)$` — every field excludes only `':'`,
+> the sole delimiter; validation lives in the private constructor rather than `parse()`,
+> and adds a `refStart < 1` check; and both `parseInt` calls rethrow with the full ID in
+> the message. 20 tests, not 12. See spec §3.1 for the reasoning.
+>
+> **The strain group was briefly `[^:_]+` and that was a live bug**, rejecting the 1,494 of
+> 6,119 strain names (24%) that contain an underscore. It came from a false "no strain name
+> contains an underscore" measurement asserted in Task 2's preamble. Do not reintroduce it:
+> narrowing the grammar cannot make `<strain>_<refSeq>` reversible anyway, because reference
+> sequence IDs contain underscores too. The key is opaque; parse the PK instead.
 
 The `ApiCommonWebsite/Model` module has JUnit 4 on its classpath but no `src/test/java` tree yet. You are creating it. Standard Maven layout means Surefire picks it up with no POM change.
 
@@ -309,7 +314,16 @@ bash ~/workspaces/agentic-veupath-dev/bin/veup-git-sync.sh fungidb
 
 ## Task 2: Strain vocabulary param
 
-The strain list must come from `apidb.indel` (the requirement) and be scoped to the selected organism. There is no strain column on `apidb.indel`; strain is `study.protocolappnode.name` minus a `_Indel` suffix. All 6,119 names carry that suffix, none contains a colon, and none contains any other underscore — so both the strip and the later `<strain>_<refSeq>` concatenation are unambiguous.
+The strain list must come from `apidb.indel` (the requirement). There is no strain column on `apidb.indel`; strain is `study.protocolappnode.name` minus a `_Indel` suffix. All 6,119 names carry that suffix and **none contains a colon**, which is what makes the primary key parseable — `':'` is its only delimiter.
+
+> **CORRECTION — an earlier draft of this line claimed "none contains any other underscore".
+> That is FALSE: 1,494 of the 6,119 names (24%) contain an underscore** — `1_01_01`,
+> `Af293_resequence2`, `China_LZCH-36`, `USGS_28834_1_NV`. The `_Indel` strip is still
+> unambiguous (it is anchored to the end), but the `<strain>_<refSeq>` concatenation is
+> **not reversible** and must be treated as an opaque key. This bad fact propagated into
+> Task 1's regex as `[^:_]+` for the strain group, which silently rejected ~24% of
+> legitimate primary keys until it was caught in review. Consumers needing the strain parse
+> it from the primary key, where `':'` delimits unambiguously.
 
 > **REVISED after review — there is no organism param.** An earlier draft made this
 > vocabulary depend on an organism param and scope itself with `org_abbrev`. That was
@@ -888,9 +902,16 @@ ssh cedar 'bash -lc "source /var/www/jbrestel.fungidb.org/etc/setenv && \
   wdkQuery -model FungiDB -query StrainSegmentId.StrainSegmentsByRefSegment -showParams"'
 ```
 
-Expected: the attribute query prints with `##WDK_ID_SQL##` expanded; the ID query lists
-six params (`organismSinglePick`, `strain`, `sequenceId`, `start_point`,
-`end_point_segment`, `sequence_strand`).
+Expected: the ID query lists **five** params — `strain`, `sequenceId`, `start_point`,
+`end_point_segment`, `sequence_strand`. There is **no** organism param (spec §5.1.1); if
+you see one, something is wrong.
+
+The attribute query prints wrapped as `SELECT o.* FROM (…) o` with `##WDK_ID_SQL##`
+**still literal, NOT expanded** — and that is correct, not a failure. Run standalone
+through `QueryTester` there is no answer or step to supply the ID SQL, so nothing
+substitutes the macro (the log also reports `params: [ ]`). Substitution happens in the
+answer-value layer at request time. What this step proves is that the query is
+registered, parses, and resolves — *executing* it against real IDs is Task 7's job.
 
 - [ ] **Step 6: Commit**
 
@@ -923,6 +944,21 @@ Two BED columns, two very different constraints:
 **Files:**
 - Create: `ApiCommonWebsite/Model/src/main/java/org/apidb/apicommon/model/report/bed/feature/StrainSegmentFeatureProvider.java`
 - Create: `ApiCommonWebsite/Model/src/main/java/org/apidb/apicommon/model/report/bed/BedStrainSegmentReporter.java`
+- Modify: `ApiCommonModel/Model/lib/wdk/model/records/strainSegmentRecord.xml` — register the
+  reporter (Task 5 deliberately left this out; see Step 4 below). **Two repos, one task.**
+
+> **The registration in Step 4 is not optional bookkeeping — without it the BED download
+> simply is not offered, with no error anywhere.** Task 7's download call would fail with an
+> unknown-format error and the cause would not be obvious. Do not consider this task done
+> with only the Java side written.
+
+**This task must also reject the inverted-interval case.** `StrainSegmentAttributes.Coords`
+deliberately leaves `strain_start`/`strain_end` unclamped so that a segment lying inside a
+deletion reports `strain_end < strain_start` (only `strain_length` is clamped to 0 — spec
+§5.3.2). Nothing upstream rejects it, so the provider **must**: an inverted interval that
+reaches a FASTA lookup is a silent wrong answer. Verified live example to test against:
+PK `366.1:Pf3D7_10_v3:331757-331757:f` yields `strain_start 331658`, `strain_end 331604`,
+`strain_length 0`.
 
 - [ ] **Step 1: Create the feature provider**
 
@@ -1063,13 +1099,49 @@ Expected: `Tests run: 12, Failures: 0` and no compilation errors.
 typo in an attribute name surfaces on first use, not at compile time. That is what Task 7
 Step 2 checks.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Register the reporter on the record class**
+
+Task 5 could not do this: WDK's `ReporterRef.resolveReferences`
+(`WDK/Model/src/main/java/org/gusdb/wdk/model/report/ReporterRef.java:213-224`) calls
+`Class.forName(getImplementation())` at model-load time and throws
+`WdkModelException("… cannot be found.")` on `ClassNotFoundException`. Registering a
+reporter whose class did not yet exist would have hard-failed the build. Now that
+`BedStrainSegmentReporter` exists, add it.
+
+In `ApiCommonModel/Model/lib/wdk/model/records/strainSegmentRecord.xml`, replace the
+Task-6 placeholder comment inside `<recordClass>` with:
+
+```xml
+      <reporter name="bed"
+                displayName="BED - coordinates in strain sequence, configurable"
+                scopes="results"
+                implementation="org.apidb.apicommon.model.report.bed.BedStrainSegmentReporter"/>
+```
+
+`name="bed"` is the string Task 7 passes as `reportName`, so it must match exactly.
+
+- [ ] **Step 5: Rebuild so the model picks up the registration**
+
+```bash
+bash ~/workspaces/agentic-veupath-dev/bin/veup-build.sh fungidb wb model
+```
+
+Expected: build succeeds. If it fails with "Implementation class for reporter 'bed' …
+cannot be found", the Java class did not compile into the deployed webapp — fix that
+before continuing, since Task 7 cannot pass without it.
+
+- [ ] **Step 6: Commit — both repos**
 
 ```bash
 cd ~/workspaces/fungidb/ApiCommonWebsite
 git add Model/src/main/java/org/apidb/apicommon/model/report/bed/feature/StrainSegmentFeatureProvider.java \
         Model/src/main/java/org/apidb/apicommon/model/report/bed/BedStrainSegmentReporter.java
 git commit -m "Add BED reporter and feature provider for strain genomic segments"
+
+cd ~/workspaces/fungidb/ApiCommonModel
+git add Model/lib/wdk/model/records/strainSegmentRecord.xml
+git commit -m "Register the BED reporter on the strain segment record class"
+
 bash ~/workspaces/agentic-veupath-dev/bin/veup-git-sync.sh fungidb
 ```
 
@@ -1111,7 +1183,8 @@ const r = await fetch('/a/service/answer', {
   body: JSON.stringify({
     searchName: 'StrainSegmentsByRefSegment',
     searchConfig: {parameters: {
-      organismSinglePick: 'afumAf293',
+      // NO organism param -- the search does not declare one (spec §5.1.1) and WDK
+      // rejects unknown parameters.  Five params exactly.
       strain: '<STRAIN>',                // from Task 3 Step 2
       sequenceId: '<CONTIG>',            // from Task 3 Step 2
       start_point: '100',
