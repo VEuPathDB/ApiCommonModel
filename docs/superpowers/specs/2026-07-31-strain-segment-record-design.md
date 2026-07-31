@@ -71,13 +71,24 @@ Verified properties of the 6,119 distinct names appearing in `apidb.indel`:
 |---|---|---|
 | contain `:` | **0** | the colon-delimited PK grammar (§3) is unambiguous |
 | end in `_Indel` | **6,119 / 6,119** | the suffix strip is uniform; no special cases |
-| contain any other `_` | **0** | `<strain>_<refSeq>` concatenation is unambiguous |
+| contain any other `_` | **1,494** (24%) | `<strain>_<refSeq>` is **not** reversible — see §3.1 |
 | map to >1 organism | **126** (256 nodes) | strain name is **not** globally unique — see §5.2 |
 | `(name, na_sequence_id)` -> >1 node | **0** | sequence-scoped resolution is unambiguous *today* |
 
-That last row is a **data-dependent invariant with no constraint enforcing it**. §5.2
-specifies a query shape that turns a future violation into an error rather than silent
-corruption.
+**Correction (re-measured 2026-07-31).** An earlier revision of this spec recorded "contain
+any other `_`: 0" as verified fact. It is wrong: 1,494 of the 6,119 names contain an
+underscore (`1_01_01`, `Af293_resequence2`, `China_LZCH-36`, `USGS_28834_1_NV`). The
+`<strain>_<refSeq>` FASTA key is therefore a **one-way, opaque** key — correct to build,
+never to split. Anything needing the strain or the sequence back takes it from the primary
+key, where `:` delimits unambiguously (0 names contain `:`). See §3.1 for the consequence
+for `StrainSegmentId`'s pattern, which relied on the false claim.
+
+The last row is a **data-dependent invariant with no constraint enforcing it**, and it is
+the narrow one that matters: all 126 duplicated names *already* resolve to two protocol app
+nodes that both carry indel rows today, so the ambiguity is live in the data — what keeps it
+harmless is only that no `(name, na_sequence_id)` pair is served by two nodes. §5.2/§5.3
+specify a query shape that turns a future violation of *that* into an error rather than
+silent corruption.
 
 ### `webready.genomicseqattributes_p` — reference sequences
 
@@ -163,16 +174,27 @@ the range must never be parsed out of the whole string positionally.
 ^([^:_]+):([^:]+):(\d+)-(\d+):(f|r)$
 ```
 
-Two details of that pattern are load-bearing:
+One detail of that pattern is load-bearing and one is **a defect that must be fixed**:
 
-- Fields are `[^:]+`, not DynSpan's greedy `(.*)`, so an ID carrying an extra colon is
-  **rejected** rather than mis-parsed into a different segment.
-- The **strain** group additionally excludes `_`, because the FASTA key is
-  `<strain>_<refSeq>` and reference sequence IDs legitimately contain underscores
-  (`Pf3D7_01_v3`). Without that exclusion, strain `A_B` + sequence `C` and strain `A` +
-  sequence `B_C` would both yield the key `A_B_C`. No current strain name contains an
-  underscore (0 of 6,119), so this is inert today and converts a future ambiguous key
-  into a loud parse failure. Group 2 stays `[^:]+`.
+- Load-bearing: fields are `[^:]+`, not DynSpan's greedy `(.*)`, so an ID carrying an extra
+  colon is **rejected** rather than mis-parsed into a different segment.
+- **Defect — the strain group's `_` exclusion (`[^:_]+`) must be relaxed to `[^:]+`.** It was
+  added on the belief that no strain name contains an underscore ("0 of 6,119"), making the
+  exclusion inert insurance against an ambiguous `<strain>_<refSeq>` FASTA key. That belief
+  is false: **1,494 of the 6,119** strain names contain an underscore (§2, re-measured
+  2026-07-31). As written, `parse()` therefore rejects roughly a quarter of all legitimate
+  strain segment IDs — e.g. `Af293_resequence2:Chr1_A_fumigatus_Af293:1-100:f`. This is not a
+  documentation nit; it is a live bug in Task 1's deliverable
+  (`ApiCommonWebsite/.../report/bed/util/StrainSegmentId.java:22`, plus whatever
+  `StrainSegmentIdTest` asserts about it) and blocks Task 6/7.
+
+  The ambiguity the exclusion was meant to prevent is real (strain `A_B` + sequence `C` and
+  strain `A` + sequence `B_C` both yield the key `A_B_C`) but cannot be prevented by
+  narrowing the grammar, because both halves genuinely contain `_`. It is instead avoided by
+  **never reversing the key**: `strain_seq_id` is opaque output only, and every consumer that
+  needs the strain or the sequence reads them from the primary key's `:`-delimited fields
+  (§2, §5.3). Verified 0 actual key collisions in today's data; if one ever appears it is a
+  data problem to detect, not a grammar to tighten.
 
 Validation lives in the private constructor, not in `parse()`, so that any later
 from-parts factory cannot bypass it. It rejects `refStart < 1` (a 0 start would reach
@@ -287,24 +309,33 @@ gate 3 of §5.1 rejects a strain with no data on the requested sequence.
 Emits `strain_seq_id`, `strain_start`, `strain_end`, `strain_length`, `organism`.
 
 `strain_seq_id` is `strain || '_' || refSeq` — pure concatenation, matching the FASTA
-key (§2). Offsets in one index-assisted pass per `(strain, sequence)`, bounded by
-`location <= ref_end`, using conditional aggregation rather than two correlated
-subqueries:
+key (§2), and **opaque**: build it, never split it (§3.1). Offsets in one index-assisted
+pass per `(strain, sequence)`, bounded by `location <= ref_end`:
 
 ```sql
-SUM(CASE WHEN i.location <  seg.ref_start THEN i.shift ELSE 0 END) AS offset_start,
-SUM(CASE WHEN i.location <= seg.ref_end   THEN i.shift ELSE 0 END) AS offset_end
+SUM(CASE WHEN i.location < seg.ref_start THEN i.shift ELSE 0 END) AS offset_start,
+SUM(i.shift)                                                     AS offset_end
 ```
 
+Only the *start* offset needs conditional aggregation. The end bound
+`i.location <= seg.ref_end` is in the `WHERE`, so every surviving row is in scope for the
+end sum; an earlier revision wrote a mirrored
+`CASE WHEN i.location <= seg.ref_end` whose `ELSE` branch was unreachable (verified 0 rows
+disagreeing) and which made the boundary asymmetry appear to live in two places instead of
+one.
+
 **Resolve `protocol_app_node_id` via `(name, na_sequence_id)` and `GROUP BY` the
-resolved node — never join on name alone.** 126 strain names map to more than one
-organism (§2). Grouping by node makes a future collision produce two rows per primary
-key, which WDK rejects with an error. Joining on name alone would sum two strains'
-shifts into one plausible-looking wrong answer with nothing to detect it.
+resolved node — never join on name alone.** All 126 duplicated strain names (§2) *already*
+have two protocol app nodes each carrying indel rows today, so the collision is live in the
+data; what keeps it harmless is the narrower invariant the `i.na_sequence_id =
+ens.na_sequence_id` join depends on — **no `(name, na_sequence_id)` pair is served by two
+nodes (0 today)**. Grouping by node makes a violation of that produce two rows per primary
+key, which WDK rejects with an error. Joining on name alone would sum two strains' shifts
+into one plausible-looking wrong answer with nothing to detect it.
 
 **Boundary rule (to be QA'd, per §9):** an indel exactly at `refStart` lies inside the
-segment, so it shifts the end but not the start — hence `<` for start, `<=` for end. An
-off-by-one here is silent and yields sequence that looks correct.
+segment, so it shifts the end but not the start — hence `<` for start and `<=` (as the
+`WHERE` bound) for end. An off-by-one here is silent and yields sequence that looks correct.
 
 ### 5.3.1 Group and join on the primary key, not on coordinates
 
@@ -331,10 +362,31 @@ depend on it).
 the `SELECT` — that is the collision detector described above, and it is now the only
 grouping column that is not the PK.
 
-`##WDK_ID_SQL##` is expanded **once**, into a `WITH ids AS (...)` CTE referenced twice.
-Precedent: `transcriptAttributeQueries.xml:209`. Postgres materializes it (confirmed: a
-single `CTE ids` node with two `CTE Scan` references), so the id set is scanned once and
-the four `split_part` expressions exist in one place.
+`##WDK_ID_SQL##` is expanded **once**, into a `WITH parsed AS (...)` CTE; `ids` adds the
+resolved `dots.ExternalNaSequence` row to it and is referenced twice. Precedent:
+`transcriptAttributeQueries.xml:209`. Postgres materializes `ids` (confirmed: a single
+`CTE ids` node with two `CTE Scan` references), so the id set is scanned once and the four
+`split_part` expressions exist in one place.
+
+Three further structural rules, each guarding a silent-wrong-answer mode:
+
+- **`ids` resolves the reference sequence, and is the *only* place that does.** It therefore
+  *filters* as well as projects — an unknown `ref_seq` drops the row here, which is exactly
+  the "unknown sequence yields no record" rule. The offsets subquery originally repeated the
+  same `dots.ExternalNaSequence` lookup (a second index scan per PK, and the same rule
+  enforced in two places); it now consumes `ids.na_sequence_id`.
+- **The offsets are summed over a `DISTINCT` id set (`segs`), not the raw one.** Scanning the
+  raw set makes the sums proportional to input multiplicity: a repeated `source_id` in
+  `##WDK_ID_SQL##` joins each indel row once per duplicate and `GROUP BY source_id` collapses
+  them into one group whose `SUM` is multiplied. Demonstrated before the fix — PK
+  `366.1:Pf3D7_10_v3:331757-331757:f` supplied twice yielded offsets −198/−306 instead of
+  −99/−153, silently. Not reachable through today's ID query, but keying on the PK is
+  supposed to make one-row-per-PK true *by construction*, not by an argument about the input.
+  Regression test: the same PK twice must yield 2 rows with the single-copy offsets.
+- **`strain_length` is computed in an outer `SELECT` from the named `strain_start` /
+  `strain_end` columns**, because a `SELECT` cannot reference its own aliases and the offset
+  arithmetic would otherwise be written twice. A partial edit to one copy would yield a
+  length that disagrees with its own start and end.
 
 ### 5.3.2 A segment inside a deletion inverts, deliberately
 
@@ -352,9 +404,12 @@ range maps to nothing. So:
   clamped, because the reporter needs to see the inversion;
 - `strain_length` is `GREATEST(..., 0)`, since a negative length is not a defensible
   attribute value;
-- the BED feature provider (§7) rejects `strain_end < strain_start` with an explicit
-  error. That is the right place for it — a malformed BED interval must fail loudly rather
-  than reach a FASTA lookup.
+- `StrainSegmentFeatureProvider` (§7) **MUST** reject `strain_end < strain_start` with an
+  explicit error. That is the right place for it — a malformed BED interval must fail loudly
+  rather than reach a FASTA lookup. **Not yet implemented:** that class is Task 6 and does not
+  exist as of the attribute-query commit, so today nothing rejects the inversion and an
+  inverted segment reaches consumers unflagged. This is a required deliverable of Task 6, not
+  an existing property of the system.
 
 ## 6. Record class (`ApiCommonModel`)
 
