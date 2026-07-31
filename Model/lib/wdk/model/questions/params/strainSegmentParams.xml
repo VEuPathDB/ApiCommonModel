@@ -5,12 +5,10 @@
     <flatVocabParam name="strain"
                     queryRef="StrainSegmentVQ.StrainsByOrganism"
                     prompt="Strain / isolate"
-                    multiPick="false"
-                    dependedParamRef="organismParams.organismSinglePick">
+                    multiPick="false">
       <help>
         Strain or isolate whose coordinate system the returned segment is expressed in.
-        The list is restricted to strains that have indel data loaded for the selected
-        organism.
+        The list is all strains that have indel data loaded.
       </help>
     </flatVocabParam>
 
@@ -23,11 +21,11 @@
   <querySet name="StrainSegmentVQ" queryType="vocab" isCacheable="true">
 
     <!-- Strain identity is protocolappnode.name minus the '_Indel' suffix; there is
-         no strain column on apidb.indel.  Scoped by org_abbrev, which is both the
-         organism gate and the partition key of webready.GenomicSeqAttributes_p. -->
+         no strain column on apidb.indel.  The vocabulary is global: the search
+         takes no organism param, and relevance is enforced instead by the ID
+         query's EXISTS gate, which scopes a chosen strain to the specific reference
+         sequence it has indel data on. -->
     <sqlQuery name="StrainsByOrganism" doNotTest="true">
-      <paramRef ref="organismParams.organismSinglePick"
-                quote="true"/>
       <column name="internal"/>
       <column name="term"/>
       <column name="display"/>
@@ -36,13 +34,7 @@
           SELECT strain AS internal, strain AS term, strain AS display
           FROM (
             SELECT DISTINCT regexp_replace(pan.name, '_Indel$', '') AS strain
-            FROM (
-              SELECT DISTINCT i.protocol_app_node_id
-              FROM apidb.indel i
-                 , webready.GenomicSeqAttributes_p gsa
-              WHERE gsa.na_sequence_id = i.na_sequence_id
-                AND gsa.org_abbrev IN ($$organismSinglePick$$)
-            ) x
+            FROM (SELECT DISTINCT protocol_app_node_id FROM apidb.indel) x
                , study.protocolappnode pan
             WHERE pan.protocol_app_node_id = x.protocol_app_node_id
               AND pan.name LIKE '%\_Indel'

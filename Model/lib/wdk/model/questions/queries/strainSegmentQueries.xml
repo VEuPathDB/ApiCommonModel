@@ -2,17 +2,22 @@
 
   <querySet name="StrainSegmentId" queryType="id" isCacheable="true">
 
-    <!-- Four gates, all as filters so bad input returns zero rows:
-           1. org_abbrev  - partition key AND organism membership
-           2. source_id   - the reference sequence exists in that organism
-           3. range       - 1 <= start <= end <= sequence length
-           4. EXISTS      - the strain has indel data on this very sequence
-         Gate 4 is scoped by na_sequence_id, never by strain name alone: 126 strain
-         names map to more than one organism. -->
+    <!-- Three gates, all as filters so bad input returns zero rows:
+           1. source_id  - the reference sequence exists (dots.ExternalNaSequence.source_id)
+           2. range      - 1 <= start <= end <= ens.length
+           3. EXISTS     - the strain has indel data on this very sequence, matched
+                           on na_sequence_id
+         Gate 3 subsumes the organism check the old version did explicitly: if the
+         strain has indel rows on that sequence then strain and sequence are
+         consistent by construction, which is stronger than validating against a
+         supplied organism. It is scoped by na_sequence_id, never by strain name
+         alone: 126 strain names map to more than one organism.
+
+         project_id comes from apidb.organism.project_name rather than
+         @PROJECT_ID@: it is unpartitioned, correct on every project, and avoids
+         the per-project query duplication that forces DynSpan to maintain
+         UniDB-specific variants. -->
     <sqlQuery name="StrainSegmentsByRefSegment" doNotTest="true">
-      <paramRef ref="organismParams.organismSinglePick"
-                displayType="select"
-                quote="true"/>
       <paramRef ref="StrainSegmentParams.strain" quote="true"/>
       <paramRef ref="sharedParams.sequenceId"/>
       <paramRef ref="sharedParams.start_point" default="1"/>
@@ -29,18 +34,19 @@
                         $$sequence_strand$$)              AS source_id
                , seg.project_id
           FROM (
-            SELECT gsa.source_id                           AS ref_seq
-                 , gsa.project_id
+            SELECT ens.source_id                          AS ref_seq
+                 , o.project_name                         AS project_id
                  , $$start_point$$::integer               AS ref_start
                  , CASE WHEN $$end_point_segment$$::integer = 0
-                          THEN gsa.length::integer
+                          THEN ens.length::integer
                         ELSE $$end_point_segment$$::integer
                    END                                     AS ref_end
-                 , gsa.length::integer                     AS seq_length
-                 , gsa.na_sequence_id
-            FROM webready.GenomicSeqAttributes_p gsa
-            WHERE gsa.org_abbrev IN ($$organismSinglePick$$)
-              AND gsa.source_id = $$sequenceId$$
+                 , ens.length::integer                     AS seq_length
+                 , ens.na_sequence_id
+            FROM dots.ExternalNaSequence ens
+               , apidb.organism o
+            WHERE o.taxon_id = ens.taxon_id
+              AND ens.source_id = $$sequenceId$$
           ) seg
           WHERE seg.ref_start >= 1
             AND seg.ref_end   >= seg.ref_start
