@@ -84,9 +84,10 @@ key, where `:` delimits unambiguously (0 names contain `:`). See §3.1 for the c
 for `StrainSegmentId`'s pattern, which relied on the false claim.
 
 The last row is a **data-dependent invariant with no constraint enforcing it**, and it is
-the narrow one that matters: all 126 duplicated names *already* resolve to two protocol app
-nodes that both carry indel rows today, so the ambiguity is live in the data — what keeps it
-harmless is only that no `(name, na_sequence_id)` pair is served by two nodes. §5.2/§5.3
+the narrow one that matters: all 126 duplicated names *already* resolve to two or more
+protocol app nodes (122 to two, 4 to three) that all carry indel rows today, so the ambiguity
+is live in the data — what keeps it harmless is only that no `(name, na_sequence_id)` pair is
+served by more than one node. §5.2/§5.3
 specify a query shape that turns a future violation of *that* into an error rather than
 silent corruption.
 
@@ -306,7 +307,11 @@ gate 3 of §5.1 rejects a strain with no data on the requested sequence.
 
 ### 5.3 Attribute query: `StrainSegmentAttributes.Coords`
 
-Emits `strain_seq_id`, `strain_start`, `strain_end`, `strain_length`, `organism`.
+Emits eleven columns. Derived: `strain_seq_id`, `strain_start`, `strain_end`,
+`strain_length`, `organism`. Passed through from the primary key so that consumers never
+re-parse it: `source_id`, `project_id`, `strain`, `ref_seq`, `ref_start`, `ref_end` — §7's
+defline needs the strain and the reference range, and decomposing the PK in exactly one
+place is the whole point of §3.1.
 
 `strain_seq_id` is `strain || '_' || refSeq` — pure concatenation, matching the FASTA
 key (§2), and **opaque**: build it, never split it (§3.1). Offsets in one index-assisted
@@ -326,7 +331,8 @@ one.
 
 **Resolve `protocol_app_node_id` via `(name, na_sequence_id)` and `GROUP BY` the
 resolved node — never join on name alone.** All 126 duplicated strain names (§2) *already*
-have two protocol app nodes each carrying indel rows today, so the collision is live in the
+have two or more protocol app nodes (122 to two, 4 to three), all carrying indel rows
+today, so the collision is live in the
 data; what keeps it harmless is the narrower invariant the `i.na_sequence_id =
 ens.na_sequence_id` join depends on — **no `(name, na_sequence_id)` pair is served by two
 nodes (0 today)**. Grouping by node makes a violation of that produce two rows per primary
@@ -416,8 +422,11 @@ range maps to nothing. So:
 `StrainSegmentRecordClasses.StrainSegmentRecordClass`,
 `urlName="strain-genomic-segment"`, `doNotTest="true"`.
 
-Reporters: **`bed` only** (see §8). Attributes: exactly those §5.3 emits, plus the
-`idAttribute`. No tables, no summary view, no text attributes for display.
+Reporters: **`bed` only** (see §8). Attributes: a `columnAttribute` for each of the nine
+non-primary-key columns §5.3 emits — the passed-through `strain`, `ref_seq`, `ref_start`,
+`ref_end` included, since §7's defline consumes them — plus the `idAttribute` over the
+`source_id`/`project_id` primary key. No tables, no summary view, no text attributes for
+display.
 
 Register the new files in `Model/lib/wdk/apiCommonModel.xml`, alongside the existing
 span imports at lines 419-423.
