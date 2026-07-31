@@ -572,12 +572,24 @@ So `chrom = strain_seq_id`, and the `name` column carries provenance via
 `DeflineBuilder`, honouring `RequestedDeflineFields` as `DynSpanFeatureProvider` does
 (`DynSpanFeatureProvider.java:57-72`):
 
+The shape `DeflineBuilder.appendPosition` actually produces, with all fields requested
+(`deflineType=full`):
+
 ```
->A0003:AACB03000001:100-200:f | Aspergillus fumigatus Af293 | A0003 | ref 100 to 200 | strain 143 to 241 | segment_length=99
+>A0003:AACB03000001:100-200:f | Aspergillus fumigatus Af293 | A0003 | AACB03000001, forward strand, 100 to 200 | A0003_AACB03000001, forward strand, 143 to 241 | segment_length=99
 ```
 
 Carrying both coordinate systems is the payoff for choosing reference coordinates in
-the PK (§3).
+the PK (§3). The two ranges stay distinguishable because the first names the reference
+sequence and the second carries the strain prefix.
+
+**An earlier revision illustrated the two ranges as `ref 100 to 200 | strain 143 to 241`.**
+Nothing ever emitted that. Matching it would have meant adding a `DeflineBuilder` method or
+hand-rolling strings — duplicating the builder for cosmetics — and it silently dropped the
+strand, which `appendPosition` includes. The `name` column is declared **Free** above and
+the normative requirement is only that it carry provenance through `DeflineBuilder` honouring
+`RequestedDeflineFields`, which the implementation satisfies literally. Recorded so nobody
+"fixes" working code to match a retired example, and so §9 verifies against the real string.
 
 ## 8. Deferred: seqret wiring
 
