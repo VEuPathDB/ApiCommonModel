@@ -227,9 +227,12 @@ Input is a **single reference location**, modeled on `DynSpansByLocation`
 `recordClassRef` to DynSpan are not involved.
 
 **Caveat on that precedent, verified 2026-07-31:** `DynSpansByLocation` is *only* an
-`<sqlQuery>`. No `<question>` wraps it, and nothing references it anywhere in
+`<sqlQuery>`. No `<question>` wraps it, and nothing *consumes* it across
 ApiCommonModel, ApiCommonWebsite, ApiCommonWebService, EbrcModelCommon or
-EbrcWebsiteCommon — it is a dead id query. So "modeled on `DynSpansByLocation`" means
+EbrcWebsiteCommon — it is a dead id query. (It is not literally unmentioned: the
+`Model/vp2TuningTablesEffort` inventories name it twice, and `tableUsageMap.json` records
+`"SpanId.DynSpansByLocation": []` — an empty usage list, which independently corroborates
+that nothing uses it.) So "modeled on `DynSpansByLocation`" means
 modeled on a query **no question has ever exercised**: the param shape below has no live
 precedent and inherits no operational confidence. Worth knowing when the params
 misbehave — there is no working sibling to diff against.
@@ -246,8 +249,13 @@ organism as well only creates a consistency question the query then has to answe
 Dropping it removes three problems at once:
 
 - **No partition-key concern.** Resolve the sequence through unpartitioned
-  `dots.ExternalNaSequence` (`source_id_uniq` index; carries `na_sequence_id`, `taxon_id`,
-  `length`) rather than `webready.GenomicSeqAttributes_p`. Same table path §5.3 already
+  `dots.ExternalNaSequence` (carries `na_sequence_id`, `taxon_id`, `length`; `source_id`
+  uniqueness is enforced by `source_id_uniq` on the **base table** `dots.nasequenceimp` —
+  `ExternalNaSequence` is a view, so it holds no index of its own. The guarantee is
+  therefore stronger than "unique among external sequences": it is unique across all of
+  `nasequenceimp`, which is what makes "one input location yields one record" structural
+  rather than a data accident. Measured: 10,331,542 rows, 0 duplicate non-null `source_id`,
+  the only gap being 17 NULLs that can never match `= $$sequenceId$$`.) rather than `webready.GenomicSeqAttributes_p`. Same table path §5.3 already
   uses, so the two queries become consistent instead of divergent.
 - **No `@PROJECT_ID@`.** `project_id` for the PK comes from `apidb.organism.project_name`
   via `taxon_id` — unpartitioned, correct on every project, still one query.
@@ -447,7 +455,7 @@ range maps to nothing. So:
 `urlName="strain-genomic-segment"`, `doNotTest="true"`, **`useBasket="false"`**.
 
 `useBasket="false"` is required, not cosmetic: `RecordClass.useBasket` defaults to `true`
-(`RecordClass.java:303`), and `WdkModel.addBasketReferences` (`WdkModel.java:645-651`)
+(`RecordClass.java:303`), and `WdkModel.addBasketReferences` (`WdkModel.java:646-652`)
 then injects `..._RealtimeBasket` / `..._SnapshotBasket` questions and their `user_baskets`
 id queries, while `RecordClassFormatter.java:75` reports `useBasket` to the client so the
 results table offers basket affordances. Matches every other internal record class here
