@@ -770,13 +770,22 @@ bash ~/workspaces/agentic-veupath-dev/bin/veup-git-sync.sh fungidb
 This is the first task that can break the build, because it is the task that makes the
 model load the new files.
 
-The record class is deliberately bare: no tables, no summary view, no display attributes,
-and only the `bed` reporter. A record-page request should fail rather than render an
-empty page. `doNotTest="true"` keeps it out of the WDK sanity tests, matching DynSpan.
+The record class is deliberately bare: no tables and no reporters beyond `bed` (added in
+Task 6). `useBasket="false"` is required — the default is `true`
+(`RecordClass.java:303`) and would inject basket questions and client affordances (spec
+§6). `doNotTest="true"` keeps it out of the WDK sanity tests, matching DynSpan.
+
+"No record page" is an **intent, not a guarantee**: WDK injects a `_default` summary view,
+a `_default` "Overview" record view, and `DefaultJsonReporter` unconditionally (spec §6),
+and the nine `columnAttribute`s *are* display attributes — they must stay that way because
+the BED reporter reads them. A record-page request is not a supported operation and is not
+verified to do anything graceful.
 
 **No `individuals.txt` entry.** Omitting the row is what keeps the search out of the
 category tree while leaving it addressable by name through the service API — the same
-mechanism `DynSpansBySegIds` and `DynSpansByLocation` already rely on (spec §6.1).
+mechanism `DynSpansBySegIds` relies on (spec §6.1). Note `DynSpansByLocation` is **not** a
+second precedent: it is only an `<sqlQuery>` (`spanQueries.xml:266`) with no `<question>`
+and no references anywhere, i.e. a dead id query (spec §5.1).
 
 **Files:**
 - Create: `ApiCommonModel/Model/lib/wdk/model/records/strainSegmentRecord.xml`
@@ -792,13 +801,20 @@ mechanism `DynSpansBySegIds` and `DynSpansByLocation` already rely on (spec §6.
 
     <!-- Internal record class.  Sole purpose: convert a reference-coordinate genomic
          segment plus a strain into a BED feature in that strain's coordinates.
-         Not user facing: no ontology node, no record page, no saved strategies.
+         INTENT, not a guarantee: no tables, no reporters beyond 'bed' (Task 6), no
+         ontology rows, so nothing wires up a record page or a saved strategy.  WDK still
+         injects a '_default' summary view, a '_default' "Overview" record view, and the
+         DefaultJsonReporter unconditionally, so do not claim those are absent.  The
+         columnAttributes below ARE display attributes and must stay so; the BED reporter
+         reads them.  useBasket="false" is required: the default is true
+         (RecordClass.java:303).
          Works on every project: no includeProjects/excludeProjects anywhere, including
          on the PK columns.  project_id comes from the data, not @PROJECT_ID@. -->
     <recordClass name="StrainSegmentRecordClass"
                  urlName="strain-genomic-segment"
                  displayName="Strain Genomic Segment"
                  shortDisplayName="Strain Segment"
+                 useBasket="false"
                  doNotTest="true">
 
       <primaryKey aliasPluginClassName="org.gusdb.wdk.model.record.GenericRecordPrimaryKeyAliasPlugin">
@@ -810,10 +826,10 @@ mechanism `DynSpansBySegIds` and `DynSpansByLocation` already rely on (spec §6.
         <text><![CDATA[ $$source_id$$ ]]></text>
       </idAttribute>
 
-      <reporter name="bed"
-                displayName="BED - coordinates in strain sequence, configurable"
-                scopes="results"
-                implementation="org.apidb.apicommon.model.report.bed.BedStrainSegmentReporter"/>
+      <!-- NO <reporter> element in Task 5: ReporterRef.resolveReferences does a
+           Class.forName at model-load time and fails the build while
+           BedStrainSegmentReporter does not exist.  Task 6, Step 4 adds it, with
+           scopes="results" (NOT "results,record"); see spec section 7. -->
 
       <attributeQueryRef ref="StrainSegmentAttributes.Coords">
         <columnAttribute name="strain"        displayName="Strain"/>
@@ -842,20 +858,35 @@ mechanism `DynSpansBySegIds` and `DynSpansByLocation` already rely on (spec §6.
   <questionSet name="StrainSegmentQuestions" displayName="Strain Genomic Segments">
 
     <!-- Intentionally absent from Model/lib/wdk/ontology/individuals.txt so it does not
-         appear in the category tree.  Still reachable by name via the service API. -->
+         appear in the category tree.  Still reachable by name via the service API, the
+         same mechanism DynSpansBySegIds relies on (spanQuestions.xml:15).
+         DynSpansByLocation is NOT a second precedent: it is a bare sqlQuery with no
+         question and no references (spec section 5.1). -->
     <question name="StrainSegmentsByRefSegment"
               displayName="Strain Genomic Segment by Reference Location"
               shortDisplayName="Strain Segment"
               queryRef="StrainSegmentId.StrainSegmentsByRefSegment"
               recordClassRef="StrainSegmentRecordClasses.StrainSegmentRecordClass">
 
-      <attributesList summary="strain,strain_seq_id,strain_start,strain_end"
-                      sorting="strain_seq_id asc"/>
+      <!-- summary mirrors what the BED download consumes, so the list means something to
+           a consumer.  NO sorting attribute: prepareSortingSqls (AnswerValue.java:748..800)
+           splices a QueryColumnAttributeField's attribute query into the ordering/paging
+           SQL, so sorting on strain_seq_id would re-run the apidb.indel prefix-sum
+           aggregation just to order rows.  Undeclared, WDK falls back to the idAttribute
+           against the id query alone (RecordClass.java:1441..1443), which is free, and
+           strain_seq_id is a pure function of the PK so nothing is lost. -->
+      <attributesList summary="organism,strain,ref_seq,ref_start,ref_end,strain_seq_id,strain_start,strain_end,strain_length"/>
 
       <summary>
         Given a genomic location in reference coordinates and a strain, return the
         equivalent segment in that strain's consensus sequence coordinates.
       </summary>
+
+      <description>
+        <![CDATA[
+        Internal, webservice-only search. ... (see the checked-in file for full text)
+        ]]>
+      </description>
 
     </question>
 

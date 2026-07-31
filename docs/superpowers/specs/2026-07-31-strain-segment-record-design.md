@@ -226,6 +226,14 @@ Input is a **single reference location**, modeled on `DynSpansByLocation`
 (`spanQueries.xml:266`), not a `datasetParam` — so `SpanParams.span_id` and its
 `recordClassRef` to DynSpan are not involved.
 
+**Caveat on that precedent, verified 2026-07-31:** `DynSpansByLocation` is *only* an
+`<sqlQuery>`. No `<question>` wraps it, and nothing references it anywhere in
+ApiCommonModel, ApiCommonWebsite, ApiCommonWebService, EbrcModelCommon or
+EbrcWebsiteCommon — it is a dead id query. So "modeled on `DynSpansByLocation`" means
+modeled on a query **no question has ever exercised**: the param shape below has no live
+precedent and inherits no operational confidence. Worth knowing when the params
+misbehave — there is no working sibling to diff against.
+
 Params: `strain`, `sequenceId`, `start`, `end`, `strand`. **There is no organism param.**
 
 ### 5.1.1 Why no organism input
@@ -436,13 +444,33 @@ range maps to nothing. So:
 ## 6. Record class (`ApiCommonModel`)
 
 `StrainSegmentRecordClasses.StrainSegmentRecordClass`,
-`urlName="strain-genomic-segment"`, `doNotTest="true"`.
+`urlName="strain-genomic-segment"`, `doNotTest="true"`, **`useBasket="false"`**.
 
-Reporters: **`bed` only** (see §8). Attributes: a `columnAttribute` for each of the nine
-non-primary-key columns §5.3 emits — the passed-through `strain`, `ref_seq`, `ref_start`,
-`ref_end` included, since §7's defline consumes them — plus the `idAttribute` over the
-`source_id`/`project_id` primary key. No tables, no summary view, no text attributes for
-display.
+`useBasket="false"` is required, not cosmetic: `RecordClass.useBasket` defaults to `true`
+(`RecordClass.java:303`), and `WdkModel.addBasketReferences` (`WdkModel.java:645-651`)
+then injects `..._RealtimeBasket` / `..._SnapshotBasket` questions and their `user_baskets`
+id queries, while `RecordClassFormatter.java:75` reports `useBasket` to the client so the
+results table offers basket affordances. Matches every other internal record class here
+(`fileRecord.xml:4`, `userfileRecords.xml:4`, `ajaxRecords.xml:16,35`); DynSpan leaving the
+default alone is not a counterexample, since DynSpan is user-facing.
+
+Reporters: **`bed` only** (plus WDK's unavoidable default JSON reporter — see below).
+Attributes: a `columnAttribute` for each of the nine non-primary-key columns §5.3 emits —
+the passed-through `strain`, `ref_seq`, `ref_start`, `ref_end` included, since §7's defline
+consumes them — plus the `idAttribute` over the `source_id`/`project_id` primary key. No
+tables.
+
+**What "no record page" does and does not mean.** It is an intent, not something WDK
+enforces. WDK unconditionally injects a `_default` summary view
+(`RecordClass.java:1306` → `SummaryView.createSupportedSummaryViews`), a `_default` record
+view displayed as "Overview" (`RecordClass.java:1346` →
+`RecordView.createSupportedRecordViews`), and `DefaultJsonReporter`
+(`RecordClass.java:1137-1139`). The nine `columnAttribute`s are ordinary *display*
+attributes — they carry `displayName` and are not `internal="true"`, and they must stay
+that way because the BED reporter reads them. The real basis for "non-user-facing" is
+narrower and sufficient: no tables, no reporters beyond `bed`, no ontology rows, so nothing
+wires up a record page. A record-page request is not a supported operation and is not
+verified to degrade gracefully.
 
 Register the new files in `Model/lib/wdk/apiCommonModel.xml`, alongside the existing
 span imports at lines 419-423.
@@ -473,11 +501,15 @@ Scope combinations across the 202 `targetType=search` rows, measured 2026-07-31:
 **Decision: add no row at all for the new search.** Two mechanisms could hide it, and
 omission is the right one here:
 
-- **Omission** — `DynSpansBySegIds` (commented "SegIds only WEBSERVICES",
-  `spanQueries.xml:7`) and `DynSpansByLocation` are both absent from `individuals.txt`
-  and the model builds. A question stays addressable by name through the service API
-  regardless of ontology presence. This is the precedent for a *hand-written*
-  webservice-only span search — exactly our case.
+- **Omission** — `DynSpansBySegIds` (`spanQuestions.xml:15`, commented "SegIds only
+  WEBSERVICES" at `spanQueries.xml:7`) is absent from `individuals.txt` and the model
+  builds. A question stays addressable by name through the service API regardless of
+  ontology presence. This is *the* precedent for a hand-written webservice-only span
+  search — exactly our case, and it is the **only** one. An earlier draft of this spec
+  also cited `DynSpansByLocation`; that was wrong and is corrected in §5.1 —
+  `DynSpansByLocation` is only an `<sqlQuery>` (`spanQueries.xml:266`) with no
+  `<question>` and no references anywhere, so it demonstrates nothing about service-API
+  reachability.
 - **`internal` + `webservice`** — all 42 users are *injected per-dataset* searches, which
   need ontology presence for categorization to work. Not our situation.
 
@@ -486,12 +518,37 @@ Consequence for verification: the search must be **absent** from
 does **not** touch categorization — so `wb model` suffices and `wb ontology` is not
 required. (It would be required if a row were ever added.)
 
-## 7. BED reporter (`ApiCommonWebsite`)
+## 7. BED reporter (`ApiCommonWebsite` **and one model-side element**)
 
-`BedStrainSegmentReporter extends BedReporter` + `StrainSegmentFeatureProvider
-implements BedFeatureProvider`, following `BedGenomicSequenceReporter` /
-`GenomicSequenceFeatureProvider` — the existing precedent for a provider that computes
-coordinates from **attributes** rather than from the PK.
+Three deliverables, not two. The third is easy to lose because it lives in a different
+repo from the other two:
+
+1. `BedStrainSegmentReporter extends BedReporter` (`ApiCommonWebsite`)
+2. `StrainSegmentFeatureProvider implements BedFeatureProvider` (`ApiCommonWebsite`)
+3. the `<reporter>` element on the record class (`ApiCommonModel`,
+   `Model/lib/wdk/model/records/strainSegmentRecord.xml`) — **exact shape**:
+
+```xml
+<reporter name="bed" displayName="BED - coordinates in strain sequence, configurable" scopes="results" implementation="org.apidb.apicommon.model.report.bed.BedStrainSegmentReporter"/>
+```
+
+`scopes="results"`, *not* `"results,record"`. The precedents `dynSpanRecord.xml:35` and
+`genomicRecords.xml:121` use `"results,record"`, but this class must not claim a `record`
+scope: §6 gives it no record page to download from.
+
+`name="bed"` is the literal string §9's verification passes as `reportName`, so it must
+match exactly.
+
+The element cannot land before the Java class: `ReporterRef.resolveReferences` does
+`Class.forName` on the implementation at model-load time and hard-fails the build if it is
+absent. Hence it ships in Task 6 alongside the reporter, not in Task 5 — which is exactly
+why it is at risk of being forgotten (see §10): **omit it and there is no BED download and
+no error anywhere**, because nothing in the model or the Java code references the reporter
+by name at build time.
+
+`BedStrainSegmentReporter` / `StrainSegmentFeatureProvider` follow
+`BedGenomicSequenceReporter` / `GenomicSequenceFeatureProvider` — the existing precedent
+for a provider that computes coordinates from **attributes** rather than from the PK.
 
 `getRequiredAttributeNames()` = `{strain_seq_id, strain_start, strain_end, organism}`.
 Strain is parsed from the PK, so it needs no attribute.
@@ -566,3 +623,5 @@ dense options: *Cryptococcus neoformans* H99 (875), *Candida auris* B8441 (502),
 | `(name, na_sequence_id)` uniqueness | true today, unconstrained; §5.3 grouping converts a violation to an error |
 | Prefix-sum cost | heaviest strain/sequence pair carries ~115k events; the `location <= ref_end` bound plus `ix0`/`ix1` should hold, but measure on Af293 |
 | Categorization rebuild | not applicable — §6.1 adds no ontology node, so `wb model` suffices. If a row is ever added, it becomes `wb ontology` (a superset of `wb model`). |
+| **Model-side `<reporter name="bed">` element silently missing** | **open until Task 6** — it ships in a different repo from the two Java classes (§7.3), and nothing references it at build time. Omit it and there is no BED download and **no error anywhere**: `/service/record-types/strain-genomic-segment` simply lists no `bed` format. Verification: that endpoint's `formats` must contain `bed` with `scopes` = `results` only. |
+| Reporter `scopes` over-claimed | **open until Task 6** — copying `scopes="results,record"` from `dynSpanRecord.xml:35` / `genomicRecords.xml:121` would advertise a record-scope download on a class with no record page. Must be `scopes="results"`. |
