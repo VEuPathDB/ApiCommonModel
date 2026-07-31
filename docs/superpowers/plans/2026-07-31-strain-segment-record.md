@@ -410,9 +410,12 @@ input yields zero records rather than a broken download — the failure mode
 straight into the PK with no `CASE`. `end_point_segment` documents `0 = end`, which the
 `CASE` below honours.
 
-`project_id` is declared and selected on both branches, mirroring `DynSpansBySourceId`
-(`spanQueries.xml:45-46`), which works on UniDB today. The record class excludes
-`project_id` from the PK on UniDB; the extra column is tolerated.
+**One `<sql>` block, no project variants.** Do not add `includeProjects` or
+`excludeProjects` to anything in this task. `project_id` is selected from
+`webready.GenomicSeqAttributes_p`, not from `@PROJECT_ID@`, so it is correct on every
+project including UniDB. DynSpan duplicates its queries for UniDB precisely because it
+uses `@PROJECT_ID@`, which is meaningless on the portal — that is a problem this design
+avoids rather than a pattern to copy.
 
 **Files:**
 - Create: `ApiCommonModel/Model/lib/wdk/model/questions/queries/strainSegmentQueries.xml`
@@ -730,7 +733,9 @@ mechanism `DynSpansBySegIds` and `DynSpansByLocation` already rely on (spec §6.
 
     <!-- Internal record class.  Sole purpose: convert a reference-coordinate genomic
          segment plus a strain into a BED feature in that strain's coordinates.
-         Not user facing: no ontology node, no record page, no saved strategies. -->
+         Not user facing: no ontology node, no record page, no saved strategies.
+         Works on every project: no includeProjects/excludeProjects anywhere, including
+         on the PK columns.  project_id comes from the data, not @PROJECT_ID@. -->
     <recordClass name="StrainSegmentRecordClass"
                  urlName="strain-genomic-segment"
                  displayName="Strain Genomic Segment"
@@ -739,7 +744,7 @@ mechanism `DynSpansBySegIds` and `DynSpansByLocation` already rely on (spec §6.
 
       <primaryKey aliasPluginClassName="org.gusdb.wdk.model.record.GenericRecordPrimaryKeyAliasPlugin">
         <columnRef>source_id</columnRef>
-        <columnRef excludeProjects="UniDB">project_id</columnRef>
+        <columnRef>project_id</columnRef>
       </primaryKey>
 
       <idAttribute name="primary_key" displayName="Strain Segment ID">

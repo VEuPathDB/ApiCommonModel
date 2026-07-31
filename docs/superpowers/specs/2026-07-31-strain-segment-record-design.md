@@ -109,10 +109,22 @@ source_id = <strain>:<refSeq>:<refStart>-<refEnd>:<f|r>
             A0003:AACB03000001:100-200:f
 ```
 
-Primary key columns: `source_id`, plus `project_id` with `excludeProjects="UniDB"` and
-UniDB-specific `<sql>` variants, mirroring the existing fork at
-`dynSpanAttributeQueries.xml:16-33`. **UniDB is included** for this record and is to be
-added to the existing genomic-segment `includeProjects` lists where absent.
+Primary key columns: `source_id` and `project_id`, uniformly.
+
+**No `includeProjects` or `excludeProjects` anywhere** — not on the record class, the
+question, the queries, or the PK columns. The record works on every project, UniDB
+included.
+
+This is a deliberate departure from DynSpan, which carries an `excludeProjects="UniDB"` PK
+column *and* duplicated UniDB `<sql>` variants (`dynSpanAttributeQueries.xml:16-33`). That
+fork exists because DynSpan derives `project_id` from `@PROJECT_ID@`, which is meaningless
+on the portal. This record instead takes `project_id` from the data
+(`webready.GenomicSeqAttributes_p.project_id`), so it is populated correctly on every
+project including UniDB and needs no fork. One query, one PK, no variants.
+
+Note this is separate from the requirement to add UniDB to the **existing**
+genomic-segment `includeProjects` lists where absent — that concerns pre-existing
+searches, not this record.
 
 Coordinates in the PK are **reference** coordinates — the input, not the output. Strain
 coordinates are derived in the attribute query (§5.2). Rationale:
