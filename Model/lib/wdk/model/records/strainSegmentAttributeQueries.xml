@@ -26,59 +26,70 @@
            because the coordinate range is its own colon-delimited field. -->
       <sql>
         <![CDATA[
+          WITH ids AS (
+            SELECT t.source_id
+                 , t.project_id
+                 , split_part(t.source_id, ':', 1)                               AS strain
+                 , split_part(t.source_id, ':', 2)                               AS ref_seq
+                 , split_part(split_part(t.source_id, ':', 3), '-', 1)::integer   AS ref_start
+                 , split_part(split_part(t.source_id, ':', 3), '-', 2)::integer   AS ref_end
+            FROM (##WDK_ID_SQL##) t
+          )
           SELECT ids.source_id
                , ids.project_id
                , ids.strain
                , ids.ref_seq
                , ids.ref_start
                , ids.ref_end
+                 -- unambiguous only because strain names contain no underscore while
+                 -- reference sequence IDs do (e.g. Pf3D7_01_v3), so the first '_' always
+                 -- ends the strain name.
                , ids.strain || '_' || ids.ref_seq                    AS strain_seq_id
                , ids.ref_start + COALESCE(off.offset_start, 0)        AS strain_start
                , ids.ref_end   + COALESCE(off.offset_end,   0)        AS strain_end
-               , (ids.ref_end   + COALESCE(off.offset_end,   0))
-                 - (ids.ref_start + COALESCE(off.offset_start, 0)) + 1 AS strain_length
+                 -- Clamped at zero: a segment lying inside a deletion legitimately
+                 -- inverts (the reference bases do not exist in this strain), which
+                 -- would otherwise yield a negative length.  strain_start/strain_end
+                 -- above are deliberately NOT clamped -- the inversion
+                 -- (strain_end < strain_start) is the signal the BED feature provider
+                 -- checks for and rejects loudly.
+               , GREATEST( (ids.ref_end   + COALESCE(off.offset_end,   0))
+                           - (ids.ref_start + COALESCE(off.offset_start, 0)) + 1
+                         , 0 )                                        AS strain_length
                , tn.name                                             AS organism
-          FROM (
-            SELECT t.source_id
-                 , t.project_id
-                 , split_part(t.source_id, ':', 1)                              AS strain
-                 , split_part(t.source_id, ':', 2)                              AS ref_seq
-                 , split_part(split_part(t.source_id, ':', 3), '-', 1)::integer  AS ref_start
-                 , split_part(split_part(t.source_id, ':', 3), '-', 2)::integer  AS ref_end
-            FROM (##WDK_ID_SQL##) t
-          ) ids
+          FROM ids
           JOIN dots.ExternalNaSequence ens ON ens.source_id = ids.ref_seq
           JOIN sres.TaxonName tn           ON tn.taxon_id = ens.taxon_id
                                           AND tn.name_class = 'scientific name'
           LEFT JOIN (
-            SELECT seg.strain
-                 , seg.ref_start
-                 , seg.ref_end
+            SELECT seg.source_id
+                 -- Boundary asymmetry is deliberate: '<' for the start offset, '<=' for
+                 -- the end.  An indel exactly at ref_start lies INSIDE the segment, so it
+                 -- shifts the end but not the start.  An off-by-one here is silent -- the
+                 -- coordinates just come out wrong, with no error anywhere.
                  , SUM(CASE WHEN i.location <  seg.ref_start THEN i.shift ELSE 0 END) AS offset_start
                  , SUM(CASE WHEN i.location <= seg.ref_end   THEN i.shift ELSE 0 END) AS offset_end
-            FROM apidb.indel i
-               , study.protocolappnode pan
+            FROM ids seg
                , dots.ExternalNaSequence ens2
-               , (
-                   SELECT DISTINCT
-                          split_part(t.source_id, ':', 1)                              AS strain
-                        , split_part(t.source_id, ':', 2)                              AS ref_seq
-                        , split_part(split_part(t.source_id, ':', 3), '-', 1)::integer  AS ref_start
-                        , split_part(split_part(t.source_id, ':', 3), '-', 2)::integer  AS ref_end
-                   FROM (##WDK_ID_SQL##) t
-                 ) seg
-            WHERE pan.protocol_app_node_id = i.protocol_app_node_id
-              AND ens2.source_id = seg.ref_seq
-              AND i.na_sequence_id = ens2.na_sequence_id
+               , study.protocolappnode pan
+               , apidb.indel i
+            WHERE ens2.source_id = seg.ref_seq
               AND pan.name = CONCAT(seg.strain, '_Indel')
+              AND i.protocol_app_node_id = pan.protocol_app_node_id
+              AND i.na_sequence_id = ens2.na_sequence_id
               AND i.location <= seg.ref_end
-            GROUP BY seg.strain
-                   , seg.ref_start
-                   , seg.ref_end
+            -- Grouping on seg.source_id (the whole PK) makes one-row-per-PK true by
+            -- construction; one protocol_app_node_id spans EVERY sequence of a strain, so
+            -- grouping on coordinate fields alone conflated segments on different
+            -- sequences and summed a foreign chromosome's shifts into both.
+            GROUP BY seg.source_id
+                 -- NOT redundant, and not to be "cleaned up": it is here so that a strain
+                 -- name resolving to two protocol app nodes on one sequence yields
+                 -- DUPLICATE rows per PK and a loud WDK error, rather than silently
+                 -- summing two strains' shifts.  126 strain names map to more than one
+                 -- organism, so this is reachable by a data change alone.
                    , i.protocol_app_node_id
-          ) off ON off.strain    = ids.strain
-               AND off.ref_start = ids.ref_start
-               AND off.ref_end   = ids.ref_end
+          ) off ON off.source_id = ids.source_id
         ]]>
       </sql>
     </sqlQuery>
