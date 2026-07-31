@@ -1,0 +1,62 @@
+<wdkModel>
+
+  <querySet name="StrainSegmentId" queryType="id" isCacheable="true">
+
+    <!-- Four gates, all as filters so bad input returns zero rows:
+           1. org_abbrev  - partition key AND organism membership
+           2. source_id   - the reference sequence exists in that organism
+           3. range       - 1 <= start <= end <= sequence length
+           4. EXISTS      - the strain has indel data on this very sequence
+         Gate 4 is scoped by na_sequence_id, never by strain name alone: 126 strain
+         names map to more than one organism. -->
+    <sqlQuery name="StrainSegmentsByRefSegment" doNotTest="true">
+      <paramRef ref="organismParams.organismSinglePick"
+                displayType="select"
+                quote="true"/>
+      <paramRef ref="StrainSegmentParams.strain" quote="true"/>
+      <paramRef ref="sharedParams.sequenceId"/>
+      <paramRef ref="sharedParams.start_point" default="1"/>
+      <paramRef ref="sharedParams.end_point_segment"/>
+      <paramRef ref="SpanParams.sequence_strand"/>
+
+      <column name="source_id"/>
+      <column name="project_id"/>
+
+      <sql>
+        <![CDATA[
+          SELECT CONCAT($$strain$$, ':', seg.ref_seq, ':',
+                        seg.ref_start, '-', seg.ref_end, ':',
+                        $$sequence_strand$$)              AS source_id
+               , seg.project_id
+          FROM (
+            SELECT gsa.source_id                           AS ref_seq
+                 , gsa.project_id
+                 , $$start_point$$::integer               AS ref_start
+                 , CASE WHEN $$end_point_segment$$::integer = 0
+                          THEN gsa.length::integer
+                        ELSE $$end_point_segment$$::integer
+                   END                                     AS ref_end
+                 , gsa.length::integer                     AS seq_length
+                 , gsa.na_sequence_id
+            FROM webready.GenomicSeqAttributes_p gsa
+            WHERE gsa.org_abbrev IN ($$organismSinglePick$$)
+              AND gsa.source_id = $$sequenceId$$
+          ) seg
+          WHERE seg.ref_start >= 1
+            AND seg.ref_end   >= seg.ref_start
+            AND seg.ref_end   <= seg.seq_length
+            AND EXISTS (
+                  SELECT 1
+                  FROM apidb.indel i
+                     , study.protocolappnode pan
+                  WHERE i.protocol_app_node_id = pan.protocol_app_node_id
+                    AND i.na_sequence_id = seg.na_sequence_id
+                    AND pan.name = CONCAT($$strain$$, '_Indel')
+                )
+        ]]>
+      </sql>
+    </sqlQuery>
+
+  </querySet>
+
+</wdkModel>
