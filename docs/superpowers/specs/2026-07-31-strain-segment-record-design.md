@@ -224,6 +224,48 @@ off-by-one here is silent and yields sequence that looks correct.
 Reporters: **`bed` only** (see §8). Attributes: exactly those §5.3 emits, plus the
 `idAttribute`. No tables, no summary view, no text attributes for display.
 
+Register the new files in `Model/lib/wdk/apiCommonModel.xml`, alongside the existing
+span imports at lines 419-423.
+
+### 6.1 Keeping it non-user-facing
+
+`Model/lib/wdk/ontology/individuals.txt` is a 14-column TSV:
+
+| col | meaning |
+|---|---|
+| 1 | full node name |
+| 4 | `recordClassName` |
+| 5 | `targetType` (`search` / `table` / `attribute` / `dataset`) |
+| 6 | `name` (e.g. `SpanQuestions.DynSpansBySourceId`) |
+| 12-14 | three `scope` columns |
+
+Scope combinations across the 202 `targetType=search` rows, measured 2026-07-31:
+
+| scopes | count |
+|---|---|
+| `menu` `webservice` | 95 |
+| `internal` `webservice` | 42 |
+| *(none)* | 27 |
+| `webservice` | 17 |
+| `menu` | 15 |
+| `internal` | 6 |
+
+**Decision: add no row at all for the new search.** Two mechanisms could hide it, and
+omission is the right one here:
+
+- **Omission** — `DynSpansBySegIds` (commented "SegIds only WEBSERVICES",
+  `spanQueries.xml:7`) and `DynSpansByLocation` are both absent from `individuals.txt`
+  and the model builds. A question stays addressable by name through the service API
+  regardless of ontology presence. This is the precedent for a *hand-written*
+  webservice-only span search — exactly our case.
+- **`internal` + `webservice`** — all 42 users are *injected per-dataset* searches, which
+  need ontology presence for categorization to work. Not our situation.
+
+Consequence for verification: the search must be **absent** from
+`/service/ontologies/Categories` (§9.4). Also, since no ontology node is added, this work
+does **not** touch categorization — so `wb model` suffices and `wb ontology` is not
+required. (It would be required if a row were ever added.)
+
 ## 7. BED reporter (`ApiCommonWebsite`)
 
 `BedStrainSegmentReporter extends BedReporter` + `StrainSegmentFeatureProvider
@@ -300,7 +342,7 @@ dense options: *Cryptococcus neoformans* H99 (875), *Candida auris* B8441 (502),
 | Item | Status |
 |---|---|
 | `<`/`<=` boundary at `refStart` | **open** — ships as specified, QA per §9.5 |
-| Ontology absence hides the search | **unverified assumption** — the `DynSpansBySegIds` precedent was read but `Model/lib/wdk/ontology/individuals.txt` was never opened. Confirm before relying on it. |
+| Ontology absence hides the search | **verified** 2026-07-31 — see §6.1 |
 | `(name, na_sequence_id)` uniqueness | true today, unconstrained; §5.3 grouping converts a violation to an error |
 | Prefix-sum cost | heaviest strain/sequence pair carries ~115k events; the `location <= ref_end` bound plus `ix0`/`ix1` should hold, but measure on Af293 |
-| Categorization rebuild | any change touching categorization needs `wb ontology`, not `wb model` — `wb ontology` is a superset and reloads the webapp |
+| Categorization rebuild | not applicable — §6.1 adds no ontology node, so `wb model` suffices. If a row is ever added, it becomes `wb ontology` (a superset of `wb model`). |
