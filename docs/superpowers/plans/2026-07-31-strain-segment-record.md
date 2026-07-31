@@ -1208,6 +1208,49 @@ bash ~/workspaces/agentic-veupath-dev/bin/veup-git-sync.sh fungidb
 
 ## Task 7: End-to-end verification
 
+> ## BLOCKED — the dev instance's appDb has no `apidb.indel`
+>
+> **Discovered 2026-07-31, while starting this task.** Steps 3-6 cannot run on
+> `jbrestel.fungidb.org` as it is currently configured, and this invalidates one premise of
+> the whole plan.
+>
+> Every SQL fact in this spec and plan was measured against **`genomicsdb_rebuild01`**
+> (`localhost:5439`). But the site's `appDb` resolves through LDAP:
+>
+> ```
+> gus_home/config/FungiDB/model-config.xml → <appDb ldapCommonName="genomicsdb_devn">
+> ldapsearch cn=genomicsdb_devn → dbname=genomicsdb_070n, host=ares13.penn.apidb.org:5432
+> ```
+>
+> i.e. the running site queries **`genomicsdb_070n`** (reachable locally on port **5433**),
+> a different database. Measured there:
+>
+> | | `genomicsdb_rebuild01` (verified against) | `genomicsdb_070n` (what the site queries) |
+> |---|---|---|
+> | `apidb.indel` | 43,585,584 rows | **relation does not exist** |
+> | `study.protocolappnode` `%_Indel` | 6,119 | **0** |
+> | `dots.externalnasequence` | 10,331,542 | 10,168,874 |
+> | `apidb.organism` | 967 | 957 |
+>
+> So the ID query's `EXISTS` over `apidb.indel` will not return zero rows — it will raise
+> `relation "apidb.indel" does not exist`. The search errors rather than coming back empty.
+>
+> **What this does and does not invalidate.** The SQL correctness work stands: the queries were
+> verified against a database that really does hold this data, and `rebuild01` is where the
+> indel load exists. What is *not* established is that any deployed site can run them.
+> Note also that the earlier decision to move development from giardiadb to fungidb ("giardiadb
+> has zero indel rows") was itself made by querying `rebuild01`, so it chose the right *data*
+> but told us nothing about either instance's actual appDb.
+>
+> **Steps 1-2 are unaffected** — they read model metadata, not the appDb.
+>
+> **Resolving it is a decision for John, not a workaround to pick unilaterally.** The options:
+> point this instance's `appDb` at `genomicsdb_rebuild01` (a `model-config.xml` change, which
+> conifer generates from a template, so it is not a one-line edit); stand up or find an
+> instance whose appDb already has the indel load; or wait for `apidb.indel` to reach the
+> current workflow database. Until then Task 7 Steps 3-6, and the deferred `refStart`-boundary
+> QA question, cannot be answered on this instance.
+
 - [ ] **Step 1: Rebuild and confirm registration**
 
 ```bash

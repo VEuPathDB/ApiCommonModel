@@ -40,6 +40,14 @@ supports no saved strategies.
 
 Measured 2026-07-31 against `genomicsdb_rebuild01` (ssh tunnel, `localhost:5439`).
 
+> **Which database these numbers describe matters, and it is not the one the dev site queries.**
+> `jbrestel.fungidb.org` resolves its `appDb` through LDAP `genomicsdb_devn` →
+> `genomicsdb_070n` (ares13, local port 5433), where **`apidb.indel` does not exist at all**
+> and there are **0** `_Indel` protocol app nodes. Every figure below is from
+> `genomicsdb_rebuild01`, which does hold the indel load. The queries in §5 are therefore
+> verified correct against real data, but have never been executed by a deployed site — see
+> the BLOCKED banner on plan Task 7.
+
 ### `apidb.indel` — 43,585,584 rows
 
 ```
