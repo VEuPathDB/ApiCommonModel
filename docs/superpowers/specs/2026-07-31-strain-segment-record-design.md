@@ -444,10 +444,20 @@ range maps to nothing. So:
   attribute value;
 - `StrainSegmentFeatureProvider` (§7) **MUST** reject `strain_end < strain_start` with an
   explicit error. That is the right place for it — a malformed BED interval must fail loudly
-  rather than reach a FASTA lookup. **Not yet implemented:** that class is Task 6 and does not
-  exist as of the attribute-query commit, so today nothing rejects the inversion and an
-  inverted segment reaches consumers unflagged. This is a required deliverable of Task 6, not
-  an existing property of the system.
+  rather than reach a FASTA lookup. **Implemented** in `ApiCommonWebsite` `a3c062e03`, hardened
+  in `e5346e9c4`. The guard is now three conditions, and leaving `strain_start`/`strain_end`
+  unclamped depends on all three:
+  1. `strain_end < strain_start` — the deletion inversion this section is about;
+  2. `strain_start < 1` — would emit `chromStart = -1` via `BedLine.locationToZeroBased`;
+  3. the `strain_seq_id` attribute must equal the key `StrainSegmentId` computes from the
+     primary key — a tripwire for any future rewrite of that column, since a divergence would
+     otherwise be a BED line naming the wrong contig with no error.
+
+  All three throw `WdkModelException` naming the primary key and the offending values, before
+  `DeflineBuilder` or `BedLine.bed6` sees them; `BedReporter.write` does not swallow it, so the
+  download aborts. Covered by `StrainSegmentFeatureProviderTest` (10 tests), including the live
+  case `366.1:Pf3D7_10_v3:331757-331757:f`. **If that guard is ever removed, these columns must
+  be clamped instead.**
 
 ## 6. Record class (`ApiCommonModel`)
 

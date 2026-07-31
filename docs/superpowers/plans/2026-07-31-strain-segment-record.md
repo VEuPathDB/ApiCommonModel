@@ -51,6 +51,11 @@ bash ~/workspaces/agentic-veupath-dev/bin/veup-logs.sh fungidb since t1
 > ssh cedar 'bash -lc "source /var/www/jbrestel.fungidb.org/etc/setenv && bld ApiCommonWebsite/Model"'
 > ```
 >
+> **Running more than one test class:** this module is on surefire 2.12.4, where `-Dtest=A+B`
+> matches **zero** tests and still reports `BUILD SUCCESS` — a green run that tested nothing.
+> Use a comma: `-Dtest=StrainSegmentIdTest,StrainSegmentFeatureProviderTest`. Always check the
+> `Tests run:` counts rather than trusting the exit status.
+>
 > **The failure mode is misleading, which is why this is worth knowing:** `mvn test` compiles
 > to `target/classes`, which is not on `wdkXml`'s classpath — the jar must be installed into
 > `gus_home/lib/java`. Skip the `bld` and `wb model` fails with `Implementation class for
@@ -216,7 +221,7 @@ public class StrainSegmentIdTest {
 
 ```bash
 ssh cedar 'bash -lc "cd /var/www/jbrestel.fungidb.org/project_home/ApiCommonWebsite/Model && \
-  mvn -q -Dtest=StrainSegmentIdTest -DfailIfNoTests=false test"'
+  mvn -Dtest=StrainSegmentIdTest -DfailIfNoTests=true test"'
 ```
 
 Expected: **compilation failure** — `cannot find symbol: class StrainSegmentId`.
@@ -311,7 +316,7 @@ public class StrainSegmentId {
 
 ```bash
 ssh cedar 'bash -lc "cd /var/www/jbrestel.fungidb.org/project_home/ApiCommonWebsite/Model && \
-  mvn -q -Dtest=StrainSegmentIdTest -DfailIfNoTests=false test"'
+  mvn -Dtest=StrainSegmentIdTest -DfailIfNoTests=true test"'
 ```
 
 Expected: `Tests run: 12, Failures: 0, Errors: 0, Skipped: 0`.
@@ -1136,10 +1141,17 @@ public class BedStrainSegmentReporter extends BedReporter {
 
 ```bash
 ssh cedar 'bash -lc "cd /var/www/jbrestel.fungidb.org/project_home/ApiCommonWebsite/Model && \
-  mvn -q -Dtest=StrainSegmentIdTest -DfailIfNoTests=false test"'
+  mvn -Dtest=StrainSegmentIdTest,StrainSegmentFeatureProviderTest -DfailIfNoTests=true test"'
 ```
 
-Expected: `Tests run: 12, Failures: 0` and no compilation errors.
+Expected, as actually observed from this exact invocation: `StrainSegmentIdTest` **20**,
+`StrainSegmentFeatureProviderTest` **10**, `Tests run: 30, Failures: 0`, no compilation
+errors. (An earlier revision of this step said 12 — that predated both the underscore
+regression tests and this task's provider tests.)
+
+Read the `Tests run:` counts; do not trust the exit status alone. See the surefire warning
+in "Useful commands" above — `-Dtest=A+B` matches nothing on this module and, combined with
+`-DfailIfNoTests=false`, reports `BUILD SUCCESS` having run no tests at all.
 
 `BedReporter.configure` validates at runtime that the record class matches
 `getRequiredRecordClassFullName()` and that every declared attribute exists on it, so a
