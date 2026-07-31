@@ -42,6 +42,22 @@ bash ~/workspaces/agentic-veupath-dev/bin/veup-logs.sh fungidb since t1
 
 `wb ontology` is **not** needed: this work adds no ontology node (spec §6.1). `wb model` suffices.
 
+> **`wb model` does NOT compile `ApiCommonWebsite/Model`.** Verified in `gus_home/bin/wb`: the
+> `model` target runs `bld EbrcModelCommon/Model; bld ApiCommonModel/Model` and nothing else;
+> `site` covers `Website/Site` and `ontology` adds `Presenters/Model`. No `wb` target builds
+> `ApiCommonWebsite/Model`. So after editing Java there (Tasks 1 and 6), run:
+>
+> ```bash
+> ssh cedar 'bash -lc "source /var/www/jbrestel.fungidb.org/etc/setenv && bld ApiCommonWebsite/Model"'
+> ```
+>
+> **The failure mode is misleading, which is why this is worth knowing:** `mvn test` compiles
+> to `target/classes`, which is not on `wdkXml`'s classpath — the jar must be installed into
+> `gus_home/lib/java`. Skip the `bld` and `wb model` fails with `Implementation class for
+> reporter 'bed' … cannot be found` / `ClassNotFoundException`, which reads as "the XML
+> registration is wrong" when in fact the XML is fine and the class simply was never deployed.
+> Do not respond to that error by reverting the `<reporter>` element.
+
 ---
 
 ## File structure
