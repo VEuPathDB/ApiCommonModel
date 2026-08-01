@@ -64,6 +64,36 @@ FK -> dots.nasequenceimp, study.protocolappnode
 strain into `study.protocolappnode`, so on the website side strain identity is one join
 away. This is the single most misleading thing about the table and the reason §4.1 exists.
 
+**`location` is the VCF anchor base, not the first affected base.** Established 2026-07-31 by
+reconstructing strain sequence from reference: for each event, the only deletion offsets that
+reproduce the observed consensus start at `location + 1`, never at `location` itself.
+
+| strain | recorded offset in segment | offsets that reproduce the strain |
+|---|---|---|
+| A17-10A-1 | 1207 | **1208**-1212 |
+| E-1-75s-2 | 2492 | **2493**-2495 |
+
+So a deletion covers `location+1 … location+|shift|` and `location` is the last *unaffected*
+base. This **confirms** the `<` / `<=` asymmetry in §5.3: an event whose `location` equals
+`refStart` deletes bases starting at `refStart+1`, i.e. genuinely inside the segment, so it
+must shift the end and not the start — which is what the query does.
+
+Two caveats it also exposes:
+
+1. **Event position is ambiguous within repeat context.** Several offsets reproduce the same
+   consensus (1208-1212 above, a 5-wide window). VCF left-normalizes; aligners tend to place
+   gaps rightmost. Nothing is wrong, but a segment boundary landing inside that window inherits
+   the ambiguity, and no convention we control resolves it. This is the honest answer to the
+   deferred "refStart sits inside the segment" question: for events fully outside or fully
+   inside a segment the arithmetic is exact; for an event *straddling* a boundary the reference
+   base may not exist in the strain at all, so no exact strain coordinate exists to return.
+2. **Only the net shift is meaningful, not the decomposition.** Verified on an insertion region
+   (A17-58A-3, ref 491000-493500): the table records `-1, -6, +31, -1` while a clustalo
+   alignment of the real consensus resolves the same region as `-1, +25, -1`. Both sum to
+   **+23**, and the recorded `-6/+31` pair 40 bp apart is one compound variant the aligner
+   renders as a single `+25`. The prefix sum consumes only the sum, so this is harmless -- but
+   do not expect a one-to-one correspondence between rows here and gaps in an alignment.
+
 `shift` is a **signed per-event delta**, never zero: range −101..+80, with 21,945,521
 negative and 21,640,063 positive rows. The strain offset at a reference position is
 therefore a *prefix sum*, partitioned by `(protocol_app_node_id, na_sequence_id)`.
