@@ -96,13 +96,22 @@
                  -- NOT redundant, and not to be "cleaned up": it is here so that a strain
                  -- name resolving to two protocol app nodes ON THE SAME SEQUENCE yields
                  -- DUPLICATE rows per PK and a loud WDK error, rather than silently summing
-                 -- two strains' shifts.  Measured today: 126 strain names each resolve to
-                 -- two OR MORE protocol app nodes (122 to two, 4 to three; 256 nodes in
-                 -- all) that ALL already carry indel rows, so the
-                 -- ambiguity exists in the data right now.  What keeps this detector dormant
-                 -- is the narrower invariant the join on na_sequence_id relies on -- no
-                 -- (strain name, na_sequence_id) pair is served by more than one node
-                 -- (0 today).  A data change that breaks THAT is what this fires on.
+                 -- two strains' shifts.  Provenance matters for the numbers here, because
+                 -- the two databases in play disagree by two orders of magnitude:
+                 --   genomicsdb_rebuild01 (a DIFFERENT, larger database, and where the
+                 --     original of this comment was measured): 126 strain names each
+                 --     resolve to two OR MORE protocol app nodes (122 to two, 4 to three;
+                 --     256 nodes in all) that ALL already carry indel rows, so the
+                 --     ambiguity exists in that data right now.
+                 --   unidb_shu_a (the LIVE appDb, measured 2026-07-31): no ambiguity at
+                 --     all -- 452 '_Indel' nodes, 452 distinct names, 0 names spanning
+                 --     more than one organism, and (strain, taxon) resolving to exactly
+                 --     one node in 452 of 452 cases.
+                 -- So this detector is dormant here today and would NOT have been on
+                 -- rebuild01; keep it.  What keeps it dormant even under the rebuild01
+                 -- shape is the narrower invariant the join on na_sequence_id relies on --
+                 -- no (strain name, na_sequence_id) pair is served by more than one node
+                 -- (0 on both).  A data change that breaks THAT is what this fires on.
                    , i.protocol_app_node_id
           )
           -- Outer wrapper exists so strain_length is computed from the strain_start /
@@ -133,15 +142,18 @@
                    -- written by dnaseq-nextflow bin/makeConsensusFastaFromVcfAndBed.py:233
                    -- (spec 2; that script is not in this checkout), and must NEVER be
                    -- split back apart.  The '_' is not a usable
-                   -- delimiter: measured over the 6,119 strain names carrying indel data,
-                   -- 1,494 (24%) themselves contain '_' (1_01_01, Af293_resequence2,
+                   -- delimiter: measured on genomicsdb_rebuild01 (a DIFFERENT, larger
+                   -- database) over the 6,119 strain names carrying indel data, 1,494
+                   -- (24%) themselves contain '_' (1_01_01, Af293_resequence2,
                    -- China_LZCH-36, USGS_28834_1_NV), so "the first '_' ends the strain name"
                    -- is false for roughly a quarter of strains.  A consumer needing the
                    -- strain or the sequence takes it from the primary key, where ':'
-                   -- delimits unambiguously: 0 of 6,119 strain names contain ':', and the
-                   -- ID query refuses to mint an ID for a reference sequence containing
-                   -- one (10,704 dots.ExternalNaSequence source_ids do, though none of
-                   -- the 20,823 indel-bearing ones -- see that query's ref_seq gate).
+                   -- delimits unambiguously: 0 strain names contain ':' (0 of 6,119 on
+                   -- rebuild01, 0 of 452 on the live unidb_shu_a), and the ID query
+                   -- refuses to mint an ID for a reference sequence containing one
+                   -- (10,704 dots.ExternalNaSequence source_ids do on rebuild01, though
+                   -- none of its 20,823 indel-bearing ones; on unidb_shu_a it is 0 of
+                   -- 160,581 -- see that query's gate 4 on ref_seq).
                  , ids.strain || '_' || ids.ref_seq                    AS strain_seq_id
                  , ids.ref_start + COALESCE(off.offset_start, 0)       AS strain_start
                  , ids.ref_end   + COALESCE(off.offset_end,   0)       AS strain_end

@@ -103,9 +103,18 @@ therefore a *prefix sum*, partitioned by `(protocol_app_node_id, na_sequence_id)
 Strain name is `name` with the suffix `_Indel` removed: `A0003_Indel`, `S7_Indel`,
 `A17-48H-7_Indel`, `X10462-P1C9_Indel`.
 
-Verified properties of the 6,119 distinct names appearing in `apidb.indel`:
+Verified properties of the 6,119 distinct names appearing in `apidb.indel`.
 
-| Property | Result | Consequence |
+> **Provenance — this whole table was measured on `genomicsdb_rebuild01`, which is a
+> different and much larger database than the live appDb.** On `unidb_shu_a` (measured
+> 2026-07-31) there are **452** `_Indel` protocol app nodes, **452** distinct names, **0**
+> names mapping to more than one organism, **0** nodes spanning more than one organism, and
+> `(strain, taxon)` resolving to exactly one node in **452 / 452** cases — i.e. none of the
+> ambiguity below is live here yet. Everything downstream is written to be correct under the
+> rebuild01 shape, because that shape is what this data grows into; do not "simplify" a
+> query by citing the live zeroes.
+
+| Property (on `genomicsdb_rebuild01`) | Result | Consequence |
 |---|---|---|
 | contain `:` | **0** | the colon-delimited PK grammar (§3) is unambiguous |
 | end in `_Indel` | **6,119 / 6,119** | the suffix strip is uniform; no special cases |
@@ -317,25 +326,39 @@ Dropping it removes three problems at once:
 > `includeProjects`/`excludeProjects`, which this record may not have. Not taking an
 > organism at all sidesteps the whole question.
 
-Four gates, all as filters so bad input yields **zero records** rather than a broken
-download:
+**Five** gates, all as filters so bad input yields **zero records** rather than a broken
+download. This numbering is mirrored verbatim in the header comment of
+`strainSegmentQueries.xml`; renumber both or neither.
 
 1. the reference sequence exists — `dots.ExternalNaSequence.source_id = $$sequenceId$$`;
 2. `1 <= refStart <= refEnd <= ens.length`;
 3. the strain has indel data somewhere on **this sequence's organism** — an `EXISTS` over
    `apidb.indel` joined to `study.protocolappnode` and back to `dots.ExternalNaSequence`,
    matched on `taxon_id` (**not** on `na_sequence_id`; see "Gate 3 is organism-level" below);
-4. the reference sequence ID contains no `':'` — `seg.ref_seq NOT LIKE '%:%'`.
+4. the reference sequence ID contains no `':'` — `seg.ref_seq NOT LIKE '%:%'`;
+5. the sequence's `taxon_id` has an `apidb.organism` row — the *inner* join that also
+   supplies `project_id`. It belongs in this list because it filters: a sequence whose
+   `taxon_id` has no `apidb.organism` row yields no record at all. That is intended — such
+   a sequence sits outside every project and so has no `project_id` to key a record on —
+   and it must not become a `LEFT JOIN`, since a NULL `project_id` would mint a malformed
+   primary key.
 
 Gate 4 exists because `':'` is the only delimiter in the minted primary key, so a
 colon-bearing `source_id` yields an ID that §5.3 mis-parses and then dies on
-(`'ncRNA'::integer` aborts the *entire* attribute query, every row on the page). 10,704
-`dots.ExternalNaSequence` source_ids do contain a colon — `bld68_Tb927.1.05:mRNA` and
-similar transcript-level features — while **0** of the 20,823 indel-bearing sequences do.
-That makes the gate unreachable today, which is exactly why it is worth having: the
-grammar's soundness should not rest on which features happen to get indel-called. Verified
-the gate costs nothing real — it refuses 0 indel-bearing sequences and all 8 Af293
-chromosomes still pass.
+(`'ncRNA'::integer` aborts the *entire* attribute query, every row on the page). On
+`genomicsdb_rebuild01` — a **different, larger database**, not the live appDb — 10,704
+`dots.ExternalNaSequence` source_ids contain a colon (`bld68_Tb927.1.05:mRNA` and similar
+transcript-level features) while **0** of its 20,823 indel-bearing sequences do. On
+`unidb_shu_a` (live, measured 2026-07-31) it is **0 of 160,581** source_ids, with 120
+indel-bearing sequences. Either way the gate is unreachable today, which is exactly why it
+is worth having: the grammar's soundness should not rest on which features happen to get
+indel-called. Verified the gate costs nothing real — it refuses 0 indel-bearing sequences
+and all **9** Af293 sequences (8 chromosomes plus `mito_A_fumigatus_Af293`) still pass.
+
+Note what gate 4 does **not** cover: it is sequence-side only. `$$strain$$` is concatenated
+into the PK ahead of the first colon and is never colon-checked. That field is safe because
+the `flatVocab` it comes from holds no colon-bearing value (0 of 452 on `unidb_shu_a`,
+0 of 6,119 on rebuild01) — a property of the data, not of the SQL.
 
 Gate 3 subsumes the organism check the earlier draft did explicitly: if the strain has indel
 rows against that sequence's organism, strain and sequence are consistent **by
@@ -377,25 +400,89 @@ against `unidb_shu_a`):
 - `(strain name, taxon)` resolves to **exactly one** `protocol_app_node` — 452 / 452 pairs,
   zero exceptions. Organism scoping is therefore no less specific than node scoping.
 - **0** `protocol_app_node_id` values span more than one organism.
-- It remains scoped by organism, never by strain name alone: 126 strain names map to more
-  than one organism (§2), and the cross-organism case still returns zero rows
-  (`A17-10A-1` + `Pf3D7_01_v3`).
-- Cost is negligible: 0.35 ms, early-exits via `indel_ix1`, no sequential scan.
+- It remains scoped by organism, never by strain name alone. On `unidb_shu_a` that scope is
+  currently free — all 452 `_Indel` nodes carry 452 distinct names and **0** names span more
+  than one organism — so the "126 strain names map to more than one organism" figure quoted
+  in §2 is a `genomicsdb_rebuild01` measurement, **not** a live one. The taxon scope is what
+  keeps this query correct whenever that situation recurs here, and the cross-organism case
+  still returns zero rows today (`A17-10A-1` + `Pf3D7_01_v3`).
 
-> **The one assumption a future reader must re-check.** Organism-level gating admits every
-> contig of the organism, so it is sound only while **a strain set covers every contig of
-> its organism's reference** — i.e. the consensus pipeline never omits a reference contig.
-> That holds today: Af293 has 9 sequences in the DB and the consensus FASTA has 9 deflines,
-> so the gate admits exactly the contigs that exist in the FASTA and cannot emit a `chrom`
-> with no FASTA entry. If a future pipeline ever dropped a contig from the consensus, this
-> gate *would* mint an ID whose `chrom` is absent from the FASTA, and gate 3 would need a
-> per-strain contig manifest rather than a taxon match.
+**Cost, both paths** (`EXPLAIN ANALYZE` on `unidb_shu_a`, 2026-07-31). The earlier claim
+"0.35 ms, no sequential scan" measured only the accept path and was wrong in detail:
+
+| Path | Old (exact-sequence gate) | New (organism gate) |
+|---|---|---|
+| **Accept** (`A17-48H-7` + `mito_A_fumigatus_Af293`) | — | **~0.33 ms**, `EXISTS` early-exits on the first matching indel row via `indel_ix1` |
+| **Reject**, largest strain (`A17-48H-7`, 108,091 indel rows, vs `Pf3D7_01_v3`) | ~53 ms | **~101 ms** (≈2×) |
+| **Reject**, smallest strain (`C044`, 4 indel rows) | — | **~0.33 ms** |
+
+Two corrections to the old claim. (i) "No sequential scan" is false in detail: the plan
+contains a `Seq Scan on organism o` (5 rows) — harmless, but it is there. (ii) The reject
+path is where this change costs something, and it is unavoidable: a *false* `EXISTS` must
+exhaust every indel row the strain owns, so the cost scales with **the strain's row count**,
+not the database's. Reviewers measured the same reject at 79–99 ms new vs 8.9–56 ms old
+depending on the plan chosen (2–9×). On a 43.5M-row database the worst case would be
+substantially larger.
+
+> **Rejected optimisation: do not rewrite the `EXISTS` as a `LIMIT 1` scalar subquery.**
+> Resolving the strain to a single `protocol_app_node` and comparing its organism directly
+> would make the reject path O(1). It was considered and **deliberately rejected**: it is
+> correct only while "no `protocol_app_node_id` spans more than one organism" holds, and if
+> that ever breaks it silently picks an arbitrary organism and admits or refuses the wrong
+> pairs, with no error anywhere. `EXISTS` degrades to *slow* rather than to *wrong*, which
+> is the trade this record wants. Revisit only with a schema constraint enforcing the
+> one-node-per-(strain, organism) invariant.
+
+> **The one assumption a future reader must re-check** (also listed in §10). Organism-level
+> gating admits every contig of the organism, so the minted `chrom` is guaranteed to exist
+> in the strain's consensus FASTA only while **a strain set covers every contig of its
+> organism's reference**.
+>
+> **Frame it as set equality, not as a one-way pipeline omission.** The invariant is that
+> the taxon's `dots.ExternalNaSequence` rows and the consensus deflines are the *same set*.
+> It can drift from either side:
+>
+> - *FASTA side* — the consensus pipeline omits a reference contig. The gate then mints an
+>   ID whose `chrom` has no FASTA entry.
+> - *DB side* — a **non-genomic** sequence gains a row under a strain-bearing taxon. It is
+>   then a contig of the organism as far as gate 3 is concerned, but was never a consensus
+>   target. The gate-4 paragraph above supplies the live example of the shape:
+>   `bld68_Tb927.1.05:mRNA`, a *T. brucei* transcript-level `source_id` — 10,704 such rows
+>   exist on `genomicsdb_rebuild01`. **Gate 4's colon filter is currently the only thing
+>   stopping those**, and it stops them by an accident of naming (transcript-level IDs
+>   happen to carry a colon), not by any check on what kind of sequence it is. A
+>   non-genomic row without a colon in its `source_id` would pass every gate.
+>
+> **Verification (2026-07-31), done on the organism where the risk actually lives.** Af293
+> alone would have been the easy case; the check was run on three organisms, chosen so that
+> one of them has contigs no strain has ever indeled:
+>
+> | Organism | Pairs admitted | Newly admitted | …of those, on contigs **no strain ever indeled** |
+> |---|---|---|---|
+> | *P. falciparum* 3D7 | 3,456 | 381 | **0** |
+> | *A. fumigatus* Af293 | 2,088 | 65 | **0** |
+> | *T. brucei* TREU927 | 524 | 243 | **144** |
+>
+> TREU927 is the case that could have broken: it has **131** sequences in the DB, **36** of
+> them never indeled by any strain, and organism scoping newly admits **144** pairs sitting
+> on exactly those 36 contigs — pairs the old gate refused and for which there is no indel
+> evidence at all that the contig was sequenced. So the FASTAs were checked directly.
+> `STIB247_consensus.fa.gz`, `gambiense_consensus.fa.gz` and
+> `TREU927_resequence1_consensus.fa.gz` each carry **131** deflines, and set-comparing each
+> one's `<chrom>` fields against the DB's 131 `source_id`s gives **0 missing in either
+> direction** — in particular **0 of the 36 never-indeled contigs is absent from any of the
+> three FASTAs**. The invariant holds on the organism that would have exposed it, not merely
+> on the one that could not.
+>
+> If a future pipeline ever dropped a contig from the consensus, or a non-genomic row landed
+> under a strain-bearing taxon, this gate *would* mint an ID whose `chrom` is absent from the
+> FASTA, and gate 3 would need a per-strain contig manifest rather than a taxon match.
 
 Gate 4 becomes slightly more load-bearing under organism scoping, since it can no longer
 rely on colon-free-ness being a property of the *indel-bearing* subset. It still refuses
 nothing real: in `unidb_shu_a` **0** sequences reachable through gate 1+2 contain a colon
-(the 10,704 figure below was measured on a different database), and all 9 Af293 contigs
-pass.
+(the 10,704 figure quoted *above*, in the gate-4 paragraph, was measured on
+`genomicsdb_rebuild01`, a different database), and all 9 Af293 contigs pass.
 
 Strain membership itself is enforced by WDK, which validates a `flatVocabParam` value
 against its vocabulary — that is what makes strain names a controlled vocabulary sourced
@@ -424,7 +511,9 @@ Two shape details carried over from review, both load-bearing:
 
 - Dedupe on the numeric `protocol_app_node_id` (6,249 values) **before** computing
   `regexp_replace`, not after. Deduping on the regexp'd string instead runs the function
-  across all 43.6M indel rows and hash-aggregates text keys — measured 12,085ms versus
+  across all 43.6M indel rows and hash-aggregates text keys (timings and row counts here are
+  `genomicsdb_rebuild01`; the live `unidb_shu_a` holds 1,855,449 indel rows over 1,356
+  `protocolappnode` rows, so the same shape is simply cheaper) — measured 12,085ms versus
   2,681ms for identical output.
 - `pan.name LIKE '%\_Indel'` makes the suffix invariant executable rather than merely
   documented; `regexp_replace` silently passes a non-conforming name through, which would
@@ -434,7 +523,8 @@ Two shape details carried over from review, both load-bearing:
 This is the controlled vocabulary required by the brief: strain names come from
 `apidb.indel` (via `study.protocolappnode`, which is where the name actually lives). No
 tuning table exists for it. Scoping to a *relevant* strain is not the vocabulary's job —
-gate 3 of §5.1 rejects a strain with no data on the requested sequence.
+gate 3 of §5.1 rejects a strain with no indel data on the requested sequence's **organism**.
+(It does *not* require data on that exact sequence; see §5.1.1.)
 
 ### 5.3 Attribute query: `StrainSegmentAttributes.Coords`
 
@@ -750,6 +840,8 @@ dense options: *Cryptococcus neoformans* H99 (875), *Candida auris* B8441 (502),
 | `<`/`<=` boundary at `refStart` | **open** — ships as specified, QA per §9.5 |
 | Ontology absence hides the search | **verified** 2026-07-31 — see §6.1 |
 | `(name, na_sequence_id)` uniqueness | true today, unconstrained; §5.3 grouping converts a violation to an error |
+| **A strain set covers every contig of its organism's reference** | true today, unconstrained — the residual assumption introduced by organism-level gate 3 (§5.1.1). Really *set equality* between a taxon's `dots.ExternalNaSequence` rows and the consensus deflines, and it can drift from either side (a pipeline dropping a contig; a non-genomic sequence gaining a row under a strain-bearing taxon, which only gate 4's colon filter incidentally catches). Verified on three organisms including *T. brucei* TREU927, where 144 newly-admitted pairs sit on 36 never-indeled contigs and all 131 deflines match the DB set exactly. Nothing enforces it; a breach mints an ID whose `chrom` has no FASTA entry, with **no error anywhere**. Fix would be a per-strain contig manifest. |
+| Reject-path cost of gate 3 | **accepted, measured** — a false `EXISTS` scans all of a strain's indel rows: ~101 ms vs ~53 ms for the largest strain here (§5.1.1). The `LIMIT 1` rewrite that would fix it is rejected on purpose; it trades slow for silently wrong. |
 | Prefix-sum cost | heaviest strain/sequence pair carries ~115k events; the `location <= ref_end` bound plus `ix0`/`ix1` should hold, but measure on Af293 |
 | Categorization rebuild | not applicable — §6.1 adds no ontology node, so `wb model` suffices. If a row is ever added, it becomes `wb ontology` (a superset of `wb model`). |
 | **Model-side `<reporter name="bed">` element silently missing** | **open until Task 6** — it ships in a different repo from the two Java classes (§7.3), and nothing references it at build time. Omit it and there is no BED download and **no error anywhere**: `/service/record-types/strain-genomic-segment` simply lists no `bed` format. Verification: that endpoint's `formats` must contain `bed` with `scopes` = `results` only. |

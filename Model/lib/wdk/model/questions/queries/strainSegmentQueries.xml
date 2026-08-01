@@ -2,23 +2,34 @@
 
   <querySet name="StrainSegmentId" queryType="id" isCacheable="true">
 
-    <!-- Four gates, all as filters so bad input returns zero rows:
+    <!-- FIVE gates, all as filters so bad input returns zero rows.  The numbering
+         below is the SAME as spec section 5.1, so "gate 3" here and "gate 3" there
+         are the same gate; do not renumber one without the other:
            1. source_id  - the reference sequence exists (dots.ExternalNaSequence.source_id)
-           2. organism   - the sequence's taxon_id has a matching apidb.organism row
-                           (inner join, not just a project_id source; see below)
-           3. range      - 1 <= start <= end <= ens.length (end=0 means "to end of
+           2. range      - 1 <= start <= end <= ens.length (end=0 means "to end of
                            sequence" and is normalized to ens.length in the
                            derived table, before this gate ever sees it)
-           4. EXISTS     - the strain has indel data somewhere on this sequence's
+           3. EXISTS     - the strain has indel data somewhere on this sequence's
                            ORGANISM, matched on taxon_id
+           4. colon      - seg.ref_seq contains no ':', the only delimiter in the
+                           minted primary key (see the gate's own comment below)
+           5. organism   - the sequence's taxon_id has a matching apidb.organism row
+                           (the inner join, not just a project_id source; see below)
 
-         Gate 4 exists to prove strain and sequence are mutually consistent, which
+         Gate 3 exists to prove strain and sequence are mutually consistent, which
          is why this query needs no separate organism input to validate against.
-         It is scoped by taxon_id, never by strain name alone: 126 strain names map
-         to more than one organism.
+         It is scoped by taxon_id, never by strain name alone.  On unidb_shu_a (the
+         live appDb, measured 2026-07-31) that scope currently costs nothing to
+         guarantee: 452 '_Indel' protocol app nodes carry 452 distinct names and 0
+         names span more than one organism.  On the much larger genomicsdb_rebuild01
+         (6,119 strain names) 126 names resolved to two or more nodes; the taxon
+         scope is what keeps this query correct whenever that situation recurs here.
+         The full evidence for organism-level scoping (including the three-organism
+         FASTA coverage check) lives in spec section 5.1.1 and is deliberately NOT
+         duplicated here, so that only one copy of the numbers can go stale.
 
-         The apidb.organism join is also a gate, not just a project_id source: it
-         is an inner join, so a sequence whose taxon_id has no apidb.organism row
+         Gate 5, the apidb.organism join, is a gate and not just a project_id source:
+         it is an inner join, so a sequence whose taxon_id has no apidb.organism row
          yields no record at all. That is intended - such a sequence sits outside
          every project and so has no project_id to key a record on - and it does
          not need to be a LEFT JOIN, since a NULL project_id would produce a
@@ -62,16 +73,32 @@
           WHERE seg.ref_start >= 1
             AND seg.ref_end   >= seg.ref_start
             AND seg.ref_end   <= seg.seq_length
-            -- ':' is the ONLY delimiter in the primary key this query mints, so a
-            -- reference sequence whose source_id contains one would produce an
-            -- unparseable ID -- StrainSegmentAttributes.Coords would split it at the
-            -- embedded colon and then abort the ENTIRE attribute query (every row on
-            -- the page, not just the offender) casting 'ncRNA'::integer.  Refusing to
-            -- mint such an ID here makes the grammar sound BY CONSTRUCTION instead of
-            -- by a property of what happens to be loaded: 10,704 dots.ExternalNaSequence
-            -- source_ids do contain ':' (e.g. bld68_Tb927.1.05:mRNA), and today none of
-            -- the 20,823 indel-bearing ones do -- but that is an accident of which
-            -- features get indel-called, not an invariant anyone enforces.
+            -- GATE 4 (spec 5.1 numbering).  ':' is the ONLY delimiter in the primary
+            -- key this query mints, so a reference sequence whose source_id contains
+            -- one would produce an unparseable ID -- StrainSegmentAttributes.Coords
+            -- would split it at the embedded colon and then abort the ENTIRE attribute
+            -- query (every row on the page, not just the offender) casting
+            -- 'ncRNA'::integer.
+            --
+            -- What this gate guarantees is SEQUENCE-SIDE ONLY.  It is not a
+            -- by-construction property of the whole ID: $$strain$$ is concatenated in
+            -- ahead of the first colon and is never colon-checked here.  What keeps
+            -- the strain field safe is the flatVocab it comes from, all of whose
+            -- values are colon-free today (0 of 452 on unidb_shu_a) -- a property of
+            -- the data, not of this SQL.
+            --
+            -- Neither side is an enforced invariant, which is exactly why the gate is
+            -- worth its keystrokes.  Provenance of the numbers, because two databases
+            -- get confused here:
+            --   unidb_shu_a (the LIVE appDb, measured 2026-07-31): 0 of 160,581
+            --     dots.ExternalNaSequence source_ids contain ':'; 120 sequences carry
+            --     indel rows (1,855,449 rows over 1,356 protocolappnode rows).
+            --   genomicsdb_rebuild01 (a DIFFERENT, larger database): 10,704
+            --     colon-bearing source_ids, e.g. bld68_Tb927.1.05:mRNA, a
+            --     transcript-level feature; 20,823 indel-bearing sequences, none of
+            --     them colon-bearing.
+            -- So on the live DB the gate is currently unreachable, and on rebuild01 it
+            -- was unreachable only by an accident of which features get indel-called.
             AND seg.ref_seq NOT LIKE '%:%'
             -- The suffix is appended to the parameter (CONCAT($$strain$$, '_Indel'))
             -- rather than stripped from the column (regexp_replace(pan.name, ...)),
@@ -79,6 +106,7 @@
             -- an Index Only Scan; applying a function to pan.name instead would force
             -- a scan of protocolappnode per row.
             --
+            -- GATE 3 (spec 5.1 numbering).
             -- The gate is on ORGANISM (ens2.taxon_id = seg.taxon_id), not on the exact
             -- sequence (i.na_sequence_id = seg.na_sequence_id).  What it proves is the
             -- only thing this query needs: THIS STRAIN WAS SEQUENCED AGAINST THIS
@@ -92,19 +120,34 @@
             -- StrainSegmentAttributes.Coords already returns via its LEFT JOIN +
             -- COALESCE(..., 0), and the contig IS present in that strain's consensus
             -- FASTA.  Gating on the exact sequence refused 689 of the 6,068 valid
-            -- strain/sequence pairs in this appDb (11%), e.g. A17-10A-1 +
+            -- strain/sequence pairs on unidb_shu_a (11%), e.g. A17-10A-1 +
             -- mito_A_fumigatus_Af293, whose defline >A17-10A-1_mito_A_fumigatus_Af293
             -- is right there in A17-10A-1_consensus.fa.gz.
             --
-            -- Organism-level scoping is safe to substitute because (strain name,
-            -- taxon) resolves to exactly one protocol_app_node in every one of the
-            -- 452 pairs present, and no protocol_app_node_id spans more than one
-            -- organism.  The one assumption worth re-checking if the consensus
-            -- pipeline changes: a strain set is assumed to cover every contig of its
-            -- organism's reference.  Af293 holds for that today (9 sequences in the
-            -- DB, 9 deflines in the FASTA).  If a future pipeline ever omitted a
-            -- reference contig from the consensus, this gate would happily mint an ID
-            -- whose chrom has no FASTA entry.
+            -- Organism-level scoping is safe to substitute because, on unidb_shu_a
+            -- (measured 2026-07-31), (strain name, taxon) resolves to exactly one
+            -- protocol_app_node in all 452 pairs present, and no protocol_app_node_id
+            -- spans more than one organism.  The residual assumption, and the FASTA
+            -- coverage evidence for it across three organisms, are in spec 5.1.1 and
+            -- spec 10; in one line, this gate is sound only while a strain set covers
+            -- every contig of its organism's reference.
+            --
+            -- Cost, both paths, measured on unidb_shu_a 2026-07-31 (EXPLAIN ANALYZE):
+            --   ACCEPT ~0.33 ms.  The EXISTS early-exits on the first matching indel
+            --     row via indel_ix1.  (There IS one sequential scan in the plan, a
+            --     Seq Scan on apidb.organism, 5 rows; harmless.)
+            --   REJECT is where this change costs something, and it is unavoidable:
+            --     a false EXISTS must exhaust every indel row the strain owns.  For
+            --     the largest strain here, A17-48H-7 (108,091 indel rows), a
+            --     cross-organism reject runs ~101 ms versus ~53 ms for the old
+            --     exact-sequence gate, i.e. about 2x.  It scales with the strain's
+            --     row count, not the DB's: the smallest strain, C044 (4 rows),
+            --     rejects in ~0.33 ms.  On a 43.5M-row database the worst case would
+            --     be substantially larger.
+            --   Do NOT "optimise" this into a LIMIT 1 scalar subquery; that rewrite
+            --     was considered and rejected on purpose (spec 5.1.1) because it
+            --     would silently return a wrong answer if the "no node spans >1
+            --     organism" invariant ever broke, whereas EXISTS degrades to slow.
             AND EXISTS (
                   SELECT 1
                   FROM apidb.indel i
