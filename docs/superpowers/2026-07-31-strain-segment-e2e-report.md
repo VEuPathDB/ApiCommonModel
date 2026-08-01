@@ -25,6 +25,10 @@ Input: five strains + `Chr1_A_fumigatus_Af293`, reference `396000-399000`, forwa
 **single search**. Column 1 is the strain FASTA key, columns 2–3 the strain coordinates (BED
 start is 0-based), column 4 the record ID carrying the reference coordinates requested.
 
+Note for callers: the strain list is passed as a **comma-delimited string**
+(`"A17-10A-1,A17-3C-11,…"`), not a JSON array. A real array is rejected with
+`400 … "strain" is not a string`.
+
 ```
 A17-10A-1_Chr1_A_fumigatus_Af293  395992  398982  A17-10A-1:Chr1_A_fumigatus_Af293:396000-399000:f  0  +
 A17-3C-11_Chr1_A_fumigatus_Af293  396006  398996  A17-3C-11:Chr1_A_fumigatus_Af293:396000-399000:f  0  +
