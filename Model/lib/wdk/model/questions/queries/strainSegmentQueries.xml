@@ -9,13 +9,13 @@
            3. range      - 1 <= start <= end <= ens.length (end=0 means "to end of
                            sequence" and is normalized to ens.length in the
                            derived table, before this gate ever sees it)
-           4. EXISTS     - the strain has indel data on this very sequence, matched
-                           on na_sequence_id
+           4. EXISTS     - the strain has indel data somewhere on this sequence's
+                           ORGANISM, matched on taxon_id
 
-         Indel rows recorded on a sequence make strain and sequence consistent by
-         construction, so gate 4 needs no separate organism input to validate
-         against. It is scoped by na_sequence_id, never by strain name alone:
-         126 strain names map to more than one organism.
+         Gate 4 exists to prove strain and sequence are mutually consistent, which
+         is why this query needs no separate organism input to validate against.
+         It is scoped by taxon_id, never by strain name alone: 126 strain names map
+         to more than one organism.
 
          The apidb.organism join is also a gate, not just a project_id source: it
          is an inner join, so a sequence whose taxon_id has no apidb.organism row
@@ -53,7 +53,7 @@
                         ELSE $$end_point_segment$$::integer
                    END                                     AS ref_end
                  , ens.length::integer                     AS seq_length
-                 , ens.na_sequence_id
+                 , ens.taxon_id
             FROM dots.ExternalNaSequence ens
                , apidb.organism o
             WHERE o.taxon_id = ens.taxon_id
@@ -78,13 +78,42 @@
             -- so pan_named_ix (name, protocol_app_node_id, ...) can still be used as
             -- an Index Only Scan; applying a function to pan.name instead would force
             -- a scan of protocolappnode per row.
+            --
+            -- The gate is on ORGANISM (ens2.taxon_id = seg.taxon_id), not on the exact
+            -- sequence (i.na_sequence_id = seg.na_sequence_id).  What it proves is the
+            -- only thing this query needs: THIS STRAIN WAS SEQUENCED AGAINST THIS
+            -- ORGANISM, so the strain name and the reference sequence are mutually
+            -- consistent and the minted primary key is meaningful.  What it
+            -- deliberately no longer proves is that the strain has indel data on this
+            -- exact contig -- because that is not a precondition for a valid request.
+            -- A strain with ZERO indels on a contig is the ordinary case of a contig
+            -- that simply matches the reference: the strain coordinates equal the
+            -- reference coordinates, the identity mapping is exactly what
+            -- StrainSegmentAttributes.Coords already returns via its LEFT JOIN +
+            -- COALESCE(..., 0), and the contig IS present in that strain's consensus
+            -- FASTA.  Gating on the exact sequence refused 689 of the 6,068 valid
+            -- strain/sequence pairs in this appDb (11%), e.g. A17-10A-1 +
+            -- mito_A_fumigatus_Af293, whose defline >A17-10A-1_mito_A_fumigatus_Af293
+            -- is right there in A17-10A-1_consensus.fa.gz.
+            --
+            -- Organism-level scoping is safe to substitute because (strain name,
+            -- taxon) resolves to exactly one protocol_app_node in every one of the
+            -- 452 pairs present, and no protocol_app_node_id spans more than one
+            -- organism.  The one assumption worth re-checking if the consensus
+            -- pipeline changes: a strain set is assumed to cover every contig of its
+            -- organism's reference.  Af293 holds for that today (9 sequences in the
+            -- DB, 9 deflines in the FASTA).  If a future pipeline ever omitted a
+            -- reference contig from the consensus, this gate would happily mint an ID
+            -- whose chrom has no FASTA entry.
             AND EXISTS (
                   SELECT 1
                   FROM apidb.indel i
                      , study.protocolappnode pan
+                     , dots.ExternalNaSequence ens2
                   WHERE i.protocol_app_node_id = pan.protocol_app_node_id
-                    AND i.na_sequence_id = seg.na_sequence_id
                     AND pan.name = CONCAT($$strain$$, '_Indel')
+                    AND ens2.na_sequence_id = i.na_sequence_id
+                    AND ens2.taxon_id = seg.taxon_id
                 )
         ]]>
       </sql>

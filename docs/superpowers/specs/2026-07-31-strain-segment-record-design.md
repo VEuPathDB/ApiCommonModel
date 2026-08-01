@@ -322,8 +322,9 @@ download:
 
 1. the reference sequence exists — `dots.ExternalNaSequence.source_id = $$sequenceId$$`;
 2. `1 <= refStart <= refEnd <= ens.length`;
-3. the strain has indel data on **this** sequence — an `EXISTS` over `apidb.indel` joined to
-   `study.protocolappnode`, matched on `na_sequence_id`;
+3. the strain has indel data somewhere on **this sequence's organism** — an `EXISTS` over
+   `apidb.indel` joined to `study.protocolappnode` and back to `dots.ExternalNaSequence`,
+   matched on `taxon_id` (**not** on `na_sequence_id`; see "Gate 3 is organism-level" below);
 4. the reference sequence ID contains no `':'` — `seg.ref_seq NOT LIKE '%:%'`.
 
 Gate 4 exists because `':'` is the only delimiter in the minted primary key, so a
@@ -337,10 +338,64 @@ the gate costs nothing real — it refuses 0 indel-bearing sequences and all 8 A
 chromosomes still pass.
 
 Gate 3 subsumes the organism check the earlier draft did explicitly: if the strain has indel
-rows on that sequence, strain and sequence are consistent **by construction**. That is a
-stronger guarantee than validating against a user-supplied organism, and it is what the
-original requirement ("validate the reference sequence against the reference organism")
-actually wanted.
+rows against that sequence's organism, strain and sequence are consistent **by
+construction**. That is a stronger guarantee than validating against a user-supplied
+organism, and it is what the original requirement ("validate the reference sequence against
+the reference organism") actually wanted.
+
+#### Gate 3 is organism-level, and that is deliberate
+
+**Corrected 2026-07-31 after end-to-end QA.** Gate 3 originally matched on
+`na_sequence_id`, so it did double duty: it proved strain/sequence consistency (its job,
+and the reason §5.1.1 can drop the organism param) *and* it required indel data on that
+exact contig (not its job, and wrong).
+
+The second requirement is wrong because **zero indels on a contig is a valid, ordinary
+state**, not a missing-data state. It means the strain matches the reference there: the
+strain coordinates equal the reference coordinates, `StrainSegmentAttributes.Coords`
+already returns exactly that identity mapping via its `LEFT JOIN` + `COALESCE(..., 0)`
+(no change needed there — verified against a zero-indel PK, which yields `100-200 ->
+100-200` with the correct `strain_seq_id`), and the contig **is** present in that strain's
+consensus FASTA. Refusing the request produced `### The result is empty ###` for a request
+the data fully supports.
+
+Scale of the defect: **689 of the 6,068 valid strain/sequence pairs (11%)** in `unidb_shu_a`
+were refused this way. The case that surfaced it: `A17-10A-1` + `mito_A_fumigatus_Af293`
+returned empty, yet `>A17-10A-1_mito_A_fumigatus_Af293` is present in
+`A17-10A-1_consensus.fa.gz`.
+
+So the gate now matches on `ens2.taxon_id = seg.taxon_id`. Stated plainly:
+
+| | |
+|---|---|
+| What gate 3 **now proves** | this strain was sequenced against this organism, so the strain name and the reference sequence are mutually consistent and the minted PK is meaningful |
+| What it **no longer proves** | this strain has indel data on this exact contig — which was never a precondition for a valid request |
+
+Weakening it is safe because the substitution is exact, not approximate (re-verified
+against `unidb_shu_a`):
+
+- `(strain name, taxon)` resolves to **exactly one** `protocol_app_node` — 452 / 452 pairs,
+  zero exceptions. Organism scoping is therefore no less specific than node scoping.
+- **0** `protocol_app_node_id` values span more than one organism.
+- It remains scoped by organism, never by strain name alone: 126 strain names map to more
+  than one organism (§2), and the cross-organism case still returns zero rows
+  (`A17-10A-1` + `Pf3D7_01_v3`).
+- Cost is negligible: 0.35 ms, early-exits via `indel_ix1`, no sequential scan.
+
+> **The one assumption a future reader must re-check.** Organism-level gating admits every
+> contig of the organism, so it is sound only while **a strain set covers every contig of
+> its organism's reference** — i.e. the consensus pipeline never omits a reference contig.
+> That holds today: Af293 has 9 sequences in the DB and the consensus FASTA has 9 deflines,
+> so the gate admits exactly the contigs that exist in the FASTA and cannot emit a `chrom`
+> with no FASTA entry. If a future pipeline ever dropped a contig from the consensus, this
+> gate *would* mint an ID whose `chrom` is absent from the FASTA, and gate 3 would need a
+> per-strain contig manifest rather than a taxon match.
+
+Gate 4 becomes slightly more load-bearing under organism scoping, since it can no longer
+rely on colon-free-ness being a property of the *indel-bearing* subset. It still refuses
+nothing real: in `unidb_shu_a` **0** sequences reachable through gate 1+2 contain a colon
+(the 10,704 figure below was measured on a different database), and all 9 Af293 contigs
+pass.
 
 Strain membership itself is enforced by WDK, which validates a `flatVocabParam` value
 against its vocabulary — that is what makes strain names a controlled vocabulary sourced

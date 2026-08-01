@@ -498,6 +498,40 @@ project including UniDB. DynSpan duplicates its queries for UniDB precisely beca
 uses `@PROJECT_ID@`, which is meaningless on the portal — that is a problem this design
 avoids rather than a pattern to copy.
 
+> **CORRECTION — gate 4 (the `EXISTS`) is scoped by ORGANISM, not by exact sequence.**
+> Found in end-to-end QA and fixed 2026-07-31. As written below it matched
+> `i.na_sequence_id = seg.na_sequence_id`, which made the gate do two jobs: prove strain
+> and sequence are mutually consistent (**required** — it is what lets this search drop the
+> organism param, spec §5.1.1) and prove indel data exists on that exact contig (**not
+> required, and wrong**). A strain with **zero** indels on a contig is a perfectly valid
+> request: it means the strain matches the reference there, so the strain coordinates
+> simply equal the reference coordinates and the contig is present in that strain's
+> consensus FASTA. Such requests returned `### The result is empty ###`.
+>
+> That refused **689 of the 6,068 valid strain/sequence pairs (11%)**. The case that
+> surfaced it: `A17-10A-1` + `mito_A_fumigatus_Af293` returned empty even though
+> `>A17-10A-1_mito_A_fumigatus_Af293` is present in `A17-10A-1_consensus.fa.gz`.
+>
+> The fix adds `ens.taxon_id` to the inner derived table and joins the `EXISTS` back
+> through `dots.ExternalNaSequence ens2` on `ens2.taxon_id = seg.taxon_id`. Gate 4 now
+> proves **"this strain was sequenced against this organism"**; it no longer proves "this
+> strain has indel data on this exact contig". The substitution is exact rather than
+> approximate: `(strain name, taxon)` resolves to exactly one protocol app node in 452/452
+> pairs, and **0** `protocol_app_node_id` values span more than one organism. Cross-organism
+> requests still return zero rows. **The attribute query needs no change** — its `LEFT JOIN`
+> + `COALESCE(..., 0)` already yields the identity mapping for a zero-indel segment.
+>
+> Assumption to re-check if the consensus pipeline changes: a strain set is assumed to
+> cover **every** contig of its organism's reference (Af293: 9 sequences in the DB, 9
+> deflines in the FASTA). If that ever fails, this gate would mint an ID whose `chrom` has
+> no FASTA entry. Full rationale in spec §5.1, "Gate 3 is organism-level, and that is
+> deliberate" (the spec numbers this gate 3; the numbering differs, the gate is the same).
+>
+> Note also that the Step 1 snapshot below predates §5.1.1: the shipped query takes **no**
+> `organismSinglePick` param and resolves sequences through unpartitioned
+> `dots.ExternalNaSequence` + `apidb.organism` rather than `webready.GenomicSeqAttributes_p`.
+> Read the committed `strainSegmentQueries.xml` as the source of truth, not this block.
+
 **Files:**
 - Create: `ApiCommonModel/Model/lib/wdk/model/questions/queries/strainSegmentQueries.xml`
 
