@@ -1208,9 +1208,71 @@ bash ~/workspaces/agentic-veupath-dev/bin/veup-git-sync.sh fungidb
 
 ## Task 7: End-to-end verification
 
-> ## BLOCKED — the dev instance's appDb has no `apidb.indel`
+> ## RESOLVED 2026-07-31 — instance repointed at an appDb that has indels
 >
-> **Discovered 2026-07-31, while starting this task.** Steps 3-6 cannot run on
+> John updated `etc/conifer_site_vars.yml` to swap the appDb from LDAP `genomicsdb_devn`
+> (`genomicsdb_070n`, **no `apidb.indel` at all**) to `appDb_ldapCommonName: UniDB_shu_a` /
+> `jdbc:postgresql://ares12.penn.apidb.org:5432/unidb_shu_a`.
+>
+> **The first gated rebuild still failed, and that turned out to be a checkout problem, not a
+> gate problem.** `rebuilder --gusjvmopts -Dpresenter.dataset.gate=on` died at WDK cache
+> creation:
+>
+> ```
+> PSQLException: relation "eda.attributegraph_sd9c28df5a4_gnphntyd" does not exist
+>   for query TranscriptAttributes.MetaPhenotypeVariablesNumericFungiDB_VEuPathDB_curated_phenotype_Phenotype_RSRC
+> <rebuilder> FATAL: I was unable to recreate the WDK cache.
+> ```
+>
+> That query name embeds a dataset (`VEuPathDB_curated_phenotype_Phenotype_RSRC`) that has **no
+> row in `apidb.datasource`** here, i.e. exactly what the gate is supposed to skip. It was not
+> skipped, and `$GUS_HOME/lib/wdk/presentersNotLoaded.txt` did not exist — the gate never ran.
+> Cause: **the gate implementation is not on `master`.** It lives on the
+> `dnaseq-merge-experiments` branch that plasmodb uses, so this checkout had the flag but not
+> the code that honours it. Fixed by putting `EbrcModelCommon`, `ApiCommonDatasets`, and
+> `ApiCommonPresenters` on that branch in this workspace.
+>
+> The gate is required here because this appDb holds a subset of the loaded data while
+> `datasetPresenters` is a superset by design.
+>
+> **The new appDb is reachable locally on port 5432** (`psql -h localhost -p 5432 -d unidb_shu_a`).
+> It is a **third** database, so the §2 figures — measured on `genomicsdb_rebuild01` — do not
+> describe it. Measured on `unidb_shu_a`:
+>
+> | | `rebuild01` (spec §2) | `unidb_shu_a` (what the site now queries) |
+> |---|---|---|
+> | `apidb.indel` rows | 43,585,584 | 1,855,449 |
+> | strains (`_Indel` nodes) | 6,119 | **452** |
+> | sequences with indels | 20,823 | 120 |
+> | `apidb.organism` | 967 | 13 |
+>
+> Indel-bearing projects here: TriTrypDB (95 sequences), PlasmoDB (16), **FungiDB (9 sequences,
+> 232 strains)** — so this FungiDB site does have usable data. Expect the strain vocabulary to
+> offer **452** options, not 6,119, and note the §5.2 vocabulary timing (57 ms) was measured
+> against the larger database.
+>
+> ### Verified test cases for Steps 3-6 — use these
+>
+> Both on strain `A17-48H-7`, sequence `Chr1_A_fumigatus_Af293` (length 4,918,979), offsets
+> computed read-only against `unidb_shu_a`:
+>
+> | Case | `start_point` | `end_point_segment` | offset_start | offset_end | expected `strain_start` | expected `strain_end` |
+> |---|---|---|---|---|---|---|
+> | A | 20000 | 25000 | +71 | +75 | 20071 | 25075 |
+> | B | 1 | 1000 | **0** | +3 | 1 | 1003 |
+>
+> Case B is the plan's required "`offset_start` is 0 but `offset_end` is not" check — it proves
+> the two offsets are computed independently rather than one being copied to the other.
+> Case A's offsets differ from each other (71 vs 75), which is a second, weaker form of the
+> same check.
+>
+> For case A the BED line must be:
+> `A17-48H-7_Chr1_A_fumigatus_Af293` / `20070` (0-based, so `strain_start - 1`) / `25075` /
+> `A17-48H-7:Chr1_A_fumigatus_Af293:20000-25000:f` / `.` / `+`
+>
+> ---
+>
+> **Original blocker, kept for the record.** **Discovered 2026-07-31, while starting this task.** Steps 3-6 cannot run on
 > `jbrestel.fungidb.org` as it is currently configured, and this invalidates one premise of
 > the whole plan.
 >
