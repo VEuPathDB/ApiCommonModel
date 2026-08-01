@@ -1,28 +1,26 @@
-END-TO-END TESTING: strain-genomic-segment record (BED in strain coordinates)
+END-TO-END TESTING: strain genomic segment search
 FungiDB dev instance jbrestel.fungidb.org, appDb unidb_shu_a, 2026-07-31
 
-WHAT WAS TESTED
+WHAT IT DOES
 
-The new internal record class takes a reference-coordinate genomic location plus a
-strain and returns a BED feature in that strain's consensus-sequence coordinates,
-by prefix-summing the signed per-event shifts in apidb.indel. The point of the
-exercise was to check the whole path against the running site rather than against
-the model XML: search -> ID query -> coordinate-conversion attribute query -> BED
-reporter -> a downloaded BED line, and then to check that line against the actual
-strain consensus FASTA files it is meant to index into.
+A new internal search takes a strain name and a reference-coordinate location
+(sequence ID, start, end, strand) as input, and returns that segment expressed in
+the strain's own consensus-sequence coordinates as a BED feature. Strain names come
+from a controlled vocabulary; the coordinate conversion prefix-sums the per-event
+shifts recorded for that strain. Testing exercised the whole path against the running
+site - search, coordinate conversion, BED download - and then checked the result
+against the actual strain consensus FASTA files the BED is meant to index into.
 
-Service checks passed: the record type resolves and advertises the "bed" format, the
-search is correctly absent from the category tree (it is internal and has no ontology
-entry), basket support is off, and a successful download leaves every error log
-silent (200, report written in 7 ms, "Wrote 1 features for 1 records"). Bad input
-returns an empty result rather than an error: a cross-organism sequence and an
-out-of-range end both come back "### The result is empty ###".
+The search returns an empty result rather than an error for invalid input: a strain
+paired with another organism's sequence, or a range beyond the sequence length, both
+come back empty. A successful download leaves every error log silent.
 
 BED OUTPUT
 
-Reference Chr1_A_fumigatus_Af293:396000-399000 requested for five strains. Column 1
-is the FASTA key, column 2 is the 0-based start, column 3 the end, column 4 the
-record's primary key:
+Input: strain + Chr1_A_fumigatus_Af293, reference 396000-399000, forward. Five
+strains, one search each. Column 1 is the strain FASTA key, columns 2-3 the strain
+coordinates (BED start is 0-based), column 4 the record ID carrying the reference
+coordinates that were requested:
 
   A17-10A-1_Chr1_A_fumigatus_Af293  395992  398982  A17-10A-1:Chr1_A_fumigatus_Af293:396000-399000:f  0  +
   A17-3C-11_Chr1_A_fumigatus_Af293  396006  398996  A17-3C-11:Chr1_A_fumigatus_Af293:396000-399000:f  0  +
@@ -30,19 +28,18 @@ record's primary key:
   B-1-71L-1_Chr1_A_fumigatus_Af293  396035  399036  B-1-71L-1:Chr1_A_fumigatus_Af293:396000-399000:f  0  +
   E-1-75s-2_Chr1_A_fumigatus_Af293  395987  398984  E-1-75s-2:Chr1_A_fumigatus_Af293:396000-399000:f  0  +
 
-The same reference interval maps to five different strain intervals, with different
-offsets and different lengths (3001 bp in the reference; 2990, 2990, 3001, 3001 and
-2997 bp in the strains). Every column-1 value was checked byte-for-byte against the
-deflines in the corresponding <strain>_consensus.fa.gz and matched exactly.
+One reference interval, five different strain intervals - different offsets and
+different lengths (reference 3001 bp; strains 2990, 2990, 3001, 3001, 2997). Every
+column-1 value matched a defline in the corresponding <strain>_consensus.fa.gz
+byte-for-byte.
 
-MULTIPLE SEQUENCE ALIGNMENT
+ALIGNMENT
 
-Reference substrings were pulled from dots.ExternalNaSequence and strain substrings
-from the consensus FASTAs with samtools faidx, using exactly the coordinates the BED
-output gave. Aligned with clustalo.
+Reference substrings came from the database and strain substrings from the consensus
+FASTAs, extracted with samtools faidx at exactly the coordinates the search returned,
+then aligned with clustalo.
 
-Chr1, reference 396000-399000. Alignment length 3001 - the same as the reference -
-so no strain required an insertion here:
+Chr1, reference 396000-399000. Alignment length 3001, the same as the reference:
 
   sequence      gaps   identity vs reference
   REFERENCE        0   100.000%
@@ -52,7 +49,7 @@ so no strain required an insertion here:
   B-1-71L-1        0    99.667%
   E-1-75s-2        4    99.766%
 
-  columns 1196-1240, the 11 bp deletion:
+  columns 1196-1240, an 11 bp deletion in two strains:
   REFERENCE   GTGGTATTGCTTCTTCCATCAAACTTCTACAGAGCACAGCGGCTA
   A17-10A-1   GTGGTATTGCTTCTT-----------CTACAGAGCACAGCGGCTA
   A17-3C-11   GTGGTATTGCTTCTT-----------CTACAGAGCACAGCGGCTA
@@ -60,16 +57,12 @@ so no strain required an insertion here:
   B-1-71L-1   GTGGTATTGCTTCTTCCATCAAACTTCTACAGAGCACMGCGGCTA
   E-1-75s-2   GTGGTATTGCTTCTTCCATCAAACTTCTACAGAGCACCGCGGCTA
 
-The gaps reproduce the recorded indels exactly. Two strains carry an 11 bp deletion in
-this window and one carries a 4 bp deletion; the remaining two have no recorded event
-and show no gap at all. Every gap size matches the recorded shift exactly, and the
-gaps fall where the alignment against the reference puts them, which is the view that
-matters when reading the strain sequence against the reference.
+Gap sizes match the recorded indels exactly: 11 bp in two strains, 4 bp in a third,
+and no gap in the two with no recorded event.
 
-mito, reference 500-2000. No strain has any indel before position 2000 on mito, so
-all five map to the identical interval 500-2000, and the alignment is the expected
-degenerate case: length 1501, zero gaps anywhere, four of five strains 100.000%
-identical to the reference and the fifth differing by a single SNP.
+mito, reference 500-2000. No strain has an indel before position 2000 here, so all
+five map to the identical interval and the alignment is the expected degenerate case
+- length 1501, no gaps anywhere, four of five strains identical to the reference:
 
   sequence      gaps   identity vs reference
   REFERENCE        0   100.000%
@@ -87,32 +80,20 @@ identical to the reference and the fifth differing by a single SNP.
   B-1-71L-1   TCTAGCATTAATGGTTATGCCTATAACTGATTTATCTAAATTAAGAGGAGTACAGTTCAG
   E-1-75s-2   TCTAGCATTAATGGTTATGCCTATAACTGATTTATCTAAATTAAGAGGAGTACAGTTCAG
 
-mito is worth reporting because it was broken until today. The search originally
-required a strain to have indel data on the exact requested sequence, so a contig a
-strain simply matches - like A17-10A-1 on mito - returned no result at all, even
-though the contig is present in that strain's FASTA. That refused 689 of 6,068 valid
-strain/sequence pairs (11%). The check is now scoped to the organism rather than the
-sequence, which still proves the strain and sequence are consistent while allowing
-the identity mapping. A17-10A-1's mito is also exactly the reference length (31,765
-bp), independently consistent with its having no indels there.
+mito is worth including because it was broken until this round. The search originally
+required a strain to have indel data on the exact sequence requested, so a contig a
+strain simply matches returned nothing at all - even though the contig is present in
+that strain's FASTA. That refused 689 of 6,068 valid strain/sequence combinations
+(11%). The check is now scoped to the organism, which still confirms the strain and
+sequence go together while allowing the identity mapping.
 
-A CONTROL, AND ONE CORRECTION
+CONTROL AND LIMITATION
 
-To confirm the coordinate conversion does real work, the strain sequence was also
-extracted at the unshifted reference coordinates. Against reference, the shifted
-coordinates give a 506 bp exact match before the first SNP and 99.92% identity up to
-the first internal indel; the unshifted control gives a 0 bp prefix and 25.0%
-identity, i.e. chance. Splitting at the one known indel and realigning by the
-recorded -11 restores 99.66% identity on the far side.
+To confirm the conversion does real work, the strain sequence was also pulled at the
+unshifted reference coordinates. Against the reference, the converted coordinates give
+99.92% identity; the unshifted control gives 25.0%, which is chance.
 
-One limitation is worth stating plainly, because it is a property of the data rather
-than of the implementation. If a requested segment boundary falls inside a deletion,
-that reference base does not exist in the strain at all, so there is no exact strain
-coordinate to return for it. Segments whose boundaries sit outside any deletion - the
-ordinary case, and all of the cases above - convert exactly.
-
-Insertions were checked too. A17-58A-3 on Chr1 491000-493500 yields a strain segment
-23 bp longer than the reference. The table records four events there (-1, -6, +31, -1)
-and the alignment resolves the same region as (-1, +25, -1). Both sum to +23; the
--6/+31 pair 40 bp apart is one compound variant the aligner renders as a single
-insertion. Only the net shift is meaningful, which is all the conversion uses.
+One limitation, a property of the data rather than the implementation: if a requested
+boundary falls inside a deletion, that reference base does not exist in the strain, so
+there is no exact strain coordinate for it. Boundaries outside any deletion - the
+ordinary case, and every case above - convert exactly.
