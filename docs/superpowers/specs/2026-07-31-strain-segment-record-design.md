@@ -124,9 +124,15 @@ joined by DynSpan's `Bfmv` query — **do not exist in this database**. Only the
 ### Strain consensus FASTA (for §7 context only)
 
 `makeConsensusFastaFromVcfAndBed.py:233` writes deflines as `<sample>_<chrom>`, i.e.
-**`<strain>_<refSeq>`**. `checkUniqueIds.sh` hard-fails (exit 125) on any duplicate
-defline across the merged file, so it is **one merged multi-strain FASTA**, not one file
-per strain — meaning one seqret sequence type suffices whenever §8 is picked up.
+**`<strain>_<refSeq>`**. **Verified against real artifacts 2026-07-31** (`A17-10A-1_consensus.fa.gz`):
+deflines are exactly `>A17-10A-1_Chr1_A_fumigatus_Af293`, and the `chrom` this record emits
+byte-matches them.
+
+**Correction:** an earlier revision inferred from `checkUniqueIds.sh` that the pipeline emits
+**one merged multi-strain FASTA**. The delivered artifacts are **one gzipped file per strain**
+(`<strain>_consensus.fa.gz`, 9 deflines each for Af293). The uniqueness check is still
+consistent with that, but the packaging inference was wrong, and §8 should not assume a single
+merged file when seqret wiring is picked up.
 
 ## 3. Identity
 
