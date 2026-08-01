@@ -51,6 +51,10 @@ Reference substrings came from the database and strain substrings from the conse
 extracted with `samtools faidx` at exactly the coordinates the search returned, then aligned
 with `clustalo`.
 
+Identity figures below are over the **whole** alignment; the sequence blocks are short
+windows chosen to show a specific feature, so a strain can differ overall while looking
+identical in the window.
+
 ### Chr1, reference 396000–399000
 
 Alignment length 3001, the same as the reference.
@@ -93,15 +97,17 @@ five strains identical to the reference.
 | B-1-71L-1 | 0 | 100.000% |
 | E-1-75s-2 | 0 | 99.933% |
 
-Columns 401–460:
+The only difference anywhere in this 1501-column alignment is a single SNP at column
+700, in `E-1-75s-2` — which is what its 99.933% (1500/1501) reflects. Columns 670–714:
 
 ```
-REFERENCE   TCTAGCATTAATGGTTATGCCTATAACTGATTTATCTAAATTAAGAGGAGTACAGTTCAG
-A17-10A-1   TCTAGCATTAATGGTTATGCCTATAACTGATTTATCTAAATTAAGAGGAGTACAGTTCAG
-A17-3C-11   TCTAGCATTAATGGTTATGCCTATAACTGATTTATCTAAATTAAGAGGAGTACAGTTCAG
-A17-58A-3   TCTAGCATTAATGGTTATGCCTATAACTGATTTATCTAAATTAAGAGGAGTACAGTTCAG
-B-1-71L-1   TCTAGCATTAATGGTTATGCCTATAACTGATTTATCTAAATTAAGAGGAGTACAGTTCAG
-E-1-75s-2   TCTAGCATTAATGGTTATGCCTATAACTGATTTATCTAAATTAAGAGGAGTACAGTTCAG
+REFERENCE   AATTCTTATATATATAACCTATAATTTACATATTTTATATATACA
+A17-10A-1   AATTCTTATATATATAACCTATAATTTACATATTTTATATATACA
+A17-3C-11   AATTCTTATATATATAACCTATAATTTACATATTTTATATATACA
+A17-58A-3   AATTCTTATATATATAACCTATAATTTACATATTTTATATATACA
+B-1-71L-1   AATTCTTATATATATAACCTATAATTTACATATTTTATATATACA
+E-1-75s-2   AATTCTTATATATATAACCTATAATTTACAAATTTTATATATACA
+                                          ^ T -> A
 ```
 
 mito is worth including because it was **broken until this round**. The search originally
