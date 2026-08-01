@@ -2,13 +2,48 @@
 
   <paramSet name="StrainSegmentParams">
 
+    <!-- multiPick, so ONE search returns one segment per selected strain rather than
+         needing N searches for N strains.  The ID query
+         (StrainSegmentId.StrainSegmentsByRefSegment) unnests the selection and mints one
+         primary key per strain; everything downstream was already multi record capable
+         (StrainSegmentAttributes.Coords keys on source_id, BedReporter streams one line
+         per record), so multiPick is the whole of the change on the input side.
+
+         quote="true" matters and must stay.  With it, EnumParamHandler.toInternalValue
+         quotes each internal value and joins them with DBPlatform.prepareExpressionList,
+         which on PostgreSQL (FgpUtil PostgreSQL.java) is a plain comma join.  So
+         $$strain$$ renders as   'A17-10A-1','A17-3C-11',...   which is exactly an
+         ARRAY[...] element list.  Drop the quote and it renders bare and unparseable.
+
+         maxSelectedCount="500" is a correctness rail, not a performance one:
+           a) It is above the ENTIRE vocabulary as it stands (452 strains on unidb_shu_a,
+              the live appDb, measured 2026-07-31), so it refuses nothing a user can ask
+              for today; selecting every strain still works.
+           b) It sits below Oracle's EXPRESSION_LIMIT of 999 (FgpUtil Oracle.java).  Above
+              that limit prepareExpressionList stops emitting a comma list and starts
+              emitting "SELECT * FROM table(SYS.DBMS_DEBUG_VC2COLL(...)) UNION ...", which
+              ARRAY[...] cannot consume, so the ID query would break.  UniDB is PostgreSQL
+              and so is not exposed today, but the cap makes that cliff unreachable by
+              construction instead of by luck of how big the vocabulary happens to be.
+           c) It bounds the ID query's reject path, whose cost is linear in
+              (selected strains x that strain's indel row count).  Measured on unidb_shu_a
+              2026-07-31: 1 strain accepts in ~0.35 ms, 5 in ~0.61 ms, and all 452 in
+              ~1.9 s, with the all reject case ~1.9 s as well.
+
+         allowEmpty is left at its default of false (Param.java), so WDK rejects an empty
+         selection during validation and ARRAY[] (which PostgreSQL cannot type) is never
+         generated. -->
     <flatVocabParam name="strain"
                     queryRef="StrainSegmentVQ.StrainsWithIndelData"
                     prompt="Strain / isolate"
-                    multiPick="false">
+                    multiPick="true"
+                    maxSelectedCount="500">
       <help>
-        Strain or isolate whose coordinate system the returned segment is expressed in.
-        The list is all strains that have indel data loaded.
+        One or more strains or isolates whose coordinate systems the returned segments
+        are expressed in: the search returns one segment per selected strain. The list is
+        all strains that have indel data loaded. A selected strain that does not belong to
+        the reference sequence's organism is dropped from the result rather than being an
+        error.
       </help>
     </flatVocabParam>
 

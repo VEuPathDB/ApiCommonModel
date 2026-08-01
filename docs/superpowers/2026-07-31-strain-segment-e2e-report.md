@@ -4,11 +4,11 @@
 
 ## What it does
 
-A new internal search takes a **strain name** and a **reference-coordinate location**
-(sequence ID, start, end, strand) as input, and returns that segment expressed in the
-strain's own consensus-sequence coordinates as a BED feature. Strain names come from a
-controlled vocabulary; the coordinate conversion prefix-sums the per-event shifts recorded
-for that strain.
+A new internal search takes **one or more strain names** and a **reference-coordinate
+location** (sequence ID, start, end, strand) as input, and returns that segment expressed in
+each strain's own consensus-sequence coordinates as a BED feature — one BED line per strain
+from a single search. Strain names come from a controlled vocabulary; the coordinate
+conversion prefix-sums the per-event shifts recorded for that strain.
 
 Testing exercised the whole path against the running site — search, coordinate conversion,
 BED download — and then checked the result against the actual strain consensus FASTA files
@@ -16,12 +16,13 @@ the BED is meant to index into.
 
 The search returns an empty result rather than an error for invalid input: a strain paired
 with another organism's sequence, or a range beyond the sequence length, both come back
-empty. A successful download leaves every error log silent.
+empty. In a mixed selection this applies per strain — an irrelevant strain drops out while
+the rest still return. A successful download leaves every error log silent.
 
 ## BED output
 
-Input: strain + `Chr1_A_fumigatus_Af293`, reference `396000-399000`, forward. Five strains,
-one search each. Column 1 is the strain FASTA key, columns 2–3 the strain coordinates (BED
+Input: five strains + `Chr1_A_fumigatus_Af293`, reference `396000-399000`, forward, as a
+**single search**. Column 1 is the strain FASTA key, columns 2–3 the strain coordinates (BED
 start is 0-based), column 4 the record ID carrying the reference coordinates requested.
 
 ```
@@ -35,6 +36,10 @@ E-1-75s-2_Chr1_A_fumigatus_Af293  395987  398984  E-1-75s-2:Chr1_A_fumigatus_Af2
 One reference interval, five different strain intervals — different offsets and different
 lengths (reference 3001 bp; strains 2990, 2990, 3001, 3001, 2997). Every column-1 value
 matched a defline in the corresponding `<strain>_consensus.fa.gz` byte-for-byte.
+
+Strain count is bounded only by the vocabulary: selecting all 452 strains returns 232 BED
+lines in ~2.3 s (the other 220 belong to different organisms and are correctly dropped),
+with no duplicates. One strain returns exactly the line shown above.
 
 ## Alignment
 

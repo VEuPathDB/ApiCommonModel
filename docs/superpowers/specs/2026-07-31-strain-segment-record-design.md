@@ -23,8 +23,9 @@ Strain consensus sequences differ in length from the reference — `build_consen
 homozygous indels — so a reference interval does not address the same bases in a strain
 contig. `apidb.indel` records the per-event shifts needed to translate between them.
 
-The record class exists **only** to carry this business logic from user-selected strain +
-reference location to a BED feature. It is not user-facing, has no record page, and
+The record class exists **only** to carry this business logic from user-selected strains +
+reference location to a BED feature. One search takes **one or more** strains and emits one
+BED feature per strain (§5.1). It is not user-facing, has no record page, and
 supports no saved strategies.
 
 ### Non-goals
@@ -292,6 +293,74 @@ misbehave — there is no working sibling to diff against.
 
 Params: `strain`, `sequenceId`, `start`, `end`, `strand`. **There is no organism param.**
 
+#### `strain` is multi-pick: one search, N records
+
+`strain` is a `flatVocabParam` with `multiPick="true"` and `maxSelectedCount="500"`, so a
+single search takes **one or more** strains and returns **one record per strain** — the same
+reference interval expressed in each strain's coordinates. Five strains is one search
+producing five BED lines, not five searches producing one each.
+
+The change is confined to the param and this ID query. Everything downstream was already
+written against a *set* of primary keys: §5.3's `Coords` keys on `source_id` and parses the
+strain out of each PK, and §7's `BedReporter` streams one line per record.
+
+The ID query crosses the (single-row) sequence side with the unnested strain list:
+
+```sql
+FROM ( ...sequence derived table... ) seg
+   , unnest(ARRAY[$$strain$$]) AS st(strain)
+```
+
+and builds the PK from `st.strain`. Every gate below is then evaluated **once per strain**,
+unchanged in meaning.
+
+Three things make this shape the right one rather than the obvious alternatives:
+
+- **`quote="true"` is what makes `ARRAY[...]` work, and is not optional.**
+  `EnumParamHandler.toInternalValue` quotes each internal value and joins them with
+  `DBPlatform.prepareExpressionList`, which on PostgreSQL is a plain comma join. So
+  `$$strain$$` renders as `'A17-10A-1','A17-3C-11',…` — exactly an `ARRAY` element list.
+  Verified against the running service, not assumed.
+- **The gate stays an equality, so `pan_named_ix` stays an Index Only Scan.** Rewriting
+  gate 3 as `regexp_replace(pan.name, '_Indel$', '') IN ($$strain$$)` would put a function on
+  `pan.name` and force a scan — the same reason the single-strain version appended the suffix
+  rather than stripping it. `EXPLAIN ANALYZE` on `unidb_shu_a` confirms an Index Only Scan on
+  `pan_named_ix` with one index search per strain.
+- **A failing strain is dropped, not fatal.** Because the gates are per (sequence, strain)
+  pair, a strain belonging to another organism is simply absent from the result while its
+  companions still return — the existing "bad input yields zero rows" contract applied per
+  row. Verified: `C044` (a *P. falciparum* strain, in the vocabulary) plus two *A. fumigatus*
+  strains against `Chr1_A_fumigatus_Af293` returns 2 records, no error. A strain that is not
+  in the vocabulary at all never reaches the SQL: WDK rejects it at param validation with a
+  422, exactly as it did when the param was single-pick.
+
+**`maxSelectedCount="500"` is a correctness rail, not a performance one.** It sits above the
+entire vocabulary as it stands (452 strains on `unidb_shu_a`, live, measured 2026-07-31), so
+it refuses nothing a user can ask for today — selecting every strain still works. It sits
+*below* Oracle's `EXPRESSION_LIMIT` of 999 (FgpUtil `Oracle.java`), past which
+`prepareExpressionList` stops emitting a comma list and starts emitting
+`SELECT * FROM table(SYS.DBMS_DEBUG_VC2COLL(...)) UNION …`, which `ARRAY[...]` cannot
+consume. UniDB is PostgreSQL and so is not exposed today; the cap makes that cliff
+unreachable by construction rather than by luck of how large the vocabulary happens to be.
+It also bounds the reject path, whose cost is linear in (strains × that strain's indel rows).
+`allowEmpty` stays at its default `false`, so WDK rejects an empty selection during
+validation and the untypeable `ARRAY[]` is never generated.
+
+Cost on `unidb_shu_a`, 2026-07-31, `Chr1_A_fumigatus_Af293` 396000–399000:
+
+| selection | planner cost | wall | rows |
+|---|---:|---:|---:|
+| 1 strain, accept | 238.24 | ~0.35 ms | 1 |
+| 5 strains, accept | 939.65 | ~0.61 ms | 5 |
+| all 452, accept | — | ~1.9 s | 232 |
+| 1 strain, reject | — | ~4.9 ms | 0 |
+| 5 strains, reject | — | ~22.5 ms | 0 |
+
+The accept path is roughly flat in strain count; the reject path is linear in it. That is
+the same asymmetry the single-strain query already had (§5.1.1), just multiplied. Five
+strains in one search is cheaper than five separate searches, which would repeat the
+sequence lookup and the WDK query-instance overhead five times.
+
 ### 5.1.1 Why no organism input
 
 An earlier draft took an organism as a first param, used it to prune the `org_abbrev`
@@ -355,7 +424,7 @@ is worth having: the grammar's soundness should not rest on which features happe
 indel-called. Verified the gate costs nothing real — it refuses 0 indel-bearing sequences
 and all **9** Af293 sequences (8 chromosomes plus `mito_A_fumigatus_Af293`) still pass.
 
-Note what gate 4 does **not** cover: it is sequence-side only. `$$strain$$` is concatenated
+Note what gate 4 does **not** cover: it is sequence-side only. `st.strain` is concatenated
 into the PK ahead of the first colon and is never colon-checked. That field is safe because
 the `flatVocab` it comes from holds no colon-bearing value (0 of 452 on `unidb_shu_a`,
 0 of 6,119 on rebuild01) — a property of the data, not of the SQL.
@@ -524,7 +593,9 @@ This is the controlled vocabulary required by the brief: strain names come from
 `apidb.indel` (via `study.protocolappnode`, which is where the name actually lives). No
 tuning table exists for it. Scoping to a *relevant* strain is not the vocabulary's job —
 gate 3 of §5.1 rejects a strain with no indel data on the requested sequence's **organism**.
-(It does *not* require data on that exact sequence; see §5.1.1.)
+(It does *not* require data on that exact sequence; see §5.1.1.) Because the param is
+multi-pick, that rejection is per strain: irrelevant strains drop out of a mixed selection
+rather than failing the search.
 
 ### 5.3 Attribute query: `StrainSegmentAttributes.Coords`
 

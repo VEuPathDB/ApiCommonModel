@@ -2,7 +2,16 @@
 
   <querySet name="StrainSegmentId" queryType="id" isCacheable="true">
 
-    <!-- FIVE gates, all as filters so bad input returns zero rows.  The numbering
+    <!-- MULTI STRAIN.  The strain param is multiPick, so this query returns ONE row per
+         selected strain: the sequence side (one row) is crossed with the unnested strain
+         list and the gates below are applied to each pair.  Nothing downstream needed to
+         change for that, since it was already written against a set of primary keys.
+
+         Because the gates are per pair, a strain that fails one is simply absent from the
+         result while its companions still return: asking for two valid strains and one
+         nonsense strain yields two rows, not an error.
+
+         FIVE gates, all as filters so bad input returns zero rows.  The numbering
          below is the SAME as spec section 5.1, so "gate 3" here and "gate 3" there
          are the same gate; do not renumber one without the other:
            1. source_id  - the reference sequence exists (dots.ExternalNaSequence.source_id)
@@ -51,7 +60,14 @@
 
       <sql>
         <![CDATA[
-          SELECT CONCAT($$strain$$, ':', seg.ref_seq, ':',
+          -- $$strain$$ is a multiPick flatVocab with quote="true", so WDK renders it as a
+          -- comma separated list of quoted values ('a','b','c'): EnumParamHandler quotes
+          -- each internal value and joins them with DBPlatform.prepareExpressionList,
+          -- which on PostgreSQL is a plain comma join.  That is precisely an ARRAY[...]
+          -- element list, so unnesting it gives one row per selected strain, and the
+          -- sequence side is crossed with it to mint one primary key per strain.  Every
+          -- gate below is then evaluated once per strain, unchanged in meaning.
+          SELECT CONCAT(st.strain, ':', seg.ref_seq, ':',
                         seg.ref_start, '-', seg.ref_end, ':',
                         $$sequence_strand$$)              AS source_id
                , seg.project_id
@@ -70,6 +86,10 @@
             WHERE o.taxon_id = ens.taxon_id
               AND ens.source_id = $$sequenceId$$
           ) seg
+             -- One row per selected strain.  ARRAY[...] is a constant expression here, so
+             -- no LATERAL is needed; the planner turns the whole thing into a Nested Loop
+             -- Semi Join driven by the (single row) sequence side.
+             , unnest(ARRAY[$$strain$$]) AS st(strain)
           WHERE seg.ref_start >= 1
             AND seg.ref_end   >= seg.ref_start
             AND seg.ref_end   <= seg.seq_length
@@ -81,7 +101,7 @@
             -- 'ncRNA'::integer.
             --
             -- What this gate guarantees is SEQUENCE-SIDE ONLY.  It is not a
-            -- by-construction property of the whole ID: $$strain$$ is concatenated in
+            -- by-construction property of the whole ID: st.strain is concatenated in
             -- ahead of the first colon and is never colon-checked here.  What keeps
             -- the strain field safe is the flatVocab it comes from, all of whose
             -- values are colon-free today (0 of 452 on unidb_shu_a) -- a property of
@@ -100,11 +120,16 @@
             -- So on the live DB the gate is currently unreachable, and on rebuild01 it
             -- was unreachable only by an accident of which features get indel-called.
             AND seg.ref_seq NOT LIKE '%:%'
-            -- The suffix is appended to the parameter (CONCAT($$strain$$, '_Indel'))
+            -- The suffix is appended to the unnested strain (CONCAT(st.strain, '_Indel'))
             -- rather than stripped from the column (regexp_replace(pan.name, ...)),
             -- so pan_named_ix (name, protocol_app_node_id, ...) can still be used as
             -- an Index Only Scan; applying a function to pan.name instead would force
-            -- a scan of protocolappnode per row.
+            -- a scan of protocolappnode per row.  This is why the multiPick change
+            -- unnests the strain list rather than turning the gate into
+            -- regexp_replace(pan.name, '_Indel$', '') IN ($$strain$$): keeping pan.name
+            -- on the bare side of an equality is what preserves the Index Only Scan, and
+            -- it stays an equality once per strain (verified below: "Index Searches: 5"
+            -- for five strains).
             --
             -- GATE 3 (spec 5.1 numbering).
             -- The gate is on ORGANISM (ens2.taxon_id = seg.taxon_id), not on the exact
@@ -133,10 +158,9 @@
             -- every contig of its organism's reference.
             --
             -- Cost, both paths, measured on unidb_shu_a 2026-07-31 (EXPLAIN ANALYZE):
-            --   ACCEPT ~0.33 ms.  The EXISTS early-exits on the first matching indel
-            --     row via indel_ix1.  (There IS one sequential scan in the plan, a
-            --     Seq Scan on apidb.organism, 5 rows; harmless.)
-            --   REJECT is where this change costs something, and it is unavoidable:
+            --   ACCEPT ~0.33 ms for one strain.  The EXISTS early-exits on the first
+            --     matching indel row via indel_ix1.
+            --   REJECT is where this gate costs something, and it is unavoidable:
             --     a false EXISTS must exhaust every indel row the strain owns.  For
             --     the largest strain here, A17-48H-7 (108,091 indel rows), a
             --     cross-organism reject runs ~101 ms versus ~53 ms for the old
@@ -144,6 +168,21 @@
             --     row count, not the DB's: the smallest strain, C044 (4 rows),
             --     rejects in ~0.33 ms.  On a 43.5M-row database the worst case would
             --     be substantially larger.
+            --
+            -- Cost of the multiPick change itself, same DB and date, Chr1 396000-399000:
+            --   ACCEPT  1 strain   est cost 238.24, ~0.35 ms
+            --   ACCEPT  5 strains  est cost 939.65, ~0.61 ms  (5 rows)
+            --   ACCEPT  all 452    ~1.9 s (232 rows; 220 strains belong to other organisms
+            --                      and are gated out)
+            --   REJECT  1 strain   ~4.9 ms   |  REJECT  5 strains  ~22.5 ms
+            -- So wall time on the accept path is roughly flat in strain count while the
+            -- reject path is linear in it, which is the same asymmetry the single-strain
+            -- query already had, just multiplied.  The plan stays a Nested Loop Semi Join
+            -- with an Index Only Scan on pan_named_ix, one index search per strain; the
+            -- unnest is a Function Scan costing 0.05.  Five strains in one search is
+            -- cheaper than five separate searches, which would repeat the sequence lookup
+            -- and the WDK query-instance overhead five times.  The unbounded worst case is
+            -- capped by maxSelectedCount on the param (see strainSegmentParams.xml).
             --   Do NOT "optimise" this into a LIMIT 1 scalar subquery; that rewrite
             --     was considered and rejected on purpose (spec 5.1.1) because it
             --     would silently return a wrong answer if the "no node spans >1
@@ -154,7 +193,7 @@
                      , study.protocolappnode pan
                      , dots.ExternalNaSequence ens2
                   WHERE i.protocol_app_node_id = pan.protocol_app_node_id
-                    AND pan.name = CONCAT($$strain$$, '_Indel')
+                    AND pan.name = CONCAT(st.strain, '_Indel')
                     AND ens2.na_sequence_id = i.na_sequence_id
                     AND ens2.taxon_id = seg.taxon_id
                 )
