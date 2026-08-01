@@ -1,0 +1,123 @@
+END-TO-END TESTING: strain-genomic-segment record (BED in strain coordinates)
+FungiDB dev instance jbrestel.fungidb.org, appDb unidb_shu_a, 2026-07-31
+
+WHAT WAS TESTED
+
+The new internal record class takes a reference-coordinate genomic location plus a
+strain and returns a BED feature in that strain's consensus-sequence coordinates,
+by prefix-summing the signed per-event shifts in apidb.indel. The point of the
+exercise was to check the whole path against the running site rather than against
+the model XML: search -> ID query -> coordinate-conversion attribute query -> BED
+reporter -> a downloaded BED line, and then to check that line against the actual
+strain consensus FASTA files it is meant to index into.
+
+Service checks passed: the record type resolves and advertises the "bed" format, the
+search is correctly absent from the category tree (it is internal and has no ontology
+entry), basket support is off, and a successful download leaves every error log
+silent (200, report written in 7 ms, "Wrote 1 features for 1 records"). Bad input
+returns an empty result rather than an error: a cross-organism sequence and an
+out-of-range end both come back "### The result is empty ###".
+
+BED OUTPUT
+
+Reference Chr1_A_fumigatus_Af293:396000-399000 requested for five strains. Column 1
+is the FASTA key, column 2 is the 0-based start, column 3 the end, column 4 the
+record's primary key:
+
+  A17-10A-1_Chr1_A_fumigatus_Af293  395992  398982  A17-10A-1:Chr1_A_fumigatus_Af293:396000-399000:f  0  +
+  A17-3C-11_Chr1_A_fumigatus_Af293  396006  398996  A17-3C-11:Chr1_A_fumigatus_Af293:396000-399000:f  0  +
+  A17-58A-3_Chr1_A_fumigatus_Af293  395999  399000  A17-58A-3:Chr1_A_fumigatus_Af293:396000-399000:f  0  +
+  B-1-71L-1_Chr1_A_fumigatus_Af293  396035  399036  B-1-71L-1:Chr1_A_fumigatus_Af293:396000-399000:f  0  +
+  E-1-75s-2_Chr1_A_fumigatus_Af293  395987  398984  E-1-75s-2:Chr1_A_fumigatus_Af293:396000-399000:f  0  +
+
+The same reference interval maps to five different strain intervals, with different
+offsets and different lengths (3001 bp in the reference; 2990, 2990, 3001, 3001 and
+2997 bp in the strains). Every column-1 value was checked byte-for-byte against the
+deflines in the corresponding <strain>_consensus.fa.gz and matched exactly.
+
+MULTIPLE SEQUENCE ALIGNMENT
+
+Reference substrings were pulled from dots.ExternalNaSequence and strain substrings
+from the consensus FASTAs with samtools faidx, using exactly the coordinates the BED
+output gave. Aligned with clustalo.
+
+Chr1, reference 396000-399000. Alignment length 3001 - the same as the reference -
+so no strain required an insertion here:
+
+  sequence      gaps   identity vs reference
+  REFERENCE        0   100.000%
+  A17-10A-1       11    99.799%
+  A17-3C-11       11    99.799%
+  A17-58A-3        0    99.867%
+  B-1-71L-1        0    99.667%
+  E-1-75s-2        4    99.766%
+
+  columns 1196-1240, the 11 bp deletion:
+  REFERENCE   GTGGTATTGCTTCTTCCATCAAACTTCTACAGAGCACAGCGGCTA
+  A17-10A-1   GTGGTATTGCTTCTT-----------CTACAGAGCACAGCGGCTA
+  A17-3C-11   GTGGTATTGCTTCTT-----------CTACAGAGCACAGCGGCTA
+  A17-58A-3   GTGGTATTGCTTCTTCCATCAAACTTCTACAGAGCACAGCGGCTA
+  B-1-71L-1   GTGGTATTGCTTCTTCCATCAAACTTCTACAGAGCACMGCGGCTA
+  E-1-75s-2   GTGGTATTGCTTCTTCCATCAAACTTCTACAGAGCACCGCGGCTA
+
+The gaps reproduce the recorded indels exactly. apidb.indel holds one event for
+A17-10A-1 and A17-3C-11 in this window (location 397206, shift -11) and one for
+E-1-75s-2 (location 398491, shift -4); the alignment shows an 11 bp gap for the first
+two, a 4 bp gap for the third, and no gap at all for the two strains with no recorded
+events. Gap sizes match the recorded shifts exactly. Gap positions differ by 3-4 bp
+because indel placement is ambiguous inside a repeat - VCF left-normalises, aligners
+place gaps rightmost - and both descriptions produce the same sequence.
+
+mito, reference 500-2000. No strain has any indel before position 2000 on mito, so
+all five map to the identical interval 500-2000, and the alignment is the expected
+degenerate case: length 1501, zero gaps anywhere, four of five strains 100.000%
+identical to the reference and the fifth differing by a single SNP.
+
+  sequence      gaps   identity vs reference
+  REFERENCE        0   100.000%
+  A17-10A-1        0   100.000%
+  A17-3C-11        0   100.000%
+  A17-58A-3        0   100.000%
+  B-1-71L-1        0   100.000%
+  E-1-75s-2        0    99.933%
+
+  columns 401-460:
+  REFERENCE   TCTAGCATTAATGGTTATGCCTATAACTGATTTATCTAAATTAAGAGGAGTACAGTTCAG
+  A17-10A-1   TCTAGCATTAATGGTTATGCCTATAACTGATTTATCTAAATTAAGAGGAGTACAGTTCAG
+  A17-3C-11   TCTAGCATTAATGGTTATGCCTATAACTGATTTATCTAAATTAAGAGGAGTACAGTTCAG
+  A17-58A-3   TCTAGCATTAATGGTTATGCCTATAACTGATTTATCTAAATTAAGAGGAGTACAGTTCAG
+  B-1-71L-1   TCTAGCATTAATGGTTATGCCTATAACTGATTTATCTAAATTAAGAGGAGTACAGTTCAG
+  E-1-75s-2   TCTAGCATTAATGGTTATGCCTATAACTGATTTATCTAAATTAAGAGGAGTACAGTTCAG
+
+mito is worth reporting because it was broken until today. The search originally
+required a strain to have indel data on the exact requested sequence, so a contig a
+strain simply matches - like A17-10A-1 on mito - returned no result at all, even
+though the contig is present in that strain's FASTA. That refused 689 of 6,068 valid
+strain/sequence pairs (11%). The check is now scoped to the organism rather than the
+sequence, which still proves the strain and sequence are consistent while allowing
+the identity mapping. A17-10A-1's mito is also exactly the reference length (31,765
+bp), independently consistent with its having no indels there.
+
+A CONTROL, AND ONE CORRECTION
+
+To confirm the coordinate conversion does real work, the strain sequence was also
+extracted at the unshifted reference coordinates. Against reference, the shifted
+coordinates give a 506 bp exact match before the first SNP and 99.92% identity up to
+the first internal indel; the unshifted control gives a 0 bp prefix and 25.0%
+identity, i.e. chance. Splitting at the one known indel and realigning by the
+recorded -11 restores 99.66% identity on the far side.
+
+One finding came out of this that is worth recording: apidb.indel.location is the VCF
+anchor base, not the first affected base. Reconstructing the strain sequence showed
+that the only deletion offsets reproducing the observed consensus start at
+location + 1, never at location itself (A17-10A-1: recorded 1207, valid 1208-1212;
+E-1-75s-2: recorded 2492, valid 2493-2495). This confirms rather than contradicts the
+boundary handling in the query. It also means an event straddling a segment boundary
+has no exact strain coordinate, because the reference base does not exist in the
+strain - a genuine limit of the data, not of the implementation.
+
+Insertions were checked too. A17-58A-3 on Chr1 491000-493500 yields a strain segment
+23 bp longer than the reference. The table records four events there (-1, -6, +31, -1)
+and the alignment resolves the same region as (-1, +25, -1). Both sum to +23; the
+-6/+31 pair 40 bp apart is one compound variant the aligner renders as a single
+insertion. Only the net shift is meaningful, which is all the conversion uses.
