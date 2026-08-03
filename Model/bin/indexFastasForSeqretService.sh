@@ -14,22 +14,31 @@ main(){
   SQLITE_SUFFIX="$4"
 
   # Which sequence types to retrieve?
-  # Needs two options because of parsing headers difference:
+  # Needs three options because of where the files live and how their headers parse:
   # - match everything before first space as the ID
   # - match "transcript(.*?) " as the ID (so we can index proteins by their transcript)
-  FILES_ID_BEFORE_FIRST_SPACE="$5"
-  FILES_ID_TRANSCRIPT_FIELD="$6"
+  # - dnaseq consensus sequences, which come from the workflow dir and are bgzipped
+  # Any of the three may be empty, so you can rebuild just one kind of file.
+  FILES_ID_BEFORE_FIRST_SPACE="${5:-}"
+  FILES_ID_TRANSCRIPT_FIELD="${6:-}"
+  FILES_DNASEQ_CONSENSUS="${7:-}"
 
   # Check the arguments and if they don't seem right print the usage message and exit
-  if [ "$#" -ne 6 ] || [ ! "$FILES_ID_BEFORE_FIRST_SPACE" -a ! "$FILES_ID_TRANSCRIPT_FIELD" ] || [ ! -f "$STAGING_DIR_PATHS_CONFIG" ] ; then
-    echo "Usage: $0 STAGING_DIR_PATHS_CONFIG OUTPUT_DIR FASTA_SUFFIX SQLITE_SUFFIX FILES_ID_BEFORE_FIRST_SPACE FILES_ID_TRANSCRIPT_FIELD"
-    echo "e.g. $0 ../config/stagingDirPaths.tab ./output fa fa.fai.sqlite Genome,ESTs,Isolates AnnotatedProteins"
+  if [ "$#" -lt 4 ] || [ "$#" -gt 7 ] \
+    || [ ! "$FILES_ID_BEFORE_FIRST_SPACE" -a ! "$FILES_ID_TRANSCRIPT_FIELD" -a ! "$FILES_DNASEQ_CONSENSUS" ] \
+    || [ ! -f "$STAGING_DIR_PATHS_CONFIG" ] ; then
+    echo "Usage: $0 STAGING_DIR_PATHS_CONFIG OUTPUT_DIR FASTA_SUFFIX SQLITE_SUFFIX [FILES_ID_BEFORE_FIRST_SPACE] [FILES_ID_TRANSCRIPT_FIELD] [FILES_DNASEQ_CONSENSUS]"
+    echo "e.g. $0 ../config/stagingDirPaths.tab ./output fa fa.fai.sqlite Genome,ESTs,Isolates AnnotatedProteins dnaseq"
+    echo "     $0 ../config/stagingDirPaths.tab ./output fa fa.fai.sqlite Genome            # just the genome"
+    echo "     $0 ../config/stagingDirPaths.tab ./output fa fa.fai.sqlite '' '' dnaseq      # just dnaseq"
     exit 1
   fi
   mkdir -pv $OUTPUT_DIR
 
   # Go through the different files that need to be made
-  iterSeq "removeAfterSpaceFromHeader:$FILES_ID_BEFORE_FIRST_SPACE" "chooseTranscriptFieldForHeader:$FILES_ID_TRANSCRIPT_FIELD" \
+  iterSeq "removeAfterSpaceFromHeader:$FILES_ID_BEFORE_FIRST_SPACE" \
+          "chooseTranscriptFieldForHeader:$FILES_ID_TRANSCRIPT_FIELD" \
+          "dnaseqConsensusHeader:$FILES_DNASEQ_CONSENSUS" \
   | while read SEQUENCE_TYPE PROG; do
     # For each desired result ...
     RESULT_SEQ_FASTA=$OUTPUT_DIR/${SEQUENCE_TYPE}.${FASTA_SUFFIX}
@@ -38,14 +47,17 @@ main(){
     # Remove results of any previous run
     rm -fv $RESULT_SEQ_FASTA $RESULT_SEQ_SQLITE
 
-    # Find fastas in staging dir and concatenate into one big fasta
-    readProjectAndStagingDirForGenomicSitesFromConfig $STAGING_DIR_PATHS_CONFIG \
-    | while read PROJECT_ID STAGING_DIR; do
-      findInDownloadDir ${STAGING_DIR}/downloadSite/${PROJECT_ID}/release-CURRENT "${PROJECT_ID}-CURRENT_*${SEQUENCE_TYPE}.fasta" \
-      | while read -r SOURCE_FASTA; do
-          echo $(date --iso=seconds) "$PROG >> $RESULT_SEQ_FASTA: $SOURCE_FASTA"
-          $PROG $SOURCE_FASTA >> $RESULT_SEQ_FASTA
-      done
+    # Where do the source fastas live? dnaseq is not on the download site.
+    case $PROG in
+      dnaseqConsensusHeader) FIND_SOURCE_FASTAS=findDnaseqConsensusFastas ;;
+      *)                     FIND_SOURCE_FASTAS=findDownloadSiteFastas ;;
+    esac
+
+    # Find the source fastas and concatenate into one big fasta
+    $FIND_SOURCE_FASTAS "$STAGING_DIR_PATHS_CONFIG" "$SEQUENCE_TYPE" \
+    | while read -r SOURCE_FASTA; do
+        echo $(date --iso=seconds) "$PROG >> $RESULT_SEQ_FASTA: $SOURCE_FASTA"
+        $PROG $SOURCE_FASTA >> $RESULT_SEQ_FASTA
     done
 
     # Index the big fasta
@@ -64,12 +76,41 @@ iterSeq(){
 findInDownloadDir(){
   DOWNLOAD_DIR="$1"
   NAME_PATTERN="$2"
-  find $DOWNLOAD_DIR -type f -name "$NAME_PATTERN" -a ! -wholename '*Reference/*' 
+  find $DOWNLOAD_DIR -type f -name "$NAME_PATTERN" -a ! -wholename '*Reference/*'
+}
+
+# The usual case: one fasta per project, published on the current staging download site
+findDownloadSiteFastas(){
+  config="$1"
+  SEQUENCE_TYPE="$2"
+  readProjectAndStagingDirForGenomicSitesFromConfig $config \
+  | while read PROJECT_ID STAGING_DIR; do
+      findInDownloadDir ${STAGING_DIR}/downloadSite/${PROJECT_ID}/release-CURRENT "${PROJECT_ID}-CURRENT_*${SEQUENCE_TYPE}.fasta"
+  done
+}
+
+# dnaseq consensus sequences are not published on the download site - they are read
+# straight out of the GenomicsDB workflow results. The config gives us the workflow
+# data root; the layout underneath it is fixed:
+#   <root>/<project>/<organism>/dnaseq/<experiment>/dnaseqNextflow/analysisDir/results/<sample>/<sample>_consensus.fa.gz
+# Left unquoted on purpose so the shell expands the glob - much faster than find,
+# which would otherwise walk the whole workflow tree.
+findDnaseqConsensusFastas(){
+  config="$1"
+  readDnaseqWorkflowRootFromConfig $config \
+  | while read -r DNASEQ_ROOT; do
+      ls -1d ${DNASEQ_ROOT%/}/*/*/dnaseq/*/dnaseqNextflow/analysisDir/results/*/*_consensus.fa.gz 2>/dev/null
+  done
 }
 
 readProjectAndStagingDirForGenomicSitesFromConfig(){
   config="$1"
-  grep -v 'MicrobiomeDB\|ClinEpiDB\|OrthoMCL\|^$' $config
+  grep -v 'MicrobiomeDB\|ClinEpiDB\|OrthoMCL\|^dnaseqWorkflowRoot\|^$' $config
+}
+
+readDnaseqWorkflowRootFromConfig(){
+  config="$1"
+  awk '$1 == "dnaseqWorkflowRoot" {print $2}' $config
 }
 
 removeAfterSpaceFromHeader(){
@@ -81,6 +122,13 @@ removeAfterSpaceFromHeader(){
 
 chooseTranscriptFieldForHeader(){
   perl -pe 'if(m{^>} and m{transcript=(.*?) }){$_ = ">$1\n";}' "$@"
+}
+
+# dnaseq consensus fastas are bgzipped, so decompress on the way through. Their headers
+# are already "<sample>_<contig>" with no description, which keeps IDs unique across
+# samples - the ID rule is the same as for the download site fastas.
+dnaseqConsensusHeader(){
+  zcat "$@" | removeAfterSpaceFromHeader
 }
 
 indexFasta(){
