@@ -73,7 +73,10 @@ readProjectAndStagingDirForGenomicSitesFromConfig(){
 }
 
 removeAfterSpaceFromHeader(){
-  perl -pe 's{\s.*$}{} if m{^>}' "$@"
+  # Match a space or tab rather than \s - \s also matches the newline that -p leaves on
+  # $_, so a header with no description would lose its newline and get the first line of
+  # sequence joined onto the ID.
+  perl -pe 's{[ \t].*$}{} if m{^>}' "$@"
 }
 
 chooseTranscriptFieldForHeader(){
