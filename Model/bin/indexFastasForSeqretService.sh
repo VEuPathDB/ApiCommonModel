@@ -144,6 +144,16 @@ indexFasta(){
     echo "Error: ${INPUT_FASTA_PATH}.fai not found - did Singularity+faidx work?"
     exit 1
   fi
+  # The big fasta is a concatenation of many independently made files, so check the IDs
+  # are unique before importing - otherwise the unique index below aborts the .import
+  # part way through and leaves a half filled database behind.
+  DUPLICATE_IDS=$(cut -f1 "${INPUT_FASTA_PATH}.fai" | sort | uniq -d | head)
+  if [ -n "$DUPLICATE_IDS" ] ; then
+    echo "Error: duplicate sequence IDs in ${INPUT_FASTA_PATH}, first few:"
+    echo "$DUPLICATE_IDS"
+    exit 1
+  fi
+
   # Column names follow documentation here: http://www.htslib.org/doc/faidx.html
   # Table name and columns are expected by the service
   rm -f "$OUTPUT_SQLITE_PATH"
@@ -159,6 +169,9 @@ create unique index faidx_name on faidx (name);
 .mode tabs
 .import ${INPUT_FASTA_PATH}.fai faidx
 EOF
+  # sqlite3 always creates its database 0644, and a umask can only clear permission bits
+  # rather than add them, so make the results group writable here instead.
+  chmod -v g+w "$INPUT_FASTA_PATH" "$OUTPUT_SQLITE_PATH"
   if ! [ -f "${OUTPUT_SQLITE_PATH}" ] ; then
     echo "Error: ${OUTPUT_SQLITE_PATH} not found - did sqlite3 work?"
     exit 1
