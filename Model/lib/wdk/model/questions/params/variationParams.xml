@@ -22,6 +22,76 @@
            default once their variation data loads. Omitted rather than invented. -->
     </datasetParam>
 
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- EDA sample table suffix (hidden, derived) -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Carries <studyAbbrev>_<entityAbbrev> so the EDA filter queries can name
+         eda.attributevalue_<suffix> / eda.attributegraph_<suffix>. SQL cannot
+         parameterize a table name from a subquery result, so the value has to
+         arrive as a param and be interpolated textually.
+
+         quote="false" because it is interpolated into an identifier, not compared
+         as a string. visible="false" because it is derived from the organism, not
+         chosen. The interpolation is safe: the value can only ever be one of the
+         rows VariationVQ.EdaSampleTableSuffix returns, never free user text. -->
+    <flatVocabParam name="eda_sample_table_suffix"
+                    queryRef="VariationVQ.EdaSampleTableSuffix"
+                    prompt="EDA sample table suffix"
+                    quote="false"
+                    visible="false"
+                    dependedParamRef="organismParams.organismSinglePick">
+      <help>Derived from the selected organism. Not user-visible.</help>
+    </flatVocabParam>
+
   </paramSet>
+
+  <!-- Vocabulary queries for the variation searches. Lives in the params file,
+       following this codebase's convention (organismVQ is in organismParams.xml,
+       SnpVQ was in snpParams.xml). -->
+  <querySet name="VariationVQ" queryType="vocab" isCacheable="true">
+
+    <!-- Returns exactly one row: the <studyAbbrev>_<entityAbbrev> suffix for the
+         chosen organism's dnaseq EDA study. One param rather than two because the
+         two abbreviations are only ever used concatenated, so there is one
+         interpolation point to get wrong instead of two.
+
+         The abbreviation is LOOKED UP, not recomputed. eda.study.internal_abbrev
+         is a reproducible SHA-1 digest, but hardcoding that convention into model
+         XML fails invisibly: a changed convention yields a well-formed abbreviation
+         for a study that does not exist, surfacing much later as
+         'relation "eda.attributevalue_s<hash>_sample" does not exist'. A lookup
+         yields zero rows, so the organism dropdown is visibly empty instead.
+         apiTuningManager.xml:3846-3863 builds these same names the same way. -->
+    <sqlQuery name="EdaSampleTableSuffix">
+      <paramRef ref="organismParams.organismSinglePick" noTranslation="true"/>
+      <column name="internal"/>
+      <column name="term"/>
+      <sql>
+        <![CDATA[
+          SELECT DISTINCT
+            s.internal_abbrev || '_' || lower(e.internal_abbrev) AS internal,
+            s.internal_abbrev || '_' || lower(e.internal_abbrev) AS term
+          FROM apidb.datasource ds
+          JOIN apidb.organism o  ON o.taxon_id = ds.taxon_id
+          JOIN sres.taxonname tn ON tn.taxon_id = o.taxon_id
+                                AND tn.name_class = 'scientific name'
+          JOIN sres.externaldatabase ed
+               ON ed.name = ds.name
+          JOIN sres.externaldatabaserelease edr
+               ON edr.external_database_id = ed.external_database_id
+          JOIN eda.studyexternaldatabaserelease sedr
+               ON sedr.external_database_release_id = edr.external_database_release_id
+          JOIN eda.study s
+               ON s.study_id = sedr.study_id
+          JOIN eda.entitytypegraph e
+               ON e.study_id = s.study_id
+          WHERE ds.type = 'isolates' AND ds.subtype = 'Dna_Seq'
+            AND tn.name = '$$organismSinglePick$$'
+            AND s.internal_abbrev IS NOT NULL
+        ]]>
+      </sql>
+    </sqlQuery>
+
+  </querySet>
 
 </wdkModel>
