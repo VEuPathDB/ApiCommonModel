@@ -1,7 +1,7 @@
 # Variation searches — design (scaffolding + `VariationBySourceId`)
 
 **Date:** 2026-08-05
-**Status:** approved
+**Status:** implemented 2026-08-05 (scaffolding + `VariationBySourceId`; the four searches in §8.1 remain unstarted)
 **Scope:** The question-side scaffolding for the `variation` record — a `paramSet`, a
 `querySet`, a `questionSet`, and their model imports — plus the first and simplest
 search, `VariationBySourceId`. The four remaining ported searches are **out of scope**;

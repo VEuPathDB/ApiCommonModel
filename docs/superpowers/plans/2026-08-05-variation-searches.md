@@ -1,5 +1,9 @@
 # Variation Searches Implementation Plan (scaffolding + `VariationBySourceId`)
 
+> **Executed and complete, 2026-08-05.** See "Execution outcome" at the end for what was
+> verified, what was substituted, and the two checks that remain unrun. The step
+> checkboxes below were not ticked individually; the outcome section is the record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give the `variation` record its first search — `VariationBySourceId` — along with
@@ -637,6 +641,72 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
 
 ---
+
+## Execution outcome (2026-08-05)
+
+Commits, in order: `6130ef92f` (three files), `ff563a570` (comment fix from review),
+`cf87f9d99` (imports), `eaa4757b8` (ontology row). Final change set is exactly the five
+files this plan names — 95 insertions, no deletions — and `grep -rn 'jbrestel'
+Model/lib/wdk/` is clean.
+
+### Verified
+
+- `wb model` passed in 54s. The assembled PlasmoDB model contains `Question:
+  name='VariationBySourceId'` with `query='VariationsBy.VariationBySourceId'` and
+  `columns{source_id, project_id}` — which also settles the open question of whether
+  `ApidbTuning.VariationAttributes` exposes `project_id`. It does.
+- `wb ontology` passed in 1m4s and regenerated `individuals.owl` →
+  `categories_merged.owl`. The merged OWL holds exactly one `owl:Class` for the search,
+  with `subClassOf topic_0199`, `targetType search`, and both `menu` and `webservice`
+  scopes — downstream proof the tab-delimited row parsed into the right columns.
+- The search appears in the site's searches menu.
+- Single ID → straight to the record page, confirming `noSummaryOnSingleRecord`.
+- Multi-ID → the record's **default** summary columns, confirming that inheriting rather
+  than overriding `attributesList` took effect.
+- No error-log activity: `errors-retained.log`, `errors-client-retained.log`, and the
+  httpd `error_log` were all last written days-to-months before this work.
+
+### Substituted
+
+- **`/service/record-types/variation` and `/service/ontologies/Categories` were not
+  fetched.** The Chrome profile sat behind the `veupathdb.org/auth/bin/autologin`
+  pre-release gate for most of the session. Server-side equivalents were used instead:
+  `wdkXml -model PlasmoDB` for registration (project-filtered, so it answers the same
+  question) and a grep of the built `categories_merged.owl` for placement.
+
+  Worth recording as a trap: once a tab is bounced to the autologin gate, relative-path
+  `fetch` calls hit **veupathdb.org production**, not the dev instance, and return
+  confident wrong answers — one agent nearly reported the search missing on that basis.
+  Always check `window.location.origin` before trusting a relative fetch.
+- **The log check was not a delta.** The `mark` step was skipped, so the error logs were
+  read directly by mtime rather than by byte offset. Equivalent here only because the
+  logs were entirely untouched.
+
+### Not run
+
+- **`wdkQuery -showQuery`** on the search. As this plan anticipated, `$$variation_id$$`
+  is a `datasetParam` macro with nothing for the CLI to substitute; it fails with
+  `ValidObjectWrappingException: {"keyedErrors":{"variation_id":["Cannot be empty."]}}`
+  after reaching `WDK Model construction complete`. A `wdkQuery` limitation, not a model
+  defect. Do not re-litigate it — for this search the browser is the only path that
+  executes the SQL.
+- **The empty-project case** (form renders, 0 rows, no error). Unrunnable from the
+  plasmodb instance, which has data. Still owed whenever one of the five projects in
+  §4.1 is next stood up.
+
+### Incidental findings
+
+- The app is served under `/a/` — `/a/app`, service at `/a/service`.
+- `individuals.txt` column 3 reads "Genetic Variation", matching the neighbouring
+  variation rows and the Popset search, but the edam parent's actual display term in the
+  merged OWL is "Genetic variation" (lowercase v). Column 3 is a human-readable
+  convenience — parenting is by the `topic_0199` IRI — so nothing is broken and nothing
+  was changed. Noted because it makes the plan's expected-string check look like a
+  mismatch.
+- Local commits leave the remote's git index stale, so `cedar` reports phantom
+  modifications on `apiCommonModel.xml` and `individuals.txt`. `veup-git-sync.sh` cannot
+  reconcile it while `dnaseq-merge-experiments` is unpushed (it reports `UNPUSHED` and
+  skips). Harmless for building; push the branch first if the noise matters.
 
 ## Deliberately not in this plan
 
