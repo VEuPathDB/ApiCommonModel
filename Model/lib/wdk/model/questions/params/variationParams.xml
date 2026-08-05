@@ -43,6 +43,39 @@
       <help>Derived from the selected organism. Not user-visible.</help>
     </flatVocabParam>
 
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Samples (EDA-driven filter) -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- The name variation_sample_meta is a CONTRACT with the Java plugin:
+         FindPolymorphismsPlugin.getStrainFilterParamName() returns exactly this
+         string and FindPolymorphismsAbstractPlugin lists it among its required
+         params. Renaming it breaks the search at run time, not at build time.
+
+         Internal values are EDA sample stable IDs, which are a strict subset of the
+         strain names in HSSS's strainIdToName.dat - no mapping layer needed. The
+         plugin writes them to a strains file and passes strains_are_names = 1.
+
+         minSelectedCount=2 as the snp original: polymorphism within a group of one
+         is meaningless.
+
+         organismSinglePick is declared as a depended param even though neither
+         query reads it: WDK validates only that every query param is declared, not
+         the converse, and declaring it keeps the filter visibly downstream of the
+         organism choice it is in fact scoped by. -->
+    <filterParam name="variation_sample_meta"
+                 metadataQueryRef="VariationVQ.SamplesMetadataByStudy"
+                 backgroundQueryRef="VariationVQ.SamplesMetadataByStudy"
+                 ontologyQueryRef="VariationVQ.SampleOntologyByStudy"
+                 prompt="Samples"
+                 minSelectedCount="2"
+                 dependedParamRef="organismParams.organismSinglePick,variationParams.eda_sample_table_suffix">
+      <help>
+        Select a set of samples whose genomic sequences will be compared. Use the
+        sample characteristics to narrow the group, or accept all samples for the
+        organism you chose.
+      </help>
+    </filterParam>
+
   </paramSet>
 
   <!-- Vocabulary queries for the variation searches. Lives in the params file,
@@ -88,6 +121,80 @@
           WHERE ds.type = 'isolates' AND ds.subtype = 'Dna_Seq'
             AND tn.name = '$$organismSinglePick$$'
             AND s.internal_abbrev IS NOT NULL
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <!-- Metadata and background for the samples filterParam. WDK's contract is
+         internal / ontology_term_name / string_value / number_value / date_value,
+         which EDA's attributevalue table supplies almost verbatim.
+
+         The same query serves metadataQueryRef and backgroundQueryRef, as the snp
+         original did: the background distribution is over all samples in the study,
+         which is exactly what this returns. -->
+    <sqlQuery name="SamplesMetadataByStudy" doNotTest="1">
+      <paramRef ref="variationParams.eda_sample_table_suffix"/>
+      <column name="internal"/>
+      <column name="ontology_term_name"/>
+      <column name="string_value"/>
+      <column name="number_value"/>
+      <column name="date_value"/>
+      <sql>
+        <![CDATA[
+          SELECT av.sample_stable_id    AS internal,
+                 av.attribute_stable_id AS ontology_term_name,
+                 av.string_value,
+                 av.number_value,
+                 av.date_value
+          FROM eda.attributevalue_$$eda_sample_table_suffix$$ av
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <!-- The filter tree. Two things here are load-bearing:
+
+         1. The CASE on the parent. EDA's attribute graph has no row for the entity
+            itself, so seven category nodes point at parent 'sample' and no node has
+            stable_id 'sample'. WDK's validateOntologyItems throws
+            "Parent ontology ID 'sample' ... cannot be found" on exactly that.
+            Mapping unresolvable parents to NULL makes WDK adopt them under its
+            synthetic master root. Written as a membership test rather than
+            = 'sample' so it stays correct if the entity abbreviation differs -
+            and it is already dynamic in the table name.
+
+         2. The type mapping is pinned to WDK's OntologyItemType enum, which accepts
+            exactly string / number / date / multiFilter, and treats NULL as a BRANCH
+            node. EDA's category rows have no data_type, so they map to NULL, which is
+            what makes them the tree's internal nodes. 'integer' folds into 'number'
+            because WDK has no integer type. -->
+    <sqlQuery name="SampleOntologyByStudy" doNotTest="1">
+      <paramRef ref="variationParams.eda_sample_table_suffix"/>
+      <column name="ontology_term_name"/>
+      <column name="parent_ontology_term_name"/>
+      <column name="display_name"/>
+      <column name="description"/>
+      <column name="type"/>
+      <column name="units"/>
+      <column name="precision"/>
+      <column name="is_range"/>
+      <sql>
+        <![CDATA[
+          SELECT ag.stable_id AS ontology_term_name,
+                 CASE WHEN ag.parent_stable_id IN
+                           (SELECT stable_id FROM eda.attributegraph_$$eda_sample_table_suffix$$)
+                      THEN ag.parent_stable_id
+                 END AS parent_ontology_term_name,
+                 ag.display_name,
+                 ag.definition AS description,
+                 CASE ag.data_type
+                   WHEN 'string'  THEN 'string'
+                   WHEN 'number'  THEN 'number'
+                   WHEN 'integer' THEN 'number'
+                 END AS type,
+                 ag.unit AS units,
+                 ag.precision,
+                 CASE WHEN ag.data_shape = 'continuous' THEN 1 ELSE 0 END AS is_range
+          FROM eda.attributegraph_$$eda_sample_table_suffix$$ ag
         ]]>
       </sql>
     </sqlQuery>
