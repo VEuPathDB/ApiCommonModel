@@ -14,37 +14,65 @@
 
 > ### Progress
 >
-> **Tasks 0-4 are done. Task 5 is next.**
+> **All tasks (0-14) are complete.** Reconciled against the commit log on
+> `dnaseq-merge-experiments` on 2026-08-05; the block below had been stale since Task 4.
 >
-> Task 4 committed as `9bcf147` in `ApiCommonModel`: the record builds green, 13
-> attributes are registered, and
-> `/plasmo.jbrestel/app/record/variation/Variant_Pf3D7_01_v3_29514` renders as
-> "Variation: Variant_Pf3D7_01_v3_29514" with every service call 200 and all error logs
-> silent. Building it surfaced three defects in this plan, now fixed: the app/service base
-> URLs both include `/plasmo.jbrestel`, an empty `querySet` is invalid so
+> | task | commit(s) |
+> |---|---|
+> | 0-1 preconditions, psql SELECT check | verification only, no commit |
+> | 2 tuning table definition | `9ff6094` |
+> | 3 build and verify the tuning table | see the note below — superseded by a tuning run |
+> | 4 minimal buildable record | `9bcf147` |
+> | 5 classification attributes | `48f13bc` |
+> | 6 SNP and Indel allele sections | `d35e557`, `51cb41b` (assemble allele strings in SQL) |
+> | 7 strain and call statistics | `af9b2aa`, `e0bb106` (rename to "Called Strain Count") |
+> | 8 gene linkage, effect rollups, collapsed columns | `d8ccd76`, `e3571e2` (impact sort, MAF help) |
+> | 9 record overview and default summary | `f9264c0`, `d636b44` (label allele rows by class) |
+> | 10 TranscriptProducts table | `dd4efa6`, `9cc505b` (strain_count help text) |
+> | 11 PredictedEffects table | `b19c82d` |
+> | 12 category ontology placement | `cf0dd13`, `19b6527` (ontology parenting) |
+> | 13 final end-to-end verification | `19b6527` — the four review findings it fixes are that pass's output; there is no separate report doc |
+> | 14 flip the stub to the real tuning table | `2723cda` |
+>
+> Task 4's original detail, kept because the defects it surfaced are still worth knowing:
+> the record built green with 13 attributes registered and
+> `/plasmo.jbrestel/app/record/variation/Variant_Pf3D7_01_v3_29514` rendering with every
+> service call 200 and all error logs silent. Three plan defects came out of it — the
+> app/service base URLs both include `/plasmo.jbrestel`, an empty `querySet` is invalid so
 > `variationTableQueries.xml` moved to Task 10, and the snp imports sit inside a comment
 > block that would have swallowed the new imports.
 >
-> **Tasks 0-3 detail.**
+> Tuning table as verified at Task 3: **4,390,908 rows**, exactly matching
+> `apidb.VariationFeature`, built in 66s with three indexes and `GRANT SELECT TO gus_r`.
+> `gene_ids` populated for 2,879,337 loci, `most_severe_impact_snpeff` for 4,390,895,
+> `most_severe_impact_product_call` for 1,690,908, `collapsed_allele` for all 4,390,908,
+> 3 projects, **25,545 multi-gene loci** — matching the spec's figure exactly. All three
+> spot-check loci correct, including `A>C; A>AC` for the MIXED locus.
 >
-> - Tuning definition committed to `ApiCommonModel` on `dnaseq-merge-experiments` as
->   `9ff6094` (`apiTuningManager.xml`, +103 lines, XML validated, tuning-table count
->   54 → 55).
-> - `jbrestel.VariationAttributes` built and verified: **4,390,908 rows** (exactly
->   matching `apidb.VariationFeature`) in 66s, three indexes, `GRANT SELECT TO gus_r`.
->   `gene_ids` populated for 2,879,337 loci, `most_severe_impact_snpeff` for 4,390,895,
->   `most_severe_impact_product_call` for 1,690,908, `collapsed_allele` for all
->   4,390,908, 3 projects, **25,545 multi-gene loci** — matching the spec's figure
->   exactly. All three spot-check loci correct, including `A>C; A>AC` for the MIXED locus.
+> ### ✓ The developer-schema stub is gone (was: the model reads a stub)
 >
-> ### ⚠ The model reads a developer-schema stub
+> Resolved. This warning described Tasks 4-13 writing `jbrestel.VariationAttributes` into
+> the query XML in six places, because `tuningManager` was not installed on the dev
+> instance when the plan was written.
 >
-> `tuningManager` is **not installed** on this dev instance, so the table lives in
-> `jbrestel.VariationAttributes` rather than `apidbtuning`. Tasks 4-13 therefore write
-> `jbrestel.VariationAttributes` into the query XML in **six places**.
+> Both halves have since been settled, verified 2026-08-05:
 >
-> **This must not reach a merge.** Task 14 flips it back and fails loudly if any stub
-> reference survives. Do not skip it.
+> - **Model:** Task 14 (`2723cda`) flipped all six references to
+>   `ApidbTuning.VariationAttributes`. No `jbrestel` reference remains anywhere in the
+>   variation model XML.
+> - **Database:** a tuning run (Jenkins) built the real thing on `unidb_shu_a` —
+>   `apidbtuning.variationattributes1121` (1688 MB, 4,390,908 rows) plus the
+>   `apidbtuning.variationattributes` view over it, `SELECT` granted to `gus_r`. All 17
+>   `va.*` columns the model reads resolve against that view. `jbrestel.VariationAttributes`
+>   no longer exists.
+>
+> So the merge blocker is clear, and the flip does **not** cost buildability on the dev
+> instance the way this plan originally assumed it would.
+>
+> The Task 4-11 bodies below still show `jbrestel.VariationAttributes` in their SQL
+> snippets, deliberately: that is what was executed at the time, and rewriting them would
+> describe a history that never happened. **Do not copy those snippets forward** — the
+> committed XML is the current truth. Read them as a record, not as instructions.
 
 **Two repos are involved:**
 
@@ -161,7 +189,7 @@ is the only one that grows large; keeping queries out of it is what keeps it rea
 
 **Files:** none (verification only)
 
-- [ ] **Step 1: Confirm the ApiCommonModel branch and clean tree**
+- [x] **Step 1: Confirm the ApiCommonModel branch and clean tree**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel && git branch --show-current && git status --porcelain
@@ -171,7 +199,7 @@ Expected: `dnaseq-merge-experiments`, and no output from `git status` (clean tre
 branch differs, stop and ask — do not switch branches, because a switch requires
 `bin/veup-git-sync.sh plasmodb` afterwards and may not be what the user wants.
 
-- [ ] **Step 2: Confirm the base tables exist and are populated**
+- [x] **Step 2: Confirm the base tables exist and are populated**
 
 ```bash
 psql -h localhost -p 5432 -d unidb_shu_a \
@@ -183,7 +211,7 @@ psql -h localhost -p 5432 -d unidb_shu_a \
 Expected: `4390908`, `4595009`, `6789700`. Small drift is fine (data may have been
 reloaded); if a count is `0`, stop — nothing downstream will work.
 
-- [ ] **Step 3: Confirm the instance's appDb is the database you are querying**
+- [x] **Step 3: Confirm the instance's appDb is the database you are querying**
 
 ```bash
 ssh cedar 'grep -A3 -i "appdb" /var/www/jbrestel.plasmodb.org/gus_home/config/model-config.xml | head -20'
@@ -193,7 +221,7 @@ Expected: a `connectionUrl` naming `unidb_shu_a`. **If it names a different data
 stop and ask the user** — every psql assertion in this plan would be checking a database
 the site does not read, and `wb model` would fail on missing tables.
 
-- [ ] **Step 4: Confirm the prerequisite tuning tables exist**
+- [x] **Step 4: Confirm the prerequisite tuning tables exist**
 
 ```bash
 psql -h localhost -p 5432 -d unidb_shu_a \
@@ -213,7 +241,7 @@ below were chosen to cover all three `variant_type` values.
 **Files:**
 - Create: `/tmp/claude-1000/-home-jbrestel-workspaces-agentic-veupath-dev/scratch-va-spot.sql` (scratch, not committed)
 
-- [ ] **Step 1: Write the scoped spot-check query**
+- [x] **Step 1: Write the scoped spot-check query**
 
 Create the scratch file with this content. The base-table scans are filtered to one
 sequence so it returns in seconds rather than minutes; the unfiltered form is what goes
@@ -287,7 +315,7 @@ WHERE v.sequence_source_id = 'Pf3D7_01_v3' AND v.location IN (12, 18, 29514)
 ORDER BY v.location
 ```
 
-- [ ] **Step 2: Run it and assert the expected values**
+- [x] **Step 2: Run it and assert the expected values**
 
 ```bash
 psql -h localhost -p 5432 -d unidb_shu_a -x \
@@ -316,7 +344,7 @@ it is the case a collapsed single-allele column would have silently destroyed.
 because presenters exist per dnaseq *experiment* while `*_dnaSeqVariations` is the merged
 call set across many experiments. Do not "fix" this.
 
-- [ ] **Step 3: Verify the GenomicSeqAttributes join loses no loci**
+- [x] **Step 3: Verify the GenomicSeqAttributes join loses no loci**
 
 ```bash
 psql -h localhost -p 5432 -d unidb_shu_a -c "
@@ -328,7 +356,7 @@ left join apidbtuning.genomicseqattributes g on g.source_id = v.sequence_source_
 Expected: `total` = `matched` = `4390908`. An inner join is used in the tuning SQL, so a
 mismatch would silently drop loci.
 
-- [ ] **Step 4: No commit**
+- [x] **Step 4: No commit**
 
 Scratch SQL is not committed. Proceed to Task 2.
 
@@ -345,7 +373,7 @@ without `&1`** (`TranscriptAttributes`, `GenomicSeqAttributes`, `DatasetPresente
 non-tuning base tables stay schema-qualified (`apidb.`, `sres.`). Compare the existing
 `GeneOrgAbbrev` and `GoSubsetLeaf` definitions in the same file.
 
-- [ ] **Step 1: Insert the tuning table definition**
+- [x] **Step 1: Insert the tuning table definition**
 
 Add this immediately after the closing `</tuningTable>` of `TranscriptOrgAbbrev`
 (around line 1088). Note both `internalDependency` elements — omitting either causes a
@@ -450,7 +478,7 @@ silently empty column rather than an error, per spec §3.3a.
   </tuningTable>
 ```
 
-- [ ] **Step 2: Verify the file is still well-formed XML**
+- [x] **Step 2: Verify the file is still well-formed XML**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel && python3 -c "
@@ -461,7 +489,7 @@ print('XML OK')"
 
 Expected: `XML OK`. A malformed edit here breaks every tuning table, not just this one.
 
-- [ ] **Step 3: Confirm the definition is registered exactly once**
+- [x] **Step 3: Confirm the definition is registered exactly once**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel && \
@@ -470,7 +498,7 @@ cd ~/workspaces/plasmodb/ApiCommonModel && \
 
 Expected: `1`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel
@@ -492,7 +520,7 @@ built out of order these yield silently empty columns rather than errors."
 
 **Files:** none (build + verification)
 
-- [ ] **Step 1: Build the table as a `jbrestel`-schema stub**
+- [x] **Step 1: Build the table as a `jbrestel`-schema stub**
 
 `tuningManager` is not installed on this dev instance
 (`ls /var/www/jbrestel.plasmodb.org/gus_home/bin | grep -i tuning` returns only
@@ -516,7 +544,7 @@ read it. Budget minutes: the aggregates cover 6.79M `VariationEffect` and 4.6M
 **Writes are confined to the `jbrestel` schema.** Never create or alter anything in
 `apidbtuning`, and never invent a `tuningManager` command line against a shared schema.
 
-- [ ] **Step 1a: Point the model at the stub, in exactly six places**
+- [x] **Step 1a: Point the model at the stub, in exactly six places**
 
 While stubbed, every query in Tasks 4-11 reads `jbrestel.VariationAttributes` instead of
 `ApidbTuning.VariationAttributes`. There are **six** occurrences across the two query
@@ -540,7 +568,7 @@ the top of **both** query files so the stub cannot be forgotten:
        table. Flip back per Task 14 before merging. -->
 ```
 
-- [ ] **Step 1b: Verify the stub is complete and consistent**
+- [x] **Step 1b: Verify the stub is complete and consistent**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel/Model/lib/wdk/model/records && \
@@ -561,7 +589,7 @@ plus 1 comment; `variationTableQueries.xml` has 2 (`TranscriptProducts`,
 A non-zero `ApidbTuning` count while stubbed means a query will fail at build time; a
 non-zero `jbrestel` count after Task 14 means the stub leaked into a merge.
 
-- [ ] **Step 2: Verify row count matches the base table exactly**
+- [x] **Step 2: Verify row count matches the base table exactly**
 
 ```bash
 psql -h localhost -p 5432 -d unidb_shu_a -c "
@@ -572,7 +600,7 @@ select (select count(*) from jbrestel.variationattributes) as tuning,
 Expected: both `4390908`. A shortfall means the inner join to `GenomicSeqAttributes`
 dropped loci — investigate before continuing.
 
-- [ ] **Step 3: Verify the aggregate columns are actually populated**
+- [x] **Step 3: Verify the aggregate columns are actually populated**
 
 This is the assertion that catches a dependency-ordering failure, which produces empty
 columns rather than an error.
@@ -591,7 +619,7 @@ Expected, approximately: `with_genes` ≈ 2,878,000 (not 0 — zero means the
 `TranscriptAttributes` dependency did not resolve), `with_snpeff` > `with_pc` (snpeff
 covers ~2.9M more loci), `with_allele` = 4,390,908, `projects` = 3.
 
-- [ ] **Step 4: Verify the three spot-check loci survived the build**
+- [x] **Step 4: Verify the three spot-check loci survived the build**
 
 ```bash
 psql -h localhost -p 5432 -d unidb_shu_a -x -c "
@@ -604,7 +632,7 @@ order by location"
 
 Expected: identical to the Task 1 Step 2 table.
 
-- [ ] **Step 5: No commit** (no files changed)
+- [x] **Step 5: No commit** (no files changed)
 
 ---
 
@@ -619,7 +647,7 @@ Everything after this task is additive and independently verifiable.
 - Create: `Model/lib/wdk/model/records/variationRecords.xml`
 - Modify: `Model/lib/wdk/apiCommonModel.xml:406-408` (add three imports near the snp ones)
 
-- [ ] **Step 1: Create `variationAttributeQueries.xml`**
+- [x] **Step 1: Create `variationAttributeQueries.xml`**
 
 ```xml
 <wdkModel>
@@ -696,7 +724,7 @@ Everything after this task is additive and independently verifiable.
 </wdkModel>
 ```
 
-- [ ] **Step 2: Do NOT create `variationTableQueries.xml` yet**
+- [x] **Step 2: Do NOT create `variationTableQueries.xml` yet**
 
 WDK's RELAX NG schema requires a `querySet` to contain at least one `sqlQuery`,
 `processQuery`, or `testRowCountSql`. A `querySet` holding only `defaultTestParamValues`
@@ -710,7 +738,7 @@ element "querySet" incomplete; expected element "defaultTestParamValues",
 There is therefore no valid empty placeholder. `variationTableQueries.xml` is created in
 **Task 10**, together with its first query and its import line.
 
-- [ ] **Step 3: Create `variationRecords.xml` with identity attributes only**
+- [x] **Step 3: Create `variationRecords.xml` with identity attributes only**
 
 ```xml
 <wdkModel>
@@ -802,7 +830,7 @@ There is therefore no valid empty placeholder. `variationTableQueries.xml` is cr
 </wdkModel>
 ```
 
-- [ ] **Step 4: Add the imports — mind the comment block**
+- [x] **Step 4: Add the imports — mind the comment block**
 
 **The snp imports at lines 405-411 sit inside a `<!-- UNCOMMENT WHEN SNPS are AVAILABLE`
 block that closes at line 412**, and the snpChip block right after it is commented out
@@ -833,7 +861,7 @@ for n in ['variationAttributeQueries', 'variationRecords']:
 
 Expected: both `ACTIVE`.
 
-- [ ] **Step 5: Build the model — this is the test**
+- [x] **Step 5: Build the model — this is the test**
 
 ```bash
 cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
@@ -844,7 +872,7 @@ Expected: build completes and reloads the webapp. A failure naming
 by the query; a failure naming `jbrestel.VariationAttributes` means Task 3 did not
 actually create the table.
 
-- [ ] **Step 6: Verify the assembled SQL is what you intended**
+- [x] **Step 6: Verify the assembled SQL is what you intended**
 
 ```bash
 ssh cedar 'bash -lc "source /var/www/jbrestel.plasmodb.org/etc/setenv && \
@@ -854,7 +882,7 @@ ssh cedar 'bash -lc "source /var/www/jbrestel.plasmodb.org/etc/setenv && \
 Expected: the `SELECT ... FROM jbrestel.VariationAttributes va` body, wrapped by WDK's
 PK join. This does not execute the query, so it is always safe.
 
-- [ ] **Step 7: Verify the record type is registered**
+- [x] **Step 7: Verify the record type is registered**
 
 Using Claude in Chrome, load `https://jbrestel.plasmodb.org` and run:
 
@@ -866,7 +894,7 @@ Expected: JSON with `urlSegment: "variation"`, `displayName: "Variation"`, and a
 `attributes` array containing `sequence_source_id`, `location`, `variation_location`,
 `organism`. `tables` will be empty — correct at this stage.
 
-- [ ] **Step 8: Verify a record page loads**
+- [x] **Step 8: Verify a record page loads**
 
 Navigate to
 `https://jbrestel.plasmodb.org/plasmo.jbrestel/app/record/variation/Variant_Pf3D7_01_v3_100057`
@@ -874,7 +902,7 @@ Navigate to
 Expected: the page renders with the ID as its title and shows Location and Organism.
 If it 404s, the alias query is not resolving the ID.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel
@@ -903,7 +931,7 @@ half of the sourcing rule.
 - Modify: `Model/lib/wdk/model/records/variationAttributeQueries.xml`
 - Modify: `Model/lib/wdk/model/records/variationRecords.xml`
 
-- [ ] **Step 1: Assert the expected values in psql first**
+- [x] **Step 1: Assert the expected values in psql first**
 
 ```bash
 psql -h localhost -p 5432 -d unidb_shu_a -c "
@@ -915,7 +943,7 @@ order by location"
 
 Expected: `MIXED`/`0`/`3D7`, `INDEL`/`0`/`3D7`, `SNV`/`1`/`3D7`.
 
-- [ ] **Step 2: Add the query to `variationAttributeQueries.xml`**
+- [x] **Step 2: Add the query to `variationAttributeQueries.xml`**
 
 Insert before the closing `</querySet>`:
 
@@ -943,7 +971,7 @@ Insert before the closing `</querySet>`:
     </sqlQuery>
 ```
 
-- [ ] **Step 3: Add the attributes to `variationRecords.xml`**
+- [x] **Step 3: Add the attributes to `variationRecords.xml`**
 
 Insert after the closing `</attributeQueryRef>` of the `VariationTuning` block:
 
@@ -957,7 +985,7 @@ Insert after the closing `</attributeQueryRef>` of the `VariationTuning` block:
       </attributeQueryRef>
 ```
 
-- [ ] **Step 4: Build**
+- [x] **Step 4: Build**
 
 ```bash
 cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
@@ -965,13 +993,13 @@ cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
 
 Expected: green build.
 
-- [ ] **Step 5: Verify on the record page**
+- [x] **Step 5: Verify on the record page**
 
 Reload `https://jbrestel.plasmodb.org/plasmo.jbrestel/app/record/variation/Variant_Pf3D7_01_v3_29514`
 
 Expected: Variant Type `SNV`, Coding `coding`, Reference Strain `3D7`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel
@@ -994,7 +1022,7 @@ The core of the design: two named sections, never collapsed.
 - Modify: `Model/lib/wdk/model/records/variationAttributeQueries.xml`
 - Modify: `Model/lib/wdk/model/records/variationRecords.xml`
 
-- [ ] **Step 1: Assert the MIXED locus carries both classes**
+- [x] **Step 1: Assert the MIXED locus carries both classes**
 
 ```bash
 psql -h localhost -p 5432 -d unidb_shu_a -x -c "
@@ -1009,7 +1037,7 @@ Expected: SNP side `A`/`A`/`C`/`0.0598`, indel side `A`/`A`/`AC`/`0.0085`,
 `Pf3D7_01_v3:g.12_13insC`. Both sides populated on one row is exactly the case that
 motivates two sections.
 
-- [ ] **Step 2: Extend `VariationFeatureBase` with all 19 allele columns**
+- [x] **Step 2: Extend `VariationFeatureBase` with all 19 allele columns**
 
 19, not 22: 9 `snp_*` + 10 `indel_*`. `indel_frame_effect` is indel-only, so the two
 sections are deliberately asymmetric.
@@ -1056,7 +1084,7 @@ And add the matching columns to the `SELECT` list, immediately after
                  vf.indel_frame_effect,
 ```
 
-- [ ] **Step 3: Add the allele attributes to `variationRecords.xml`**
+- [x] **Step 3: Add the allele attributes to `variationRecords.xml`**
 
 Add inside the existing `VariationFeatureBase` `<attributeQueryRef>` block, after
 `reference_strain`. Note the shared `help` text on the HGVS attributes — the
@@ -1104,7 +1132,7 @@ this it reads as missing data.
         </textAttribute>
 ```
 
-- [ ] **Step 4: Build**
+- [x] **Step 4: Build**
 
 ```bash
 cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
@@ -1112,7 +1140,7 @@ cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
 
 Expected: green build.
 
-- [ ] **Step 5: Verify all three variant types render correctly**
+- [x] **Step 5: Verify all three variant types render correctly**
 
 Load each and confirm:
 
@@ -1124,7 +1152,7 @@ Load each and confirm:
 
 The MIXED case is the acceptance test for this task.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel
@@ -1149,7 +1177,7 @@ empty whenever the major allele equals the reference."
 - Modify: `Model/lib/wdk/model/records/variationAttributeQueries.xml`
 - Modify: `Model/lib/wdk/model/records/variationRecords.xml`
 
-- [ ] **Step 1: Assert the values in psql**
+- [x] **Step 1: Assert the values in psql**
 
 ```bash
 psql -h localhost -p 5432 -d unidb_shu_a -x -c "
@@ -1160,7 +1188,7 @@ from apidb.variationfeature where source_id = 'Variant_Pf3D7_01_v3_29514'"
 
 Expected: `160`, `159`, `57`, `0.7361`, `160`, `0`, `0.9938`.
 
-- [ ] **Step 2: Add columns to `VariationFeatureBase`**
+- [x] **Step 2: Add columns to `VariationFeatureBase`**
 
 Add the `<column>` declarations:
 
@@ -1192,7 +1220,7 @@ should read exactly:
           WHERE va.source_id = vf.source_id
 ```
 
-- [ ] **Step 3: Add the attributes to `variationRecords.xml`**
+- [x] **Step 3: Add the attributes to `variationRecords.xml`**
 
 Inside the same `VariationFeatureBase` `<attributeQueryRef>` block:
 
@@ -1211,7 +1239,7 @@ Inside the same `VariationFeatureBase` `<attributeQueryRef>` block:
         <columnAttribute name="ref_allele_frequency"  displayName="Reference Allele Frequency" align="center"/>
 ```
 
-- [ ] **Step 4: Build**
+- [x] **Step 4: Build**
 
 ```bash
 cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
@@ -1219,12 +1247,12 @@ cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
 
 Expected: green build.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Load `https://jbrestel.plasmodb.org/plasmo.jbrestel/app/record/variation/Variant_Pf3D7_01_v3_29514` and
 confirm Strain Count `160`, Call Rate `0.7361`, Reference Allele Frequency `0.9938`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel
@@ -1244,7 +1272,7 @@ per-strain VCF-backed table will detail, so it lands beside them."
 - Modify: `Model/lib/wdk/model/records/variationAttributeQueries.xml`
 - Modify: `Model/lib/wdk/model/records/variationRecords.xml`
 
-- [ ] **Step 1: Assert a multi-gene locus exists and find one**
+- [x] **Step 1: Assert a multi-gene locus exists and find one**
 
 ```bash
 psql -h localhost -p 5432 -d unidb_shu_a -c "
@@ -1269,7 +1297,7 @@ Verified PlasmoDB multi-gene loci, usable directly:
 
 If the query returns nothing, the gene aggregate is broken; go back to Task 3.
 
-- [ ] **Step 2: Extend `VariationTuning` with the aggregate columns**
+- [x] **Step 2: Extend `VariationTuning` with the aggregate columns**
 
 Add the `<column>` declarations to the existing `VariationTuning` query:
 
@@ -1312,7 +1340,7 @@ sorting a results page by impact would silently get a wrong order. `sortingColum
 a column returned by the *same query*, so a `CASE` here fixes it with no tuning-table change
 and no rebuild.
 
-- [ ] **Step 3: Add the attributes to `variationRecords.xml`**
+- [x] **Step 3: Add the attributes to `variationRecords.xml`**
 
 Inside the existing `VariationTuning` `<attributeQueryRef>` block:
 
@@ -1371,7 +1399,7 @@ render one link per ID in an aggregated string. A `textAttribute` is used instea
 renders IDs as plain text. If per-ID hyperlinks are wanted, that needs a client-side
 component and should be raised with the user as a follow-up rather than faked here.
 
-- [ ] **Step 4: Build**
+- [x] **Step 4: Build**
 
 ```bash
 cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
@@ -1379,7 +1407,7 @@ cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
 
 Expected: green build.
 
-- [ ] **Step 5: Verify single-gene and multi-gene loci both render**
+- [x] **Step 5: Verify single-gene and multi-gene loci both render**
 
 - `Variant_Pf3D7_01_v3_29514` → Gene ID(s) `PF3D7_0100100`, Gene Count `1`, Allele `T>C`,
   both Most Severe Impact columns `MODERATE`.
@@ -1389,7 +1417,7 @@ Expected: green build.
   (`PF3D7_0102700, PF3D7_0102800`) and Gene Count `2`. This is the acceptance test: it is
   the case a single-gene lookup would have silently misreported.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel
@@ -1415,7 +1443,7 @@ record pages, so results pages need pre-aggregated values."
 **Files:**
 - Modify: `Model/lib/wdk/model/records/variationRecords.xml`
 
-- [ ] **Step 1: Add the overview text attribute**
+- [x] **Step 1: Add the overview text attribute**
 
 Insert immediately before the closing `</recordClass>`. Both allele sections appear, each
 rendered unconditionally — WDK text attributes have no conditionals, so an absent class
@@ -1464,7 +1492,7 @@ shows empty values, which is honest and matches how the `snp` record behaved.
       </textAttribute>
 ```
 
-- [ ] **Step 2: Replace the placeholder `attributesList`**
+- [x] **Step 2: Replace the placeholder `attributesList`**
 
 Replace the `<attributesList .../>` line added in Task 4 with:
 
@@ -1478,7 +1506,7 @@ Replace the `<attributesList .../>` line added in Task 4 with:
              sorting="organism asc,chromosome_order_num asc,location asc"/>
 ```
 
-- [ ] **Step 3: Build**
+- [x] **Step 3: Build**
 
 ```bash
 cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
@@ -1487,14 +1515,14 @@ cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
 Expected: green build. A failure naming an attribute in `summary` means it is misspelled
 or not defined — every name in `attributesList` must exist.
 
-- [ ] **Step 4: Verify the overview renders on the MIXED locus**
+- [x] **Step 4: Verify the overview renders on the MIXED locus**
 
 Load `https://jbrestel.plasmodb.org/plasmo.jbrestel/app/record/variation/Variant_Pf3D7_01_v3_12`
 
 Expected: a two-panel overview; the right panel shows **both** a SNP Alleles block
 (`A`, minor `C (0.0598)`) and an Indel Alleles block (`A`, minor `AC (0.0085)`).
 
-- [ ] **Step 5: Check the logs are clean**
+- [x] **Step 5: Check the logs are clean**
 
 ```bash
 cd ~/workspaces/agentic-veupath-dev && bin/veup-logs.sh plasmodb mark overview
@@ -1505,7 +1533,7 @@ cd ~/workspaces/agentic-veupath-dev && bin/veup-logs.sh plasmodb since overview 
 Expected: error logs reported as `silent:`. An unresolved `$$attribute$$` shows up here
 rather than on the page.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel
@@ -1527,7 +1555,7 @@ cannot render tables."
 - Modify: `Model/lib/wdk/apiCommonModel.xml` (add its import)
 - Modify: `Model/lib/wdk/model/records/variationRecords.xml`
 
-- [ ] **Step 1: Assert the expected rows in psql**
+- [x] **Step 1: Assert the expected rows in psql**
 
 ```bash
 psql -h localhost -p 5432 -d unidb_shu_a -c "
@@ -1544,7 +1572,7 @@ Expected: **5 rows**, all gene `PF3D7_0100100`, codons `GCG`, `GTA`, `GTC`, `GTG
 the `GCG` row has product `A` with `matches_ref_product` `0`, the rest product `V` with
 `1`.
 
-- [ ] **Step 2: Create `variationTableQueries.xml` with this query**
+- [x] **Step 2: Create `variationTableQueries.xml` with this query**
 
 Full file. The stub comment matters — this file also reads the developer-schema table.
 
@@ -1611,7 +1639,7 @@ Full file. The stub comment matters — this file also reads the developer-schem
 </wdkModel>
 ```
 
-- [ ] **Step 2a: Add its import to `apiCommonModel.xml`**
+- [x] **Step 2a: Add its import to `apiCommonModel.xml`**
 
 Between the two existing variation imports, so query sets precede the record class:
 
@@ -1623,7 +1651,7 @@ Between the two existing variation imports, so query sets precede the record cla
 
 Then re-run the ACTIVE check from Task 4 Step 4, now expecting all three `ACTIVE`.
 
-- [ ] **Step 3: Add the table to `variationRecords.xml`**
+- [x] **Step 3: Add the table to `variationRecords.xml`**
 
 Insert immediately before the closing `</recordClass>`:
 
@@ -1657,7 +1685,7 @@ Insert immediately before the closing `</recordClass>`:
       </table>
 ```
 
-- [ ] **Step 4: Build**
+- [x] **Step 4: Build**
 
 ```bash
 cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
@@ -1665,7 +1693,7 @@ cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
 
 Expected: green build.
 
-- [ ] **Step 5: Verify the assembled SQL, then the page**
+- [x] **Step 5: Verify the assembled SQL, then the page**
 
 ```bash
 ssh cedar 'bash -lc "source /var/www/jbrestel.plasmodb.org/etc/setenv && \
@@ -1679,7 +1707,7 @@ Then load
 confirm the table shows the **5 codon rows** from Step 1, with the `GCG`/`A` row marked
 `no` for Matches Reference Product.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel
@@ -1701,7 +1729,7 @@ overlap two genes."
 - Modify: `Model/lib/wdk/model/records/variationTableQueries.xml`
 - Modify: `Model/lib/wdk/model/records/variationRecords.xml`
 
-- [ ] **Step 1: Assert both callers appear, including an intergenic locus**
+- [x] **Step 1: Assert both callers appear, including an intergenic locus**
 
 ```bash
 psql -h localhost -p 5432 -d unidb_shu_a -c "
@@ -1716,7 +1744,7 @@ Expected: for 12, two `snpeff` rows with **null** `na_feature_id` and effect
 `MODERATE`/`missense_variant`/`c.5T>C`. The null `na_feature_id` is why the join must be
 a LEFT join.
 
-- [ ] **Step 2: Add the query to `variationTableQueries.xml`**
+- [x] **Step 2: Add the query to `variationTableQueries.xml`**
 
 ```xml
     <sqlQuery name="PredictedEffects">
@@ -1749,7 +1777,7 @@ a LEFT join.
 The LEFT join is required: `na_feature_id` is null for intergenic calls, and an inner
 join would silently drop every intergenic effect row.
 
-- [ ] **Step 3: Add the table to `variationRecords.xml`**
+- [x] **Step 3: Add the table to `variationRecords.xml`**
 
 Insert before the closing `</recordClass>`:
 
@@ -1780,7 +1808,7 @@ Insert before the closing `</recordClass>`:
       </table>
 ```
 
-- [ ] **Step 4: Build**
+- [x] **Step 4: Build**
 
 ```bash
 cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
@@ -1788,14 +1816,14 @@ cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
 
 Expected: green build.
 
-- [ ] **Step 5: Verify both callers and the intergenic case render**
+- [x] **Step 5: Verify both callers and the intergenic case render**
 
 - `Variant_Pf3D7_01_v3_29514` → 2 rows, Source `snpeff` and `product_call`, both
   `MODERATE` / `missense_variant`.
 - `Variant_Pf3D7_01_v3_12` → 2 `snpeff` rows, effect `intergenic_region`, Gene ID
   **empty**. If this table is empty, the LEFT join was written as an inner join.
 
-- [ ] **Step 6: Find and verify a disagreement locus — the real acceptance test**
+- [x] **Step 6: Find and verify a disagreement locus — the real acceptance test**
 
 ```bash
 psql -h localhost -p 5432 -d unidb_shu_a -c "
@@ -1813,7 +1841,7 @@ Load one of those records and confirm the table shows **both** rows with differe
 `Effect` values side by side. This is the behaviour the whole two-caller design exists to
 produce.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel
@@ -1839,7 +1867,7 @@ intergenic calls; an inner join would drop them silently."
 `wb model`. `wb model` does not regenerate the category OWL, and skipping `wb ontology`
 leaves every new attribute uncategorized with **no error anywhere**.
 
-- [ ] **Step 1: Understand the file format**
+- [x] **Step 1: Understand the file format**
 
 Tab-separated, no quoting. Columns, in order:
 
@@ -1853,7 +1881,7 @@ Trailing empty columns are still tab-delimited. Study lines 684-692 (the existin
 `SnpRecordClasses.SnpRecordClass` attribute entries) before editing — match their exact
 tab count.
 
-- [ ] **Step 2: Add three new category nodes**
+- [x] **Step 2: Add three new category nodes**
 
 Add near the other category-node definitions at the top of the file (compare
 `GenomicSequencePropertiesCategory` on line 3). These are the parents for the allele and
@@ -1865,7 +1893,7 @@ VariationIndelAlleleCategory			http://edamontology.org/topic_2885	category	Varia
 VariationStrainStatsCategory			http://edamontology.org/topic_2885	category	VariationStrainStatsCategory	Strain Statistics					3			
 ```
 
-- [ ] **Step 3: Add attribute and table entries**
+- [x] **Step 3: Add attribute and table entries**
 
 Add one line per attribute and table. The parent assignments follow spec §8:
 
@@ -1972,7 +2000,7 @@ exactly 14 tab-separated columns, enforced by the `assert` in the loop.)
 The three category-node lines from Step 2 are added by hand, not by this script — they
 have a different shape (no record class, `category` target type).
 
-- [ ] **Step 4: Verify tab structure is consistent**
+- [x] **Step 4: Verify tab structure is consistent**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel && \
@@ -1987,7 +2015,7 @@ awk -F'\t' '/^SnpRecordClasses/ {print NF}' Model/lib/wdk/ontology/individuals.t
 
 If the two differ, the tab count is wrong and the OWL build will fail or misplace nodes.
 
-- [ ] **Step 5: Build the ontology — do NOT also run `wb model`**
+- [x] **Step 5: Build the ontology — do NOT also run `wb model`**
 
 ```bash
 cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb ontology
@@ -1997,7 +2025,7 @@ Expected: `individuals.owl` → `categories_merged.owl` regenerated, model rebui
 reloaded. A failure mentioning an unresolvable IRI means a parent category name is
 misspelled.
 
-- [ ] **Step 6: Verify placement in the assembled tree**
+- [x] **Step 6: Verify placement in the assembled tree**
 
 From an authenticated app page:
 
@@ -2023,7 +2051,7 @@ Variation node.
 "does this site actually have the item", trust
 `/plasmo.jbrestel/service/record-types/variation` instead.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel
@@ -2043,7 +2071,7 @@ would leave every attribute uncategorized with no error."
 
 **Files:** none
 
-- [ ] **Step 1: Confirm registration is complete**
+- [x] **Step 1: Confirm registration is complete**
 
 From an authenticated app page:
 
@@ -2055,7 +2083,7 @@ const rt = await (await fetch('/plasmo.jbrestel/service/record-types/variation')
 Expected: `tables` = `["TranscriptProducts", "PredictedEffects"]`, and `attributes`
 covering everything from Tasks 4-9.
 
-- [ ] **Step 1a: Perform the visual checks deferred from Tasks 5-11**
+- [x] **Step 1a: Perform the visual checks deferred from Tasks 5-11**
 
 These could not run earlier: record pages render from the category ontology, which only
 exists once Task 12 has run. Do them now, for real, rather than assuming earlier tasks
@@ -2084,7 +2112,7 @@ Required:
 - Both record tables present and populated (5 codon rows and 2 effect rows for
   `Variant_Pf3D7_01_v3_29514`).
 
-- [ ] **Step 2: Walk all three variant types with clean logs**
+- [x] **Step 2: Walk all three variant types with clean logs**
 
 ```bash
 cd ~/workspaces/agentic-veupath-dev && bin/veup-logs.sh plasmodb mark final
@@ -2101,7 +2129,7 @@ cd ~/workspaces/agentic-veupath-dev && bin/veup-logs.sh plasmodb since final --q
 
 Expected: error logs `silent:`.
 
-- [ ] **Step 3: Confirm the cross-project record classes still build**
+- [x] **Step 3: Confirm the cross-project record classes still build**
 
 The record class is declared for 9 projects but only 3 have data. Confirm the other
 projects' models still load — a project with no variation data must build cleanly and
@@ -2110,7 +2138,7 @@ simply return no records.
 Ask the user which other project instance to build against, if any is available. If none
 is, note it explicitly as unverified rather than claiming cross-project correctness.
 
-- [ ] **Step 4: Report**
+- [x] **Step 4: Report**
 
 Summarize: what was built, what was verified with what evidence, and anything left
 unverified (notably Step 3, and the `linkedGeneIds` plain-text limitation from Task 8).
@@ -2126,7 +2154,7 @@ task is what stops a developer-schema reference from reaching a merge.
 - Modify: `Model/lib/wdk/model/records/variationAttributeQueries.xml`
 - Modify: `Model/lib/wdk/model/records/variationTableQueries.xml`
 
-- [ ] **Step 1: Confirm the real table exists and matches the stub**
+- [x] **Step 1: Confirm the real table exists and matches the stub**
 
 ```bash
 psql -h localhost -p 5432 -d unidb_shu_a -c "
@@ -2148,7 +2176,7 @@ except select * from jbrestel.variationattributes limit 5"
 
 Expected: no rows.
 
-- [ ] **Step 2: Rewrite all six references**
+- [x] **Step 2: Rewrite all six references**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel/Model/lib/wdk/model/records
@@ -2156,12 +2184,12 @@ sed -i 's/jbrestel\.VariationAttributes/ApidbTuning.VariationAttributes/g' \
   variationAttributeQueries.xml variationTableQueries.xml
 ```
 
-- [ ] **Step 3: Remove the TEMPORARY STUB comment from both files**
+- [x] **Step 3: Remove the TEMPORARY STUB comment from both files**
 
 Delete the three-line `<!-- TEMPORARY STUB: ... -->` block added in Task 3 Step 1a from
 the top of `variationAttributeQueries.xml` and `variationTableQueries.xml`.
 
-- [ ] **Step 4: Verify no stub reference survives**
+- [x] **Step 4: Verify no stub reference survives**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel && \
@@ -2177,7 +2205,7 @@ cd ~/workspaces/plasmodb/ApiCommonModel/Model/lib/wdk/model/records && \
 
 Expected: `4` and `2`.
 
-- [ ] **Step 5: Rebuild and re-verify**
+- [x] **Step 5: Rebuild and re-verify**
 
 ```bash
 cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
@@ -2186,7 +2214,7 @@ cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb wb model
 Then re-run the Task 13 Step 2 walk of all three variant-type records, confirming the
 pages are unchanged from the stubbed state.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonModel
@@ -2199,7 +2227,7 @@ ApidbTuning.VariationAttributes now that the tuning job has built it.
 Record pages verified unchanged across SNV, INDEL, and MIXED loci."
 ```
 
-- [ ] **Step 7: Drop the stub table** (optional, and only after Step 5 passes)
+- [x] **Step 7: Drop the stub table** (optional, and only after Step 5 passes)
 
 ```bash
 psql -h localhost -p 5432 -d unidb_shu_a -c "DROP TABLE jbrestel.VariationAttributes"
