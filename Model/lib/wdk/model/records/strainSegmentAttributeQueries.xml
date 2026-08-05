@@ -1,0 +1,181 @@
+<wdkModel>
+
+  <querySet name="StrainSegmentAttributes" queryType="attribute" isCacheable="false">
+
+    <sqlQuery name="Coords" doNotTest="true">
+      <column name="source_id" ignoreCase="true" columnType="string"/>
+      <column name="project_id" ignoreCase="true" columnType="string"/>
+      <column name="strain" columnType="string"/>
+      <column name="ref_seq" columnType="string"/>
+      <column name="ref_start" columnType="number"/>
+      <column name="ref_end" columnType="number"/>
+      <column name="strain_seq_id" columnType="string"/>
+      <column name="strain_start" columnType="number"/>
+      <column name="strain_end" columnType="number"/>
+      <column name="strain_length" columnType="number"/>
+      <column name="organism" columnType="string"/>
+
+      <!-- Reference coordinates come in via the PK; strain coordinates are derived here
+           by prefix-summing apidb.indel.shift.  Deliberately avoids webready.*_p: an
+           attribute query has only PK columns, so no org_abbrev is available to prune
+           the partition key, and every index on those tables is org_abbrev-prefixed.
+           dots.ExternalNaSequence is unpartitioned and indexed on source_id.
+
+           split_part, not positional regexp_substr: it does not silently renumber
+           fields when one is empty.  Strain names contain '-', which is safe only
+           because the coordinate range is its own colon-delimited field. -->
+      <sql>
+        <![CDATA[
+          -- parsed: the ID grammar is decomposed exactly once, here.  Row count matches
+          -- the injected id SQL exactly -- duplicates are NOT collapsed at this level,
+          -- because WDK expects one output row per input ID row.
+          --
+          -- NEVER write the id-SQL macro name in a comment in this file.  WDK substitutes
+          -- it by blind textual replacement, so it expands inside comments too; the
+          -- injected SQL is multi-line, so it escapes the '--' and corrupts the statement
+          -- (observed: "syntax error at or near WITH").  wdkQuery -showQuery does NOT
+          -- reproduce this, because standalone it never expands the macro at all -- the
+          -- failure only appears when a real answer runs.  Refer to it in prose instead.
+          WITH parsed AS (
+            SELECT t.source_id
+                 , t.project_id
+                 , split_part(t.source_id, ':', 1)                               AS strain
+                 , split_part(t.source_id, ':', 2)                               AS ref_seq
+                 , split_part(split_part(t.source_id, ':', 3), '-', 1)::integer   AS ref_start
+                 , split_part(split_part(t.source_id, ':', 3), '-', 2)::integer   AS ref_end
+            FROM (##WDK_ID_SQL##) t
+          )
+          -- ids: parsed + the resolved reference sequence.  Note this CTE FILTERS, it does
+          -- not merely project: an unknown ref_seq drops the row here, and this is now the
+          -- ONLY place that check lives (the offsets subquery used to repeat the same
+          -- dots.ExternalNaSequence lookup, costing a second index scan per PK and giving
+          -- the "unknown sequence yields no record" rule two enforcement points).
+          , ids AS (
+            SELECT parsed.*
+                 , ens.na_sequence_id
+                 , ens.taxon_id
+            FROM parsed
+            JOIN dots.ExternalNaSequence ens ON ens.source_id = parsed.ref_seq
+          )
+          -- segs: the DISTINCT key set the offset sums are computed over.  Required for
+          -- correctness, not tidiness: if the injected id SQL ever yields a repeated source_id,
+          -- summing over the raw set joins each indel row once per duplicate and
+          -- GROUP BY source_id collapses them into one group whose SUM is multiplied by
+          -- the duplication factor -- silently, with no error anywhere.  Distinctness here
+          -- makes the offsets independent of input multiplicity by construction.
+          , segs AS (
+            SELECT DISTINCT source_id, strain, ref_start, ref_end, na_sequence_id
+            FROM ids
+          )
+          , offsets AS (
+            SELECT seg.source_id
+                 -- Boundary asymmetry is deliberate and load-bearing on the START side:
+                 -- '<' for the start offset.  An indel exactly at ref_start lies INSIDE the
+                 -- segment, so it shifts the end but not the start.  An off-by-one here is
+                 -- silent -- the coordinates just come out wrong, with no error anywhere.
+                 , SUM(CASE WHEN i.location < seg.ref_start THEN i.shift ELSE 0 END) AS offset_start
+                 -- The end offset needs no CASE: the '<= seg.ref_end' bound is enforced in
+                 -- the WHERE clause below, so every surviving row is in scope for the end
+                 -- sum.  (An earlier revision wrote
+                 -- "CASE WHEN i.location <= seg.ref_end THEN i.shift ELSE 0 END"; that ELSE
+                 -- branch was unreachable -- verified 0 rows disagreeing -- and made the
+                 -- asymmetry above look like it lived in two places instead of one.)
+                 , SUM(i.shift)                                                      AS offset_end
+            FROM segs seg
+               , study.protocolappnode pan
+               , apidb.indel i
+            WHERE pan.name = CONCAT(seg.strain, '_Indel')
+              AND i.protocol_app_node_id = pan.protocol_app_node_id
+              AND i.na_sequence_id = seg.na_sequence_id
+              AND i.location <= seg.ref_end
+            -- Grouping on seg.source_id (the whole PK) makes one-row-per-PK true by
+            -- construction; one protocol_app_node_id spans EVERY sequence of a strain, so
+            -- grouping on coordinate fields alone conflated segments on different
+            -- sequences and summed a foreign chromosome's shifts into both.
+            GROUP BY seg.source_id
+                 -- NOT redundant, and not to be "cleaned up": it is here so that a strain
+                 -- name resolving to two protocol app nodes ON THE SAME SEQUENCE yields
+                 -- DUPLICATE rows per PK and a loud WDK error, rather than silently summing
+                 -- two strains' shifts.  Provenance matters for the numbers here, because
+                 -- the two databases in play disagree by two orders of magnitude:
+                 --   genomicsdb_rebuild01 (a DIFFERENT, larger database, and where the
+                 --     original of this comment was measured): 126 strain names each
+                 --     resolve to two OR MORE protocol app nodes (122 to two, 4 to three;
+                 --     256 nodes in all) that ALL already carry indel rows, so the
+                 --     ambiguity exists in that data right now.
+                 --   unidb_shu_a (the LIVE appDb, measured 2026-07-31): no ambiguity at
+                 --     all -- 452 '_Indel' nodes, 452 distinct names, 0 names spanning
+                 --     more than one organism, and (strain, taxon) resolving to exactly
+                 --     one node in 452 of 452 cases.
+                 -- So this detector is dormant here today and would NOT have been on
+                 -- rebuild01; keep it.  What keeps it dormant even under the rebuild01
+                 -- shape is the narrower invariant the join on na_sequence_id relies on --
+                 -- no (strain name, na_sequence_id) pair is served by more than one node
+                 -- (0 on both).  A data change that breaks THAT is what this fires on.
+                   , i.protocol_app_node_id
+          )
+          -- Outer wrapper exists so strain_length is computed from the strain_start /
+          -- strain_end columns themselves rather than by repeating their offset arithmetic
+          -- (a SELECT cannot reference its own aliases).  Do not re-inline it: a partial
+          -- edit to one copy would yield a length that silently disagrees with its own
+          -- start and end.
+          SELECT coords.*
+                 -- Clamped at zero: a segment lying inside a deletion legitimately inverts
+                 -- (the reference bases do not exist in this strain), which would otherwise
+                 -- yield a negative length.  strain_start/strain_end are deliberately NOT
+                 -- clamped -- the inversion (strain_end < strain_start) is the signal that
+                 -- StrainSegmentFeatureProvider rejects loudly (spec 5.3.2, 7).  That class
+                 -- landed in ApiCommonWebsite a3c062e03, hardened in e5346e9c4: it rejects
+                 -- the inversion, rejects strain_start < 1, and asserts the strain_seq_id
+                 -- attribute agrees with the key computed from the primary key.  So leaving
+                 -- these two columns unclamped is safe ONLY because that guard exists; if it
+                 -- is ever removed, an inverted segment reaches a FASTA lookup unflagged.
+               , GREATEST(coords.strain_end - coords.strain_start + 1, 0) AS strain_length
+          FROM (
+            SELECT ids.source_id
+                 , ids.project_id
+                 , ids.strain
+                 , ids.ref_seq
+                 , ids.ref_start
+                 , ids.ref_end
+                   -- OPAQUE key -- must match the dnaseq FASTA defline <sample>_<chrom>,
+                   -- written by dnaseq-nextflow bin/makeConsensusFastaFromVcfAndBed.py:233
+                   -- (spec 2; that script is not in this checkout), and must NEVER be
+                   -- split back apart.  The '_' is not a usable
+                   -- delimiter: measured on genomicsdb_rebuild01 (a DIFFERENT, larger
+                   -- database) over the 6,119 strain names carrying indel data, 1,494
+                   -- (24%) themselves contain '_' (1_01_01, Af293_resequence2,
+                   -- China_LZCH-36, USGS_28834_1_NV), so "the first '_' ends the strain name"
+                   -- is false for roughly a quarter of strains.  A consumer needing the
+                   -- strain or the sequence takes it from the primary key, where ':'
+                   -- delimits unambiguously: 0 strain names contain ':' (0 of 6,119 on
+                   -- rebuild01, 0 of 452 on the live unidb_shu_a), and the ID query
+                   -- refuses to mint an ID for a reference sequence containing one
+                   -- (10,704 dots.ExternalNaSequence source_ids do on rebuild01, though
+                   -- none of its 20,823 indel-bearing ones; on unidb_shu_a it is 0 of
+                   -- 160,581 -- see that query's gate 4 on ref_seq).
+                 , ids.strain || '_' || ids.ref_seq                    AS strain_seq_id
+                 , ids.ref_start + COALESCE(off.offset_start, 0)       AS strain_start
+                 , ids.ref_end   + COALESCE(off.offset_end,   0)       AS strain_end
+                 , tn.name                                            AS organism
+            FROM ids
+                 -- Second silent row-drop point (the ids CTE is the other): an inner join,
+                 -- so a sequence whose taxon has no 'scientific name' row disappears with
+                 -- no record and no error.  0 affected today (0 sequences with a NULL
+                 -- taxon, 0 taxa missing a scientific name).  Note the cross-query
+                 -- inconsistency this leaves: the ID query decides "does this sequence
+                 -- have an organism" via apidb.organism, this one via sres.TaxonName.
+                 -- They agree on all current data; nothing enforces that they keep
+                 -- agreeing, so a divergence would show up as records that pass the ID
+                 -- query and then vanish from the page.
+            JOIN sres.TaxonName tn ON tn.taxon_id = ids.taxon_id
+                                  AND tn.name_class = 'scientific name'
+            LEFT JOIN offsets off  ON off.source_id = ids.source_id
+          ) coords
+        ]]>
+      </sql>
+    </sqlQuery>
+
+  </querySet>
+
+</wdkModel>
