@@ -169,6 +169,33 @@
       <regex>\d\d?|100</regex>
     </stringParam>
 
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Chromosome (by-location search) -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- The name is a CONTRACT with the Java plugin:
+         FindPolymorphismsWithSeqFilterPlugin.PARAM_CHROMOSOME returns exactly this
+         string and lists it among the plugin's required params. It lives here rather
+         than in sharedParams because only variation searches use it.
+
+         This is the fallback when the user leaves the Genomic sequence ID box empty.
+         That handoff is not obvious from either side: sharedParams.sequenceId carries
+         allowEmpty plus emptyValue="No Match" on each of its twelve per-project
+         suggest elements, and the plugin tests seq.contains("No Match"). Do not
+         "simplify" either half. See the design doc, section 4.3. -->
+    <flatVocabParam name="chromosomeOptionalForVariations"
+                    queryRef="VariationVQ.ChromosomeForVariations"
+                    prompt="Chromosome"
+                    multiPick="false"
+                    quote="true"
+                    dependedParamRef="organismParams.organismSinglePick">
+      <help>
+        <![CDATA[
+          Select a chromosome. Used when you leave the Genomic sequence ID box empty;
+          a sequence ID you type takes precedence.
+        ]]>
+      </help>
+    </flatVocabParam>
+
   </paramSet>
 
   <!-- Vocabulary queries for the variation searches. Lives in the params file,
@@ -288,6 +315,40 @@
                  ag.precision,
                  CASE WHEN ag.data_shape = 'continuous' THEN 1 ELSE 0 END AS is_range
           FROM eda.attributegraph_$$eda_sample_table_suffix$$ ag
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <!-- Chromosome vocabulary for the by-location search. Rewritten rather than
+         reused: the snp original (SharedVQ.ChromosomeForNgsSnps) overrides the
+         organism param to organismVQ.withNgsSNPs, which reads apidbtuning.snpstrains
+         and does not exist in this build, and its SQL keys on org_abbrev while our
+         organism param carries the taxon name (see the design doc, sections 3 and
+         4.2). Keying on organism forfeits partition pruning on this LIST-partitioned
+         table; measured at 26ms, which is well inside what a vocabulary needs.
+
+         internal is the sequence source_id, which is what the HSSS files use, so the
+         chosen chromosome feeds the position filter directly.
+
+         The 'Choose chromosome' sentinel is deliberate: it gives "no chromosome
+         picked" a real value rather than an empty param. -->
+    <sqlQuery name="ChromosomeForVariations" doNotTest="1">
+      <paramRef ref="organismParams.organismSinglePick" noTranslation="true"/>
+      <column name="internal"/>
+      <column name="term"/>
+      <sql>
+        <![CDATA[
+          SELECT * FROM (
+              SELECT DISTINCT s.chromosome AS term,
+                              s.source_id  AS internal,
+                              s.chromosome_order_num
+              FROM webready.GenomicSeqAttributes_p s
+              WHERE s.organism = '$$organismSinglePick$$'
+                AND s.chromosome IS NOT NULL
+            UNION
+              SELECT 'Choose chromosome' AS term, 'choose' AS internal, -1 AS chromosome_order_num
+          ) t
+          ORDER BY chromosome_order_num
         ]]>
       </sql>
     </sqlQuery>
