@@ -999,10 +999,36 @@ In `variationQuestions.xml`, inside the `VariationQuestions` questionSet, after 
         ]]>
       </description>
 
+      <!-- REQUIRED, not decoration. attributesList cannot name a processQuery's
+           wsColumns directly: WDK fails model load with "Summary attribute field
+           [PercentMinorAlleles] ... is invalid" unless each dynamic column is first
+           declared here. Adapted from the snp original's identical block; the
+           histogram reporters make the two numeric columns plottable. -->
+      <dynamicAttributes>
+        <columnAttribute name="PercentMinorAlleles" displayName="% Minor Alleles" align="center"
+          help="Percent of minor alleles for this group of samples at this variant location (where 'minor allele' means any allele that is not the major allele).">
+          <reporter name="histogram" displayName="Histogram" scopes=""
+            implementation="org.gusdb.wdk.model.report.reporter.HistogramAttributeReporter">
+            <description>Display the histogram of the values of this attribute</description>
+            <property name="type">int</property>
+          </reporter>
+        </columnAttribute>
+        <columnAttribute name="PercentIsolateCalls" displayName="% Calls" align="center"
+          help="Percent of the samples at this variant location from the specified group that have read calls (over the threshold specified in the search)">
+          <reporter name="histogram" displayName="Histogram" scopes=""
+            implementation="org.gusdb.wdk.model.report.reporter.HistogramAttributeReporter">
+            <description>Display the histogram of the values of this attribute</description>
+            <property name="type">int</property>
+          </reporter>
+        </columnAttribute>
+        <columnAttribute name="Phenotype" align="center"
+          help="1 = this variant is within a gene and there is at least one sample in this set that has an allele with product that is non-synonymous with the most popular allele"/>
+      </dynamicAttributes>
+
     </question>
 ```
 
-- [ ] **Step 3: Verify the XML parses**
+> **The `dynamicAttributes` block is mandatory.** An earlier version of this plan omitted it and the build failed with `Summary attribute field [PercentMinorAlleles] defined in question [...] is invalid` — `attributesList` may not reference a `processQuery`'s `wsColumn`s until they are declared as dynamic attributes on the question. The three remaining HSSS variation searches will each need their own block.
 
 ```bash
 python3 -c "import xml.etree.ElementTree as T; T.parse('$HOME/workspaces/plasmodb/ApiCommonModel/Model/lib/wdk/model/questions/variationQuestions.xml'); print('parses')"
