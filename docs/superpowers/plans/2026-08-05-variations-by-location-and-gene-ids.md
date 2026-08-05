@@ -135,22 +135,24 @@ cd ~/workspaces/agentic-veupath-dev && bin/veup-build.sh plasmodb reload
 
 Expected: `OK - Reloaded application at context path [/plasmo.jbrestel]`.
 
-```bash
-ssh cedar "bash -lc 'cd /var/www/PlasmoDB/plasmo.jbrestel/webapp/WEB-INF/lib && \
-  for j in *.jar; do unzip -p \$j org/apidb/apicomplexa/wsfplugin/highspeedsnpsearch/FindPolymorphismsWithSeqFilterPlugin.class 2>/dev/null | \
-  strings | grep -l chromosomeOptionalForVariations >/dev/null && echo \$j; done'" 2>/dev/null
-```
-
-Expected: at least one jar name printed. If nothing prints, try the simpler form below; the
-point is to confirm the *installed* class carries the new string, not just the source tree.
+Jar entries are compressed, so **`grep` over the lib directory finds nothing whether or not the
+string is there** — a check that can only fail. Read the class out of the jar instead, and test
+for both strings; the old one being *gone* is the stronger signal:
 
 ```bash
-ssh cedar "bash -lc 'grep -rl chromosomeOptionalForVariations /var/www/PlasmoDB/plasmo.jbrestel/webapp/WEB-INF/lib/ 2>/dev/null | head'"
+ssh cedar "bash -lc 'J=/var/www/PlasmoDB/plasmo.jbrestel/webapp/WEB-INF/lib/api-common-websvc-wsfplugin-1.0.0.jar; \
+  C=org/apidb/apicomplexa/wsfplugin/highspeedsnpsearch/FindPolymorphismsWithSeqFilterPlugin.class; \
+  echo -n \"new=\"; unzip -p \$J \$C | strings | grep -c chromosomeOptionalForVariations; \
+  echo -n \"old=\"; unzip -p \$J \$C | strings | grep -c chromosomeOptionalForNgsSnps'"
 ```
 
-Expected: one or more jar paths. **A pass here is what makes Task 6 meaningful** — with the old
-string installed, the search fails at run time with a missing-required-parameter error and the
-model looks wrong when it is not.
+Expected: `new=1` and `old=0`. Also check the jar's mtime matches the build you just ran
+(`ls -l $J`). If the jar name has changed, find it with
+`ssh cedar 'ls /var/www/PlasmoDB/plasmo.jbrestel/webapp/WEB-INF/lib/ | grep wsfplugin'`.
+
+**A pass here is what makes Task 6 meaningful** — with the old string installed, the search
+fails at run time with a missing-required-parameter error and the model looks wrong when it is
+not.
 
 ---
 
