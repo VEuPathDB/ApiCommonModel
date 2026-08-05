@@ -27,7 +27,7 @@ sub new {
   }
 
   # nap for a third of a second to observe NCBI's three-request-per-second limit
-  usleep(333333);
+  usleep(100000);
 
   # print $response->decoded_content;
 
