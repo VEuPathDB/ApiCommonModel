@@ -822,8 +822,8 @@ from. Param names are unchanged -- the plugin reads them by name."
 ```bash
 cd ~/workspaces/plasmodb/ApiCommonWebService
 grep -rn "getStrainFilterParamName\|PARAM_ORGANISM\|REQUIRED" \
-  WSFPlugin/lib/java/org/apidb/apicomplexa/wsfplugin/highspeedsnpsearch/FindPolymorphismsPlugin.java \
-  WSFPlugin/lib/java/org/apidb/apicomplexa/wsfplugin/highspeedsnpsearch/FindPolymorphismsAbstractPlugin.java \
+  WSFPlugin/src/main/java/org/apidb/apicomplexa/wsfplugin/highspeedsnpsearch/FindPolymorphismsPlugin.java \
+  WSFPlugin/src/main/java/org/apidb/apicomplexa/wsfplugin/highspeedsnpsearch/FindPolymorphismsAbstractPlugin.java \
   | head -20
 ```
 
