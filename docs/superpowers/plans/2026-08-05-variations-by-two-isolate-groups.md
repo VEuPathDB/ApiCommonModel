@@ -336,7 +336,8 @@ for e in ps.iter('enumParam'):
 PY
 ```
 
-Expected: thirteen params, **no duplicates**, the three `MinPercent*` regexes printing
+Expected: **fourteen** params (the eight already there plus your six), **no duplicates**, the
+three new `MinPercent*` regexes printing
 `'\\d\\d?|100'` (and the pre-existing `MinPercentMinorAlleles` printing `'\\d\\d?'`), and both
 enum params listing internals `['80', '60', '40', '20']`. A duplicate name here would mean you
 redefined a param the one-group search already provides.
