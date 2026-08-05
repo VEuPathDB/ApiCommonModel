@@ -589,6 +589,45 @@
         </sqlQuery>
 
 
+    <!--============================-->
+    <!-- with Variations (dnaseq)   -->
+    <!--============================-->
+
+    <!-- Replaces withNgsSNPsTree for the variation searches. Not a copy: the snp
+         original reads apidbtuning.snpstrains, which does not exist in this build.
+         Filters on apidb.datasource's declared type/subtype rather than on a name
+         string convention; apidbtuning.datasetdatasource.category is NULL for all
+         10 dnaseq datasets, so the category idiom used elsewhere is unavailable.
+         internal is the taxon name for selectable leaves and -1 for branch nodes,
+         per the OrganismTree convention. The taxon name is load-bearing:
+         HighSpeedSnpSearchAbstractPlugin looks it up in sres.TaxonName to derive
+         apidb.organism.name_for_filenames, which is the HSSS path's directory
+         segment. See the design doc, sections 2 and 4.1. -->
+    <sqlQuery name="withVariationsTree">
+      <column name="internal"/>
+      <column name="term"/>
+      <column name="parentTerm"/>
+      <sql>
+        <![CDATA[
+          WITH FilterQuery AS (
+            SELECT DISTINCT tn.name AS organism
+            FROM apidb.datasource ds
+            JOIN apidb.organism o  ON o.taxon_id = ds.taxon_id
+            JOIN sres.taxonname tn ON tn.taxon_id = o.taxon_id
+                                  AND tn.name_class = 'scientific name'
+            WHERE ds.type = 'isolates' AND ds.subtype = 'Dna_Seq'
+          )
+          SELECT DISTINCT ot.term, ot.parentterm,
+                 CASE WHEN ot.term = ot.organism THEN ot.term ELSE '-1' END AS internal
+          FROM apidbtuning.organismtree ot
+          JOIN FilterQuery fq ON fq.organism = ot.organism
+          WHERE (ot.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
+          ORDER BY ot.parentterm, ot.term
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
     <!--=======================-->
     <!-- with NGS SNP datasets -->
     <!--=======================-->
