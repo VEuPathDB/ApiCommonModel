@@ -511,7 +511,7 @@ After `EdaSampleTableSuffix`, inside the `VariationVQ` querySet:
             "Parent ontology ID 'sample' ... cannot be found" on exactly that.
             Mapping unresolvable parents to NULL makes WDK adopt them under its
             synthetic master root. Written as a membership test rather than
-            = 'sample' so it stays correct if the entity abbreviation differs --
+            = 'sample' so it stays correct if the entity abbreviation differs -
             and it is already dynamic in the table name.
 
          2. The type mapping is pinned to WDK's OntologyItemType enum, which accepts
@@ -566,7 +566,7 @@ Inside `variationParams`, after `eda_sample_table_suffix`:
          params. Renaming it breaks the search at run time, not at build time.
 
          Internal values are EDA sample stable IDs, which are a strict subset of the
-         strain names in HSSS's strainIdToName.dat -- no mapping layer needed. The
+         strain names in HSSS's strainIdToName.dat - no mapping layer needed. The
          plugin writes them to a strains file and passes strains_are_names = 1.
 
          minSelectedCount=2 as the snp original: polymorphism within a group of one
@@ -925,9 +925,9 @@ In `variationQuestions.xml`, inside the `VariationQuestions` questionSet, after 
     <!-- Variations within one group of samples -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- This question DOES override attributesList, unlike VariationBySourceId
-         which inherits the record default. The plugin's dynamic columns -- minor
-         allele frequency and percent of samples with a call, for the chosen group
-         -- are the entire point of the search and are not in the record's default
+         which inherits the record default. The plugin's dynamic columns (minor
+         allele frequency and percent of samples with a call, for the chosen group)
+         are the entire point of the search and are not in the record's default
          summary.
 
          displayName says Samples, not the snp original's Isolates: EDA calls them
