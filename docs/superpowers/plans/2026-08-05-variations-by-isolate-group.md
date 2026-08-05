@@ -633,11 +633,14 @@ Copied out of `snpParams.xml`, **not** referenced there. Design §4.4: `snpParam
 Do not take the plan's word for it, and do not use `grep` on `apiCommonModel.xml` — grep cannot tell a live import from a commented-out one:
 
 ```bash
-ssh cedar 'bash -lc "source /var/www/jbrestel.plasmodb.org/etc/setenv && wdkXml -model PlasmoDB"' \
-  | grep -c "paramSet name=\"snpParams\""
+ssh cedar 'bash -lc "source /var/www/jbrestel.plasmodb.org/etc/setenv && wdkXml -model PlasmoDB"' > /tmp/wdkxml.txt
+grep -c snpParams /tmp/wdkxml.txt
+grep -oE "ParamSet: name='[^']*'" /tmp/wdkxml.txt | sort -u
 ```
 
-Expected: `0`. That zero is the whole justification for copying rather than referencing.
+Expected: `0`, and a list of ~22 paramSets that includes `variationParams` and does not include `snpParams`. That zero is the whole justification for copying rather than referencing.
+
+> **Grep the bare name, never `name="snpParams"`.** `wdkXml` prints attributes with **single** quotes (`name='snpParams'`), so a double-quoted pattern reports `0` whether or not the paramSet is there — a check that can only pass. Printing the full paramSet list is what makes the zero mean something.
 
 - [ ] **Step 2: Confirm the four read-frequency directories exist, since the internals must match them**
 
@@ -782,10 +785,10 @@ Then prove the params are in the *assembled* model, not merely in a file:
 
 ```bash
 ssh cedar 'bash -lc "source /var/www/jbrestel.plasmodb.org/etc/setenv && wdkXml -model PlasmoDB"' \
-  | grep -E "name=\"(eda_sample_table_suffix|variation_sample_meta|WebServicesPath|ReadFrequencyPercent|MinPercentMinorAlleles|MinPercentIsolateCalls)\""
+  | grep -E "name='(eda_sample_table_suffix|variation_sample_meta|WebServicesPath|ReadFrequencyPercent|MinPercentMinorAlleles|MinPercentIsolateCalls)'"
 ```
 
-Expected: one matching line per name, six in all. `wb model` is correct here — nothing has touched categorization yet; Task 8 is what forces `wb ontology`.
+Expected: one matching line per name, six in all, each prefixed with its Java param class (`FlatVocabParam`, `FilterParamNew`, `EnumParam`, `StringParam`). Note the **single** quotes — that is how `wdkXml` prints attributes. `wb model` is correct here — nothing has touched categorization yet; Task 8 is what forces `wb ontology`.
 
 - [ ] **Step 6: Commit**
 
