@@ -1,0 +1,72 @@
+#!/usr/bin/perl
+
+use strict;
+
+use lib "$ENV{GUS_HOME}/lib/perl";
+
+use DBI;
+use Getopt::Long qw(GetOptions);
+use Data::Dumper;
+use EbrcModelCommon::Model::tmUtils;
+
+my ($propfile, $instance, $schema, $debug, $timestamp, $unixTimestamp);
+
+Getopt::Long::Configure("pass_through");
+GetOptions("propfile=s" => \$propfile,
+           "instance=s" => \$instance,
+           "schema=s" => \$schema,
+           "debug!" => \$debug,
+           "timestamp=s" => \$timestamp,
+           "unixtimestamp=s" => \$unixTimestamp,
+          );
+
+die "required parameter missing" unless ($propfile && $instance);
+
+my $dbh = EbrcModelCommon::Model::tmUtils::getDbHandle($instance, $schema, $propfile);
+
+# get PubMed IDs
+my $stmt = $dbh->prepare(<<SQL) or print STDERR $dbh->errstr;
+     select count(pubmed_id)
+     from (select distinct primary_identifier as pubmed_id
+           from sres.DbRef
+           where db_ref_id in (select db_ref_id from dots.DbRefNaFeature)
+             and external_database_release_id
+                 in (  select edd.external_database_release_id
+                       from ExternalDbDatasetPresenter edd
+                       where lower(edd.dataset_presenter_display_name) like '%pubmed%'
+                     union
+                       select edr.external_database_release_id
+                       from sres.ExternalDatabaseRelease edr, sres.ExternalDatabase ed
+                       where ed.external_database_id = edr.external_database_id
+                         and lower(ed.name) like '%pubmed%'
+                    )
+             and primary_identifier is not null
+             and primary_identifier ~ '^\\d+\$'  -- only allow integer pubmed IDs.
+             and primary_identifier
+                 not in (select dr.primary_identifier
+                         from sres.DbRef dr,
+                              sres.ExternalDatabase ed, sres.ExternalDatabaseRelease edr
+                         where dr.external_database_release_id = edr.external_database_release_id
+                           and ed.external_database_id = edr.external_database_id
+                           and ed.name like '%DELETED_RSRC'
+                        )
+          ) t
+     where pubmed_id not in (select pubmed_id::varchar from Pubmed)
+     and pubmed_id ~ '^\\d+\$'
+SQL
+
+$stmt->execute();
+my $missingPmidCount = $stmt->fetchrow_array();
+$dbh->disconnect();
+
+print STDERR "There are $missingPmidCount missing pubmed records in the current Pubmed tuning table, needs update.\n" unless $missingPmidCount = 0;
+
+# Final output
+if ($missingPmidCount > 0) {
+  print "out of date\n";
+} else {
+  print "up to date\n";
+}
+
+exit 0;
+
