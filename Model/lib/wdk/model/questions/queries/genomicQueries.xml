@@ -308,8 +308,13 @@
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
     <sqlQuery name="ByCopyNumber"  includeProjects="AmoebaDB,TriTrypDB,PlasmoDB,ToxoDB,CryptoDB,FungiDB,UniDB">
-      <paramRef ref="organismParams.organismSinglePickCnv"/> <!-- queryRef="organismVQ.CNV"/ -->
-      <paramRef ref="sharedParams.CNV_strain"/>
+      <!-- CNVChr, not CNVGene: this search reads only chromosome ploidy. A vocabulary
+           override on organismSinglePick rather than a new param, so the
+           eda_sample_table_suffix / cnv_sample_meta dependency chain stays intact. -->
+      <paramRef ref="organismParams.organismSinglePick" queryRef="organismVQ.CNVChr"
+                quote="true" noTranslation="true"/>
+      <paramRef ref="variationParams.eda_sample_table_suffix"/>
+      <paramRef ref="variationParams.cnv_sample_meta"/>
       <paramRef ref="genomicParams.chrCopyNumber"/>
       <paramRef ref="genomicParams.medianOrIndividual"/>
       <column name="project_id"/>
@@ -320,17 +325,13 @@
       <sql>
         <![CDATA[
           WITH bySample AS (
-            SELECT sa.source_id
-              , sa.project_id
-              , ccn.chr_copy_number
-              , pan.name
-            FROM apidb.chrcopynumber ccn
-              , study.protocolappnode pan
-              , webready.GenomicSeqAttributes_p sa
-            WHERE ccn.protocol_app_node_id in ($$CNV_strain$$)
-              AND ccn.protocol_app_node_id = pan.protocol_app_node_id
-              AND sa.na_sequence_id = ccn.na_sequence_id
-              AND sa.chromosome IS NOT NULL
+            SELECT c.source_id
+              , c.project_id
+              , c.ploidy AS chr_copy_number
+              , c.eda_sample_stable_id
+            FROM apidbtuning.ChrCopyNumbers c
+            WHERE c.eda_sample_stable_id IN ($$cnv_sample_meta$$)
+              AND c.organism = $$organismSinglePick$$
           )
           , median AS (
             SELECT DISTINCT s.source_id
@@ -341,7 +342,7 @@
           SELECT DISTINCT s.source_id
             , s.project_id
             , percentile_cont(0.5) WITHIN GROUP (ORDER BY s.chr_copy_number) AS median_hits
-            , string_agg(REGEXP_REPLACE(s.name, '_[A-Za-z0-9]+ (.+)$', ''), ', ' ORDER BY s.name)  AS strains
+            , string_agg(s.eda_sample_stable_id, ', ' ORDER BY s.eda_sample_stable_id) AS strains
             , m.median AS median_all
           FROM bySample s
             , median m
