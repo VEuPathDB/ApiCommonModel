@@ -58,6 +58,17 @@
       <help>Cellular Localization Image Dataset</help>
     </flatVocabParam>
 
+    <flatVocabParam name="cellularLocImageType"
+                    queryRef="GeneVQ.CellularLocImageType"
+                    prompt="Tag location / image type"
+                    quote="true"
+                    visible="true"
+                    multiPick="false"
+                    displayType="checkBox"
+                    dependedParamRef="geneParams.cellularLocImageDataset" >
+      <suggest default="Any"/>
+      <help><![CDATA[Choose which cellular-localization images to view. For TrypTag, select the N- or C-terminal endogenous tag; other datasets list their available image types. "Any" shows all.]]></help>
+    </flatVocabParam>
     <!--
     <flatVocabParam name="phenotypeDataset"
                     queryRef="GeneVQ.PhenotypeDataset"
@@ -6282,6 +6293,14 @@ products of your selected type (or types).<br><br>
       <help>A public Phenotype User Dataset, or a private one you have imported into your workspace, and that is installed in this website </help>
     </flatVocabParam> 
 
+    <flatVocabParam name="deseq_dataset_id"
+                    queryRef="GeneVQ.DESeqUserDataset"
+                    prompt="RNA-Seq Raw Counts User Dataset"
+	            quote="false"
+                    multiPick="false" >
+      <help>A public RNA-Seq Raw Counts User Dataset, or a private one you have imported into your workspace, and that is installed in this website </help>
+    </flatVocabParam> 
+
 
     <flatVocabParam name="rna_seq_dataset"
                     queryRef="GeneVQ.RnaSeqUserDataset"
@@ -6991,6 +7010,40 @@ products of your selected type (or types).<br><br>
     </sqlQuery>
 
 
+    <!-- Distinct image types available for one gene-image dataset, as LIKE patterns.
+         Generic: term = internal = the raw image_type. Special-cased for TrypTag,
+         whose 6 raw image_types collapse to two termini: term "N-terminal"/"C-terminal"
+         shown to the user, internal "N terminal%"/"C terminal%" used by the LIKE filter.
+         The leading 'Any' -> '%' row is the default (no filtering). -->
+    <sqlQuery name="CellularLocImageType" isCacheable="false" doNotTest="1">
+      <paramRef ref="geneParams.cellularLocImageDataset"/>
+      <column name="term"/>
+      <column name="internal"/>
+      <sql>
+        <![CDATA[
+          SELECT 'Any' AS term, '%' AS internal
+          UNION
+          SELECT DISTINCT
+              CASE WHEN d.name LIKE '%TrypTag%'
+                   THEN regexp_replace(fi.image_type, '^([NC]) terminal tag.*$', '\1-terminal')
+                   ELSE fi.image_type
+              END AS term
+            , CASE WHEN d.name LIKE '%TrypTag%'
+                   THEN regexp_replace(fi.image_type, '^([NC]) terminal tag.*$', '\1 terminal%')
+                   ELSE fi.image_type
+              END AS internal
+          FROM sres.externaldatabase d
+              , sres.externaldatabaserelease r
+              , apidb.nafeatureimage fi
+          WHERE d.external_database_id = r.external_database_id
+            AND r.external_database_release_id = fi.external_database_release_id
+            AND d.name = $$cellularLocImageDataset$$
+          ORDER BY term
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
     <sqlQuery name="MetadataQuery_PhenotypeScore" doNotTest="1">
       <paramRef ref="geneParams.phenotypeScoreDataset"/>
       <column name="ontology_term_name"/>
@@ -7296,7 +7349,35 @@ products of your selected type (or types).<br><br>
           </sql>
   </sqlQuery>
 
-        <sqlQuery name="RnaSeqUserDataset" isCacheable="false">
+  <sqlQuery name="DESeqUserDataset" isCacheable="false">
+          <paramRef ref="InternalParams.user_id"/>
+          <column name="internal"/>
+          <column name="term"/>
+          <column name="display"/>
+          <sql>
+            <![CDATA[
+             WITH primary_result AS (
+               SELECT
+                 CONCAT('EDAUD_', aud.user_dataset_id) as term
+                 , CONCAT('EDAUD_', aud.user_dataset_id) as internal
+                 , aud.name as display
+                FROM
+                  @VDI_CONTROL_SCHEMA@.availableuserdatasets aud
+               WHERE
+                  (user_id = $$user_id$$ or is_public = true)
+                AND type = 'rnaseqrc'
+                AND (project_id = '@PROJECT_ID@' or ('UniDB' = '@PROJECT_ID@' and 'ClinEpiDB' != project_id))
+              ORDER BY display
+            )
+            SELECT * FROM primary_result
+            UNION ALL
+            select 'EDAUD_slI5M0RwIg0Zw' as term, 'EDAUD_slI5M0RwIg0Zw' as internal, 'Upload an RNA-Seq Raw Counts User Dataset in My Workspace' as display
+            WHERE NOT EXISTS (SELECT 1 FROM primary_result)
+            ]]>
+          </sql>
+        </sqlQuery>
+
+	<sqlQuery name="RnaSeqUserDataset" isCacheable="false">
           <paramRef ref="InternalParams.user_id"/>
           <column name="internal"/>
           <column name="term"/>

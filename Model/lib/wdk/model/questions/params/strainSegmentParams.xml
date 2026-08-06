@@ -1,0 +1,104 @@
+<wdkModel>
+
+  <paramSet name="StrainSegmentParams">
+
+    <!-- multiPick, so ONE search returns one segment per selected strain rather than
+         needing N searches for N strains.  The ID query
+         (StrainSegmentId.StrainSegmentsByRefSegment) unnests the selection and mints one
+         primary key per strain; everything downstream was already multi record capable
+         (StrainSegmentAttributes.Coords keys on source_id, BedReporter streams one line
+         per record), so multiPick is the whole of the change on the input side.
+
+         quote="true" matters and must stay.  With it, EnumParamHandler.toInternalValue
+         quotes each internal value and joins them with DBPlatform.prepareExpressionList,
+         which on PostgreSQL (FgpUtil PostgreSQL.java) is a plain comma join.  So
+         $$strain$$ renders as   'A17-10A-1','A17-3C-11',...   which is exactly an
+         ARRAY[...] element list.  Drop the quote and it renders bare and unparseable.
+
+         maxSelectedCount="500" is a correctness rail, not a performance one:
+           a) It is above the ENTIRE vocabulary as it stands (452 strains on unidb_shu_a,
+              the live appDb, measured 2026-07-31), so it refuses nothing a user can ask
+              for today; selecting every strain still works.
+           b) It sits below Oracle's EXPRESSION_LIMIT of 999 (FgpUtil Oracle.java).  Above
+              that limit prepareExpressionList stops emitting a comma list and starts
+              emitting "SELECT * FROM table(SYS.DBMS_DEBUG_VC2COLL(...)) UNION ...", which
+              ARRAY[...] cannot consume, so the ID query would break.  UniDB is PostgreSQL
+              and so is not exposed today, but the cap makes that cliff unreachable by
+              construction instead of by luck of how big the vocabulary happens to be.
+           c) It bounds the ID query's reject path, whose cost is linear in
+              (selected strains x that strain's indel row count).  Measured on unidb_shu_a
+              2026-07-31: 1 strain accepts in ~0.35 ms, 5 in ~0.61 ms, and all 452 in
+              ~1.9 s, with the all reject case ~1.9 s as well.
+
+         allowEmpty is left at its default of false (Param.java), so WDK rejects an empty
+         selection during validation and ARRAY[] (which PostgreSQL cannot type) is never
+         generated. -->
+    <flatVocabParam name="strain"
+                    queryRef="StrainSegmentVQ.StrainsWithIndelData"
+                    prompt="Strain / isolate"
+                    multiPick="true"
+                    maxSelectedCount="500">
+      <help>
+        One or more strains or isolates whose coordinate systems the returned segments
+        are expressed in: the search returns one segment per selected strain. The list is
+        all strains that have indel data loaded. A selected strain that does not belong to
+        the reference sequence's organism is dropped from the result rather than being an
+        error.
+      </help>
+    </flatVocabParam>
+
+  </paramSet>
+
+  <!--===========================================================================-->
+  <!--  Vocab queries                                                            -->
+  <!--===========================================================================-->
+
+  <querySet name="StrainSegmentVQ" queryType="vocab" isCacheable="true">
+
+    <!-- Strain identity is protocolappnode.name minus the '_Indel' suffix; there is
+         no strain column on apidb.indel.  The vocabulary is global: the search
+         takes no organism param, and relevance is enforced instead by the ID
+         query's EXISTS gate (gate 3 there), which scopes a chosen strain to the
+         reference sequence's ORGANISM.  It deliberately does NOT require indel data
+         on that exact sequence: zero indels on a contig is the ordinary
+         identity-mapping case, not a missing-data case (see spec 5.1.1).
+
+         Driven from study.protocolappnode with an EXISTS probe into apidb.indel,
+         rather than the reverse: an earlier revision derived the candidate set from
+         a DISTINCT scan of every apidb.indel row, which
+         dominated its cost. Probing indel from the protocolappnode side lets the
+         planner use indel's protocol_app_node_id index instead of scanning it.
+         That also means regexp_replace now runs over only the rows matching the
+         name pattern rather than the full indel row count, so the earlier
+         requirement to dedupe on protocol_app_node_id before applying
+         regexp_replace no longer applies here.
+
+         Row-count provenance, because two databases get confused here.  The 61,512
+         protocolappnode rows and 43.6M apidb.indel rows quoted by the original of
+         this comment were measured on genomicsdb_rebuild01, a DIFFERENT and larger
+         database.  On unidb_shu_a (the live appDb, measured 2026-07-31) it is 1,356
+         protocolappnode rows and 1,855,449 indel rows, of which 452 nodes carry the
+         '_Indel' suffix.  The shape argument above holds at either scale; only the
+         magnitude of the win changes. -->
+    <sqlQuery name="StrainsWithIndelData">
+      <column name="internal"/>
+      <column name="term"/>
+      <column name="display"/>
+      <sql>
+        <![CDATA[
+          SELECT strain AS internal, strain AS term, strain AS display
+          FROM (
+            SELECT DISTINCT regexp_replace(pan.name, '_Indel$', '') AS strain
+            FROM study.protocolappnode pan
+            WHERE pan.name LIKE '%\_Indel'
+              AND EXISTS (SELECT 1 FROM apidb.indel i
+                          WHERE i.protocol_app_node_id = pan.protocol_app_node_id)
+          ) t
+          ORDER BY strain
+        ]]>
+      </sql>
+    </sqlQuery>
+
+  </querySet>
+
+</wdkModel>

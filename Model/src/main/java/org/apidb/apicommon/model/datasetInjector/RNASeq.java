@@ -49,6 +49,13 @@ public class RNASeq extends  DatasetInjector {
 
   @Override
   public void injectTemplates() {
+      // Every RNASeq-category dataset shares this IRI, but it reaches us via the dataset
+      // properties files, so a presenter whose dataset entry is missing or renamed arrives
+      // without it.  categories.dst substitutes it into an IRI and an absent property is not
+      // caught by template validation, so the unsubstituted macro yields unparseable OWL.
+      // Set it here so the whole RNASeq hierarchy is covered.
+      setPropValue("datasetClassCategoryIri", "http://purl.obolibrary.org/obo/OBI_0001271");
+
       setShortAttribution();
       setProfileSamplesHelp();
 
