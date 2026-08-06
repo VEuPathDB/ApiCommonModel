@@ -35,6 +35,29 @@ in this form — **every task establishes a failing observation before changing 
 Never skip the "before" observation. Three of these four searches currently **build fine and
 silently return nothing**, which is exactly the failure mode a "did it build?" check misses.
 
+### The app lives under a context path — `/service` alone is a 404
+
+Verified 2026-08-06 from an authenticated tab. The app is served at
+`https://jbrestel.plasmodb.org/plasmo.jbrestel/app`, so:
+
+| fetch | result |
+|---|---|
+| `/service/record-types/transcript` | **404**, `text/html` |
+| `/plasmo.jbrestel/service/record-types/transcript` | **200**, `application/json` |
+
+Every `javascript_tool` snippet in this plan therefore derives the base from the current
+location rather than hardcoding it:
+
+```javascript
+const BASE = window.location.pathname.replace(/\/app.*$/, '');   // -> "/plasmo.jbrestel"
+```
+
+Keep the origin guard as well. The two catch different failures: the origin guard catches
+an unauthenticated tab that has been redirected to **production** (where the fetch would
+succeed and answer for the wrong site), and the BASE derivation catches the 404. A bare
+`/service` fetch throws at `.json()` rather than returning empty, so it fails loudly — but
+only if you do not wrap it in a try/catch that swallows it.
+
 ### `wdkQuery -showQuery` does not work on these queries — use `-showParams`
 
 Discovered during Task 1 and verified against a **known-good** search. Any query with a
@@ -239,7 +262,9 @@ Chrome's `javascript_tool`:
 
 ```javascript
 if (!window.location.origin.includes('jbrestel')) throw new Error('WRONG ORIGIN: ' + window.location.origin);
-const r = await fetch('/service/record-types/transcript');
+const BASE = window.location.pathname.replace(/\/app.*$/, '');   // -> "/plasmo.jbrestel"
+if (!BASE) throw new Error('NO CONTEXT PATH: ' + window.location.pathname);
+const r = await fetch(BASE + '/service/record-types/transcript');
 const j = await r.json();
 JSON.stringify(j.searches.map(s => s.urlSegment).filter(n => /NgsSnp/i.test(n)))
 ```
@@ -297,7 +322,9 @@ The OWL still predates Task 2. From the app tab:
 
 ```javascript
 if (!window.location.origin.includes('jbrestel')) throw new Error('WRONG ORIGIN: ' + window.location.origin);
-const j = await (await fetch('/service/ontologies/Categories')).json();
+const BASE = window.location.pathname.replace(/\/app.*$/, '');   // -> "/plasmo.jbrestel"
+if (!BASE) throw new Error('NO CONTEXT PATH: ' + window.location.pathname);
+const j = await (await fetch(BASE + '/service/ontologies/Categories')).json();
 const hits = [];
 (function walk(n, parent) {
   const p = n.properties || {};
@@ -1364,7 +1391,9 @@ From the app tab:
 
 ```javascript
 if (!window.location.origin.includes('jbrestel')) throw new Error('WRONG ORIGIN: ' + window.location.origin);
-const j = await (await fetch('/service/record-types/transcript/searches/GenesByCopyNumber')).json();
+const BASE = window.location.pathname.replace(/\/app.*$/, '');   // -> "/plasmo.jbrestel"
+if (!BASE) throw new Error('NO CONTEXT PATH: ' + window.location.pathname);
+const j = await (await fetch(BASE + '/service/record-types/transcript/searches/GenesByCopyNumber')).json();
 JSON.stringify(j.defaultAttributes)
 ```
 
@@ -1544,7 +1573,9 @@ From the app tab:
 
 ```javascript
 if (!window.location.origin.includes('jbrestel')) throw new Error('WRONG ORIGIN: ' + window.location.origin);
-const j = await (await fetch('/service/ontologies/Categories')).json();
+const BASE = window.location.pathname.replace(/\/app.*$/, '');   // -> "/plasmo.jbrestel"
+if (!BASE) throw new Error('NO CONTEXT PATH: ' + window.location.pathname);
+const j = await (await fetch(BASE + '/service/ontologies/Categories')).json();
 const want = /GenesByCopyNumber|GenesByCopyNumberComparison|SequencesByPloidy|GenesByNgsSnps/;
 const hits = [];
 (function walk(n, parent) {
@@ -1563,8 +1594,10 @@ is not project-filtered, so a node can appear for a site whose model excludes th
 
 ```javascript
 if (!window.location.origin.includes('jbrestel')) throw new Error('WRONG ORIGIN: ' + window.location.origin);
-const t = await (await fetch('/service/record-types/transcript')).json();
-const g = await (await fetch('/service/record-types/genomic-sequence')).json();
+const BASE = window.location.pathname.replace(/\/app.*$/, '');   // -> "/plasmo.jbrestel"
+if (!BASE) throw new Error('NO CONTEXT PATH: ' + window.location.pathname);
+const t = await (await fetch(BASE + '/service/record-types/transcript')).json();
+const g = await (await fetch(BASE + '/service/record-types/genomic-sequence')).json();
 JSON.stringify({
   transcript: t.searches.map(s=>s.urlSegment).filter(n=>/CopyNumber|NgsSnps/.test(n)),
   genomicSequence: g.searches.map(s=>s.urlSegment).filter(n=>/Ploidy/.test(n))
