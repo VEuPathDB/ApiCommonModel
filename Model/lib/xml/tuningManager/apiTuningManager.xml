@@ -4080,6 +4080,85 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
         ON DatasetVariable&1 (dataset_id)
       ]]>
     </sql>
-  </tuningTable>  
+  </tuningTable>
+
+  <!-- TRANSITIONAL. Mirrors webready/orgSpecific/GeneCopyNumbers_p.psql, which is
+       corrected in the same change but does not take effect until the next workflow
+       run. Scheduled for deletion one release later: see
+       docs/superpowers/specs/2026-08-06-genetic-variation-searches-port-design.md s7.
+       Any edit here MUST be mirrored in that .psql file, and vice versa. -->
+  <tuningTable name="GeneCopyNumbers">
+    <externalDependency name="apidb.GeneCopyNumber"/>
+    <externalDependency name="study.ProtocolAppNode"/>
+    <externalDependency name="webready.TranscriptAttributes_p"/>
+    <sql>
+      <![CDATA[
+        create table GeneCopyNumbers&1 as
+        SELECT DISTINCT
+            ta.project_id
+          , ta.org_abbrev
+          , ta.organism
+          , ta.taxon_id
+          , ta.source_id
+          , ta.gene_source_id
+          , regexp_replace(pan.name, '_GeneCNV$', '') AS eda_sample_stable_id
+          , gcn.haploid_number  AS raw_estimate
+          , gcn.ref_copy_number AS ref_cn
+          , CASE WHEN (gcn.haploid_number < 0.01) THEN 0
+                 WHEN (0.01 < gcn.haploid_number AND gcn.haploid_number < 1.85) THEN 1
+                 ELSE round(gcn.haploid_number) END AS haploid_number
+          , ta.chromosome
+          , ta.na_sequence_id
+        FROM apidb.genecopynumber gcn
+        JOIN study.protocolappnode pan
+             ON pan.protocol_app_node_id = gcn.protocol_app_node_id
+        JOIN webready.transcriptattributes_p ta
+             ON ta.gene_na_feature_id = gcn.na_feature_id
+        WHERE ta.gene_type IN ('protein coding', 'protein coding gene')
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index GeneCopyNumbersTT_i1_idx&1 ON GeneCopyNumbers&1 (organism, eda_sample_stable_id)
+      ]]>
+    </sql>
+  </tuningTable>
+
+  <!-- TRANSITIONAL. Mirrors webready/orgSpecific/ChrCopyNumbers_p.psql. Same sunset and
+       same mirroring obligation as GeneCopyNumbers above.
+
+       Sources from GenomicSeqAttributes_p, NOT TranscriptAttributes_p as the pre-port
+       definition did: chromosome ploidy is sequence-level. Deliberate, not a slip. -->
+  <tuningTable name="ChrCopyNumbers">
+    <externalDependency name="apidb.ChrCopyNumber"/>
+    <externalDependency name="study.ProtocolAppNode"/>
+    <externalDependency name="webready.GenomicSeqAttributes_p"/>
+    <sql>
+      <![CDATA[
+        create table ChrCopyNumbers&1 as
+        SELECT DISTINCT
+            sa.project_id
+          , sa.org_abbrev
+          , sa.organism
+          , sa.taxon_id
+          , sa.source_id
+          , sa.na_sequence_id
+          , sa.chromosome
+          , ccn.chr_copy_number AS ploidy
+          , regexp_replace(pan.name, '_Ploidy$', '') AS eda_sample_stable_id
+        FROM apidb.chrcopynumber ccn
+        JOIN study.protocolappnode pan
+             ON pan.protocol_app_node_id = ccn.protocol_app_node_id
+        JOIN webready.genomicseqattributes_p sa
+             ON sa.na_sequence_id = ccn.na_sequence_id
+        WHERE sa.chromosome IS NOT NULL
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+        create index ChrCopyNumbersTT_i1_idx&1 ON ChrCopyNumbers&1 (organism, eda_sample_stable_id)
+      ]]>
+    </sql>
+  </tuningTable>
 
 </tuningConfig>
