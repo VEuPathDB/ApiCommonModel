@@ -96,7 +96,7 @@ SELECT DISTINCT
   , ta.gene_source_id
   , regexp_replace(pan.name, '_GeneCNV$', '') AS eda_sample_stable_id
   , gcn.haploid_number  AS raw_estimate
-  , gcn.ref_copy_number AS ref_cn
+  , COALESCE(r.ref_cn, 1) AS ref_cn      -- see 3.5, NOT gcn.ref_copy_number
   , CASE WHEN (gcn.haploid_number < 0.01) THEN 0
          WHEN (0.01 < gcn.haploid_number AND gcn.haploid_number < 1.85) THEN 1
          ELSE round(gcn.haploid_number) END AS haploid_number
@@ -173,6 +173,47 @@ on an object scheduled for deletion in one release (§7).
 The two `_ix.psql` files must drop `input_pan_id` from the index definition, since the
 column is gone.
 
+### 3.5 `ref_cn` is recomputed from the annotation — a definitional change
+
+Added after implementation, when the fan-out below surfaced in live QA.
+
+`apidb.genecopynumber.ref_copy_number` is **not** usable. Two separate problems:
+
+1. **It is per-sample.** The loader counts only ortholog-group members present in *that
+   sample's own result set*, so a partially-covered sample reports fewer. Proven by exact
+   match: of the 72 pfal genes in group `OG7_0000041`, sample `B082` has all 72 present and
+   stores 72; `D003` 63/63; `G213` 51/51; `M283` 46/46. The 202 fully-covered samples all
+   store 72.
+
+   This broke the searches outright. `hit_medians` does `GROUP BY … s.ref_cn`, so a gene
+   with several distinct values emitted several rows, and WDK rejected the answer:
+   *"Joined attribute query returned a different number of rows (376) than the ID query
+   alone (100)"*. 812 pfal genes were affected.
+
+2. **It counts the group genome-wide**, while the attribute's own help text says *"both on
+   the same chromosome and in the same ortholog group"*. The stored values only ever matched
+   the group-wide count.
+
+So `ref_cn` is computed here instead, from `TranscriptAttributes_p` ⋈
+`apidb.orthologgroupaasequence`, restricted to the same chromosome. It is reference-only,
+hence constant per gene — the fan-out disappears at source — and it matches the
+documentation.
+
+**This moves result sets and was approved deliberately.** `OG7_0000041`'s 72 pfal genes span
+13 chromosomes, so its members drop from 72 to 1–12. Roughly a quarter to a half of all rows
+change value, and `GenesByCopyNumberComparison`'s entire predicate is
+`haploid_number <op> ref_cn`. Verified impact on a 10-sample pfal run: amplified calls move
+3,411 → 3,522 (+3%), because 3,933 of 5,285 genes are unchanged either way.
+
+`COALESCE(…, 1)` covers a gene in no ortholog group — 67 in pfal. Note `ref_cn = 1` is also
+the *normal* result (89% of pfal genes have no same-chromosome paralog), so a table built
+before the orthomcl load would be silently indistinguishable from a correct one for most
+rows. The tuningManager copy guards this with an `externalDependency` on
+`apidb.OrthologGroupAaSequence`; in the webready copy it is a workflow ordering requirement.
+
+**The loader is still wrong** and worth a separate ticket — every rebuild keeps writing
+sample-contaminated values into `apidb.genecopynumber` for anyone else reading it.
+
 ## 4. Params
 
 ### 4.1 CNV organism: a `queryRef` override, not a new param
@@ -192,7 +233,7 @@ interpolate `$$organismSinglePick$$`. A genuinely new organism param would leave
 pointing at a param the query no longer has, so the samples filter would silently never
 scope to the chosen organism.
 
-`organismVQ.CNVDnaSeq` returns `internal` = **scientific name**, matching
+`organismVQ.CNVGene` / `organismVQ.CNVChr` (two, see below) return `term` = **scientific name**, matching
 `organismSinglePick`'s convention. The dead `organismVQ.CNV` returned
 `string_agg(o.abbrev)` — a comma-joined list of abbreviations — which is a second reason
 nothing downstream lined up. It lists organisms that actually have CNV rows, so an organism
@@ -251,7 +292,7 @@ spec, §4.4):
 | `snpParams.MinPercentMinorAlleles` | `variationParams.MinPercentMinorAlleles` |
 | `snpParams.MinPercentIsolateCalls` | `variationParams.MinPercentIsolateCalls` |
 | `snpParams.ngsSnp_strain_meta` | `variationParams.variation_sample_meta` |
-| `organismSinglePick` + `queryRef="organismVQ.withNgsSNPsTree"` | plain `organismSinglePick` (drop the override) |
+| `organismSinglePick` + `queryRef="organismVQ.withNgsSNPsTree"` | `organismSinglePick` + `queryRef="organismVQ.withVariationsTree"` (swap the override, do **not** drop it) |
 
 The strain-filter repoint is not a preference: `FindGenesWithSnpCharsPlugin extends
 FindPolymorphismsPlugin`, so it inherits `getStrainFilterParamName()` returning
@@ -259,7 +300,14 @@ FindPolymorphismsPlugin`, so it inherits `getStrainFilterParamName()` returning
 run time, not build time.
 
 `organismVQ.withNgsSNPsTree` reads `apidbtuning.snpstrains`, which does not exist in this
-build; plain `organismSinglePick` is what the five working variation searches use.
+build. The replacement is `organismVQ.withVariationsTree` — what the four working variation
+`processQuery`s use (`variationQueries.xml:44, 87, 127, 170`).
+
+**Do not drop the override entirely.** Plain `organismSinglePick` falls back to
+`organismVQ.withGenes`, i.e. every annotated organism in the project. Choosing one with no
+dnaseq study makes `eda_sample_table_suffix` return zero rows, so the samples filter has
+nothing to render and the search breaks rather than returning an empty result.
+`withVariationsTree` restricts to organisms having an `isolates`/`Dna_Seq` datasource.
 
 ## 5. Queries
 
@@ -387,7 +435,7 @@ copies of a verified definition rather than two guesses.
 **Sunset, one release later** — this is a scheduled deletion, not an aspiration:
 
 - delete the two `<tuningTable>` entries from `apiTuningManager.xml`;
-- repoint three queries (§5.2 ×2, §5.3) from `apidbtuning.X` to `webready.X_p`;
+- repoint **five** references from `apidbtuning.X` to `webready.X_p`: the three queries (§5.2 ×2, §5.3) **and** the two organism vocabularies `organismVQ.CNVGene` / `organismVQ.CNVChr`, which also name the transitional tables;
 - change the organism predicate from `organism = …` back to `org_abbrev = …` **only if**
   partition pruning measures better than the composite index — the `organism` column is
   carried on the webready table too (§3.3), so no schema change is required either way.

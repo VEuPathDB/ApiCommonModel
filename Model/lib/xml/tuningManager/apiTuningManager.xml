@@ -3488,19 +3488,34 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
        docs/superpowers/specs/2026-08-06-genetic-variation-searches-port-design.md s7.
        Any edit here MUST be mirrored in that .psql file, and vice versa.
 
-       ref_cn is computed here from the annotation - the count of same-ortholog-group genes
-       on the same chromosome - and deliberately IGNORES apidb.genecopynumber.ref_copy_number.
-       That column is contaminated: the loader counts only group members present in each
-       sample's own result set, so a partially-covered sample undercounts it (verified: of 72
-       pfal genes in group OG7_0000041, sample M283 has 46 present and stores 46). Because
-       hit_medians GROUPs BY ref_cn, that produced multiple rows per gene and WDK rejected the
-       answer with "Joined attribute query returned a different number of rows". Computing it
-       here makes it constant per gene AND matches the column's documented definition. The
-       loader remains worth fixing separately. -->
+       ref_cn is computed here from the annotation and deliberately IGNORES
+       apidb.genecopynumber.ref_copy_number. This is a DEFINITIONAL CHANGE, not merely a
+       cleanup - read both parts:
+
+       1. The stored column is per-sample. The loader counts only ortholog-group members
+          present in that sample's own result set, so a partially-covered sample reports
+          less (verified: of 72 pfal genes in group OG7_0000041, sample M283 has 46 present
+          and stores 46, while the 202 fully-covered samples all store 72). Because
+          hit_medians GROUPs BY ref_cn, that emitted several rows per gene and WDK rejected
+          the answer - "Joined attribute query returned a different number of rows".
+
+       2. The stored column also counts the group GENOME-WIDE, whereas the attribute's own
+          help text says "both on the same chromosome and in the same ortholog group"
+          (geneQuestions.xml). This computes the same-chromosome count, which matches the
+          documentation but is SMALLER for any group spread across chromosomes - OG7_0000041's
+          72 pfal genes span 13 chromosomes, so its members go from 72 to between 1 and 12.
+          Roughly a quarter to a half of all rows change value, and
+          GenesByCopyNumberComparison's entire predicate is haploid_number <op> ref_cn, so
+          result sets move. Approved deliberately; see the design doc s3.1.
+
+       The loader remains worth fixing separately. -->
   <tuningTable name="GeneCopyNumbers">
     <externalDependency name="apidb.GeneCopyNumber"/>
     <externalDependency name="study.ProtocolAppNode"/>
     <externalDependency name="webready.TranscriptAttributes_p"/>
+    <!-- Feeds the refcn CTE below. Without this the table would not rebuild when the
+         ortholog groups reload, leaving ref_cn stale against a new annotation. -->
+    <externalDependency name="apidb.OrthologGroupAaSequence"/>
     <sql>
       <![CDATA[
         create table GeneCopyNumbers&1 as
@@ -3525,6 +3540,12 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
           , ta.gene_source_id
           , regexp_replace(pan.name, '_GeneCNV$', '') AS eda_sample_stable_id
           , gcn.haploid_number  AS raw_estimate
+          -- 1 = the gene itself, for a gene in no ortholog group (67 such in pfal).
+          -- CAUTION: ref_cn=1 is also the NORMAL result - 89% of pfal genes have no
+          -- same-chromosome paralog - so a table built before the ortholog groups were
+          -- loaded would be silently indistinguishable from a correct one for most rows.
+          -- The apidb.OrthologGroupAaSequence externalDependency above is what guards
+          -- against that; do not remove it.
           , COALESCE(r.ref_cn, 1) AS ref_cn
           , CASE WHEN (gcn.haploid_number < 0.01) THEN 0
                  WHEN (0.01 < gcn.haploid_number AND gcn.haploid_number < 1.85) THEN 1
