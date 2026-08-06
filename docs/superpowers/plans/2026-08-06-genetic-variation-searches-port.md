@@ -1640,8 +1640,35 @@ grep -c "organismSinglePickCnv\|CNV_strain\|CnvSamplesMetadataByOrganism\|CnvMet
   /tmp/claude-1000/-home-jbrestel-workspaces-agentic-veupath-dev/0c03b31d-4bcd-456b-b2ac-4cbb0a3afb4f/scratchpad/assembled.xml
 ```
 
-Expected: `0`. **If it is not zero, stop** — something still references them and deleting
-would break the model build.
+Expected: **4, not 0** — and that is correct, not a problem.
+
+`wdkXml -model` dumps a full *registry* of every declared param and query, so the items being
+deleted necessarily appear in their own inventory entries. A grep-for-zero gate here **cannot
+pass by construction**. (This was a defect in an earlier draft of this plan. An agent hit it,
+correctly refused to reinterpret the premise on its own authority, and stopped — the right
+call, and why the gate is now written properly.)
+
+**The real gate:** every reference must come from *within the deletion set itself*. Verified
+on this instance:
+
+| line | reference |
+|---|---|
+| 400 | `organismSinglePickCnv`'s own declaration |
+| 1405 | `CNV_strain`'s own declaration |
+| 8961 | `organismVQ.CNV`'s own declaration |
+| 9121, 9124 | the two doomed `SharedVQ` queries, each naming the doomed param |
+
+**Stop only if a *Question* references one of them.** Check that specifically:
+
+```bash
+grep -nE "GenesByCopyNumber|GenesByCopyNumberComparison|ByCopyNumber" \
+  <scratchpad>/assembled.xml | grep -E "organismSinglePickCnv|CNV_strain"
+```
+
+Expected: no output — by this point `GeneId.GenesByCopyNumber` lists `organismSinglePick`
+and `cnv_sample_meta` instead.
+
+The grep-for-zero check *is* meaningful **after** deletion; that is Step 5's job.
 
 - [ ] **Step 2: Delete from `organismParams.xml`**
 
