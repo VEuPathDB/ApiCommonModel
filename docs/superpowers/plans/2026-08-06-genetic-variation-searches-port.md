@@ -35,6 +35,33 @@ in this form — **every task establishes a failing observation before changing 
 Never skip the "before" observation. Three of these four searches currently **build fine and
 silently return nothing**, which is exactly the failure mode a "did it build?" check misses.
 
+### `wdkQuery -showQuery` does not work on these queries — use `-showParams`
+
+Discovered during Task 1 and verified against a **known-good** search. Any query with a
+dependent `filterParam` makes the `wdkQuery` CLI fail before it renders SQL:
+
+```
+ERROR - org.gusdb.wdk.model.test.ParamValuesFactory:84 - Unable to populate param values set with defaults
+```
+
+`VariationsBy.VariationsByIsolateGroup` — one of the five searches that work in production
+today — fails identically. It is a CLI auto-default limitation, **not** a defect in the
+query, so do not treat it as one and do not try to fix it.
+
+This affects every query in this plan that uses `variation_sample_meta` or
+`cnv_sample_meta`: Tasks 1, 9, 10 and 12.
+
+**Use instead:**
+
+- **`-showParams`** to prove the query resolves and its params are correctly typed. This
+  works, and is the "did my XML wire up" check.
+- **The model XML itself** as the SQL to run in psql. This is normally *not* safe advice —
+  the CLAUDE.md rule is that raw model XML is not what executes, because
+  `presenterInjectTemplates` expands `-- TEMPLATE_ANCHOR` into per-dataset `UNION` branches.
+  It is safe **here specifically**: all three CNV queries were checked and contain **zero**
+  `TEMPLATE_ANCHOR` occurrences, so the XML SQL and the assembled SQL are identical. If you
+  add a template anchor to any of them, this shortcut stops being valid.
+
 ## Environment
 
 All commands run from `/home/jbrestel/workspaces/agentic-veupath-dev` unless stated.
@@ -91,10 +118,10 @@ The `processQuery` sits inside a comment block opening at line 2723
 
 ```bash
 ssh cedar 'bash -lc "source /var/www/jbrestel.plasmodb.org/project_home/../etc/setenv && \
-  wdkQuery -model PlasmoDB -query GeneId.GenesByNgsSnps -showQuery"'
+  wdkQuery -model PlasmoDB -query GeneId.GenesByNgsSnps -showParams"'
 ```
 
-Expected: failure naming an unknown query (`GeneId.GenesByNgsSnps` does not resolve).
+Expected: `WdkModelException: Query Set GeneId does not include query GenesByNgsSnps`.
 Record the exact message — Step 5 asserts it is gone.
 
 - [ ] **Step 2: Remove the two comment-delimiter lines**
@@ -180,7 +207,8 @@ bin/veup-build.sh plasmodb wb model
 ```
 
 Expected: build succeeds. Then re-run Step 1's command.
-Expected: it now prints assembled SQL/param information instead of "unknown query".
+Expected: it now lists the query's params (including `variation_sample_meta` as a
+`FilterParamNew`) instead of "does not include query".
 
 - [ ] **Step 6: Commit**
 
@@ -1006,7 +1034,7 @@ would either hide or over-offer an organism."
 
 ```bash
 ssh cedar 'bash -lc "source /var/www/jbrestel.plasmodb.org/project_home/../etc/setenv && \
-  wdkQuery -model PlasmoDB -query GeneId.GenesByCopyNumber -showQuery"'
+  wdkQuery -model PlasmoDB -query GeneId.GenesByCopyNumber -showParams"'
 ```
 
 Record the rendered SQL. It names `webready.GeneCopyNumbers_p` and `ChrCopyNumbers_p`.
@@ -1108,8 +1136,10 @@ Jenkins build at the HALT gate did not actually run.
 
 - [ ] **Step 5: Confirm the failing observation is resolved**
 
-Re-run Step 1's `-showQuery`. The rendered SQL must now name `apidbtuning.*`. Then take that
-SQL, substitute a real organism and sample list, and run it read-only:
+Re-run Step 1's `-showParams`; the query must now resolve and list `cnv_sample_meta` as a
+`FilterParamNew`. Then take the SQL **from the model XML you just edited** (valid here — no
+template injection; see the note at the top of this plan), confirm it names `apidbtuning.*`,
+substitute a real organism and sample list, and run it read-only:
 
 ```bash
 psql -h localhost -p 5432 -U jbrestel -d unidb_shu_a
@@ -1153,7 +1183,7 @@ this query has a different param list and you may be reading tasks out of order.
 
 ```bash
 ssh cedar 'bash -lc "source /var/www/jbrestel.plasmodb.org/project_home/../etc/setenv && \
-  wdkQuery -model PlasmoDB -query GeneId.GenesByCopyNumberComparison -showQuery"'
+  wdkQuery -model PlasmoDB -query GeneId.GenesByCopyNumberComparison -showParams"'
 ```
 
 Record the rendered SQL; it names the two empty `webready` tables.
@@ -1243,8 +1273,8 @@ Expected: succeeds.
 
 - [ ] **Step 5: Confirm resolution**
 
-Re-run Step 1's `-showQuery`; confirm `apidbtuning.*`. Then run the rendered SQL in psql
-with `$$organismSinglePick$$` → `'Plasmodium falciparum 3D7'`, `$$cnv_sample_meta$$` → the
+Re-run Step 1's `-showParams`; confirm the query resolves. Then take the SQL from the model
+XML you just edited, confirm it names `apidbtuning.*`, and run it in psql with `$$organismSinglePick$$` → `'Plasmodium falciparum 3D7'`, `$$cnv_sample_meta$$` → the
 same 10-sample list as Task 9, `$$comparisonOperator$$` → `>`, `$$medianOrIndividual$$` →
 `'sample'`.
 
@@ -1365,7 +1395,7 @@ The question itself (`genomicQuestions.xml:252`) needs **no** change — its `at
 
 ```bash
 ssh cedar 'bash -lc "source /var/www/jbrestel.plasmodb.org/project_home/../etc/setenv && \
-  wdkQuery -model PlasmoDB -query SequenceIds.ByCopyNumber -showQuery"'
+  wdkQuery -model PlasmoDB -query SequenceIds.ByCopyNumber -showParams"'
 ```
 
 Record the SQL. Note it reads base tables directly and has **no organism predicate** — it
@@ -1449,7 +1479,8 @@ Expected: succeeds.
 
 - [ ] **Step 5: Confirm resolution**
 
-Re-run Step 1's `-showQuery`, then run the rendered SQL in psql with
+Re-run Step 1's `-showParams`, then run the SQL from the model XML you just edited in psql
+with
 `$$organismSinglePick$$` → `'Plasmodium falciparum 3D7'`, `$$cnv_sample_meta$$` → 10 samples
 from `apidbtuning.ChrCopyNumbers`, `$$chrCopyNumber$$` → `2`, `$$medianOrIndividual$$` →
 `'sample'`.
