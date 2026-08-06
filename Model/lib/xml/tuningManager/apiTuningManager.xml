@@ -3486,7 +3486,17 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
        corrected in the same change but does not take effect until the next workflow
        run. Scheduled for deletion one release later: see
        docs/superpowers/specs/2026-08-06-genetic-variation-searches-port-design.md s7.
-       Any edit here MUST be mirrored in that .psql file, and vice versa. -->
+       Any edit here MUST be mirrored in that .psql file, and vice versa.
+
+       ref_cn is computed here from the annotation - the count of same-ortholog-group genes
+       on the same chromosome - and deliberately IGNORES apidb.genecopynumber.ref_copy_number.
+       That column is contaminated: the loader counts only group members present in each
+       sample's own result set, so a partially-covered sample undercounts it (verified: of 72
+       pfal genes in group OG7_0000041, sample M283 has 46 present and stores 46). Because
+       hit_medians GROUPs BY ref_cn, that produced multiple rows per gene and WDK rejected the
+       answer with "Joined attribute query returned a different number of rows". Computing it
+       here makes it constant per gene AND matches the column's documented definition. The
+       loader remains worth fixing separately. -->
   <tuningTable name="GeneCopyNumbers">
     <externalDependency name="apidb.GeneCopyNumber"/>
     <externalDependency name="study.ProtocolAppNode"/>
@@ -3494,6 +3504,18 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
     <sql>
       <![CDATA[
         create table GeneCopyNumbers&1 as
+        WITH grp AS (
+          SELECT DISTINCT ta.gene_source_id, ta.org_abbrev, ta.chromosome, oga.group_id
+          FROM webready.transcriptattributes_p ta
+          JOIN apidb.orthologgroupaasequence oga ON oga.aa_sequence_id = ta.aa_sequence_id
+        ), refcn AS (
+          SELECT a.gene_source_id, a.org_abbrev, count(DISTINCT b.gene_source_id) AS ref_cn
+          FROM grp a
+          JOIN grp b ON b.group_id   = a.group_id
+                    AND b.chromosome = a.chromosome
+                    AND b.org_abbrev = a.org_abbrev
+          GROUP BY 1,2
+        )
         SELECT DISTINCT
             ta.project_id
           , ta.org_abbrev
@@ -3503,7 +3525,7 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
           , ta.gene_source_id
           , regexp_replace(pan.name, '_GeneCNV$', '') AS eda_sample_stable_id
           , gcn.haploid_number  AS raw_estimate
-          , gcn.ref_copy_number AS ref_cn
+          , COALESCE(r.ref_cn, 1) AS ref_cn
           , CASE WHEN (gcn.haploid_number < 0.01) THEN 0
                  WHEN (0.01 < gcn.haploid_number AND gcn.haploid_number < 1.85) THEN 1
                  ELSE round(gcn.haploid_number) END AS haploid_number
@@ -3514,6 +3536,9 @@ create index Organism_projectId_idx&1 ON OrganismAttributes&1 (project_id, sourc
              ON pan.protocol_app_node_id = gcn.protocol_app_node_id
         JOIN webready.transcriptattributes_p ta
              ON ta.gene_na_feature_id = gcn.na_feature_id
+        LEFT JOIN refcn r
+             ON r.gene_source_id = ta.gene_source_id
+            AND r.org_abbrev     = ta.org_abbrev
         WHERE ta.gene_type IN ('protein coding', 'protein coding gene')
       ]]>
     </sql>
