@@ -1,10 +1,20 @@
 :CREATE_AND_POPULATE
+            -- Mirrors the GeneCopyNumbers tuningTable in apiTuningManager.xml, which
+            -- carries the searches until this file's next workflow run. Any edit here
+            -- MUST be mirrored there. See
+            -- docs/superpowers/specs/2026-08-06-genetic-variation-searches-port-design.md s7.
+            --
+            -- The PANIO_p join was removed: study.Input has no rows, so PANIO_p is empty
+            -- and this table came out empty. Organism identity now comes from
+            -- TranscriptAttributes_p and sample identity from the protocolappnode name.
             SELECT DISTINCT ':PROJECT_ID' as project_id
             , ':ORG_ABBREV' as org_abbrev
+            , ta.organism
+            , ta.taxon_id
             , current_timestamp as modification_date
             , ta.source_id
             , ta.gene_source_id
-            , REGEXP_REPLACE(pan.name, '_[A-Za-z0-9]+ (.+)$', '') AS strain
+            , regexp_replace(pan.name, '_GeneCNV$', '') AS eda_sample_stable_id
             , gcn.haploid_number AS raw_estimate
             , gcn.ref_copy_number AS ref_cn
             , CASE WHEN (gcn.haploid_number < 0.01) THEN 0
@@ -12,19 +22,13 @@
                 ELSE round(gcn.haploid_number) END AS haploid_number
             , ta.chromosome
             , ta.na_sequence_id
-            , io.input_pan_id
-            , io.output_pan_id
             FROM apidb.genecopynumber gcn
             , study.protocolappnode pan
             , :SCHEMA.TranscriptAttributes_p ta
-            , :SCHEMA.PANIO_p io
             WHERE gcn.protocol_app_node_id = pan.protocol_app_node_id
             AND gcn.na_feature_id = ta.gene_na_feature_id
-            AND gcn.protocol_app_node_id = io.output_pan_id
             AND (ta.gene_type = 'protein coding' or ta.gene_type = 'protein coding gene')
-            AND ta.org_abbrev = ':ORG_ABBREV'
-            AND io.org_abbrev = ':ORG_ABBREV';
-        
-    
-:DECLARE_PARTITION;
+            AND ta.org_abbrev = ':ORG_ABBREV';
 
+
+:DECLARE_PARTITION;
