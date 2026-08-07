@@ -55,6 +55,13 @@
          strain names in HSSS's strainIdToName.dat - no mapping layer needed. The
          plugin writes them to a strains file and passes strains_are_names = 1.
 
+         One internal is NOT an EDA sample stable ID: the reference strain, which HSSS
+         carries as strain id 1 but EDA's dnaseq study omits, is synthesized by
+         SamplesMetadataByStudyWithRef from apidb.organism.strain_abbrev. That value is
+         chosen precisely because it is what strainIdToName.dat calls the strain, so the
+         invariant the paragraph above states - internal is a strain name HSSS knows -
+         still holds. See that query for the derivation.
+
          minSelectedCount=2 as the snp original: polymorphism within a group of one
          is meaningless.
 
@@ -63,8 +70,8 @@
          the converse, and declaring it keeps the filter visibly downstream of the
          organism choice it is in fact scoped by. -->
     <filterParam name="variation_sample_meta"
-                 metadataQueryRef="VariationVQ.SamplesMetadataByStudy"
-                 backgroundQueryRef="VariationVQ.SamplesMetadataByStudy"
+                 metadataQueryRef="VariationVQ.SamplesMetadataByStudyWithRef"
+                 backgroundQueryRef="VariationVQ.SamplesMetadataByStudyWithRef"
                  ontologyQueryRef="VariationVQ.SampleOntologyByStudy"
                  prompt="Samples"
                  minSelectedCount="2"
@@ -91,6 +98,14 @@
          are plain sqlQueries with no plugin behind them. It is a separate param anyway,
          because the minSelectedCount differs and because a param named for variation should
          not be what a genomic-sequence ploidy search depends on.
+
+         Also deliberately points at SamplesMetadataByStudy, NOT the ...WithRef variant
+         the three variation filters use. The reference-strain row set is real for HSSS,
+         which searches it as strain id 1, but not for copy number: the CNV searches
+         filter c.eda_sample_stable_id against a CNV table that has no reference rows
+         (genomicQueries.xml, geneQueries.xml), so offering it here would be an option
+         that silently returns nothing. Two queries rather than one flag because the
+         difference is about which data exists, not about presentation.
 
          This lives in variationParams.xml rather than a neutral file by decision, not
          oversight: see docs/superpowers/specs/2026-08-06-genetic-variation-searches-port-design.md s9.1. -->
@@ -244,8 +259,8 @@
          two groups of one is a meaningful strain-versus-strain comparison, and the
          snp original set no minimum on either group. See the design doc, 4.2. -->
     <filterParam name="variation_sample_meta_a"
-                 metadataQueryRef="VariationVQ.SamplesMetadataByStudy"
-                 backgroundQueryRef="VariationVQ.SamplesMetadataByStudy"
+                 metadataQueryRef="VariationVQ.SamplesMetadataByStudyWithRef"
+                 backgroundQueryRef="VariationVQ.SamplesMetadataByStudyWithRef"
                  ontologyQueryRef="VariationVQ.SampleOntologyByStudy"
                  prompt="Set A Samples"
                  dependedParamRef="organismParams.organismSinglePick,variationParams.eda_sample_table_suffix">
@@ -256,8 +271,8 @@
     </filterParam>
 
     <filterParam name="variation_sample_meta_b"
-                 metadataQueryRef="VariationVQ.SamplesMetadataByStudy"
-                 backgroundQueryRef="VariationVQ.SamplesMetadataByStudy"
+                 metadataQueryRef="VariationVQ.SamplesMetadataByStudyWithRef"
+                 backgroundQueryRef="VariationVQ.SamplesMetadataByStudyWithRef"
                  ontologyQueryRef="VariationVQ.SampleOntologyByStudy"
                  prompt="Set B Samples"
                  dependedParamRef="organismParams.organismSinglePick,variationParams.eda_sample_table_suffix">
@@ -429,6 +444,102 @@
                  av.number_value,
                  av.date_value
           FROM eda.attributevalue_$$eda_sample_table_suffix$$ av
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <!-- SamplesMetadataByStudy plus a synthesized row set for the REFERENCE STRAIN.
+
+         The EDA dnaseq study holds only the resequenced isolates, so the reference
+         strain has no attributevalue rows and cannot be picked - even though HSSS
+         has always carried it as strain id 1 in strainIdToName.dat (verified 3D7 on
+         PlasmoDB, TREU927 on TriTrypDB, Af293 on FungiDB). The gap is in the filter's
+         feed, not in the search, so it is fixed here rather than in the plugin.
+
+         Three attributes, chosen because they are the identity a reference strain
+         genuinely has: its strain, its organism, and the dataset it came from. The
+         reference has no collection site, host, or alignment statistics, so inventing
+         values for the other nodes would be worse than leaving them null - an unset
+         attribute simply excludes the reference from that facet, which is correct.
+
+         Keyed on provider_label, NOT on stable_id. eda.attributegraph stable_ids are
+         VAR_<hash> digests of the provider label, so they are stable per label but the
+         label itself is site-specific: parasite_strain/parasite_organism on PlasmoDB
+         and TriTrypDB, fungal_strain/FUNGUS_organism on FungiDB (fungus, not fungal -
+         the two halves are not named symmetrically). Matching the label keeps one query
+         correct everywhere; a site that names things differently yields zero extra rows
+         instead of a wrong row.
+
+         The values deliberately match the shape the isolates already use, so the
+         reference lands in the SAME facet buckets rather than creating singletons:
+         an isolate's parasite strain reads 'Plasmodium falciparum B082' and its
+         parasite organism 'Plasmodium falciparum', which are the scientific names of
+         the strain taxon and its parent. Hence tn_self / tn_parent below. internal is
+         apidb.organism.strain_abbrev because that - not the taxon name - is what HSSS
+         calls the strain, and the plugin passes internals through as strain names.
+
+         The NOT EXISTS guard makes this a no-op the day EDA does load the reference:
+         the filter must never offer it twice.
+
+         cnv_sample_meta deliberately does NOT use this query - see its definition.
+
+         NOTE the BARE $$organismSinglePick$$ below, with no surrounding quotes. The
+         param is quote="true", so WDK supplies the quotes. The two vocab queries in
+         this same querySet - EdaSampleTableSuffix and ChromosomeForVariations - write
+         it as '$$organismSinglePick$$' and are correct, because a flatVocabParam's
+         vocab query resolves its depended values on a different path that substitutes
+         raw. This is a filter param's metadata query, which goes through
+         SqlQueryInstance and gets the quoting. Copying the quoted form here yields
+         ''Plasmodium falciparum 3D7'' and a 500 from the searches service, not a build
+         error. The non-vocab queries elsewhere (genomicQueries.xml, geneQueries.xml)
+         all use the bare form; match those, not the neighbours. -->
+    <sqlQuery name="SamplesMetadataByStudyWithRef" doNotTest="1">
+      <paramRef ref="variationParams.eda_sample_table_suffix"/>
+      <paramRef ref="organismParams.organismSinglePick" noTranslation="true"/>
+      <column name="internal"/>
+      <column name="ontology_term_name"/>
+      <column name="string_value"/>
+      <column name="number_value"/>
+      <column name="date_value"/>
+      <sql>
+        <![CDATA[
+          SELECT av.sample_stable_id    AS internal,
+                 av.attribute_stable_id AS ontology_term_name,
+                 av.string_value,
+                 av.number_value,
+                 av.date_value
+          FROM eda.attributevalue_$$eda_sample_table_suffix$$ av
+
+          UNION ALL
+
+          SELECT o.strain_abbrev AS internal,
+                 ag.stable_id    AS ontology_term_name,
+                 CASE
+                   WHEN ag.provider_label IN ('["parasite_strain"]', '["fungal_strain"]')
+                        THEN tn_self.name
+                   WHEN ag.provider_label IN ('["parasite_organism"]', '["fungus_organism"]')
+                        THEN tn_parent.name
+                   WHEN ag.provider_label = '["dataset_id"]'
+                        THEN dp.dataset_presenter_id
+                 END AS string_value,
+                 CAST(NULL AS numeric) AS number_value,
+                 CAST(NULL AS date)    AS date_value
+          FROM eda.attributegraph_$$eda_sample_table_suffix$$ ag
+          CROSS JOIN apidb.organism o
+          JOIN sres.taxon     tx        ON tx.taxon_id = o.taxon_id
+          JOIN sres.taxonname tn_self   ON tn_self.taxon_id = o.taxon_id
+                                       AND tn_self.name_class = 'scientific name'
+          JOIN sres.taxonname tn_parent ON tn_parent.taxon_id = tx.parent_id
+                                       AND tn_parent.name_class = 'scientific name'
+          JOIN apidbtuning.datasetpresenter dp
+                                        ON dp.name = o.abbrev || '_primary_genome_RSRC'
+          WHERE tn_self.name = $$organismSinglePick$$
+            AND ag.provider_label IN ('["parasite_strain"]', '["fungal_strain"]',
+                                      '["parasite_organism"]', '["fungus_organism"]',
+                                      '["dataset_id"]')
+            AND NOT EXISTS (SELECT 1
+                            FROM eda.attributevalue_$$eda_sample_table_suffix$$ av2
+                            WHERE av2.sample_stable_id = o.strain_abbrev)
         ]]>
       </sql>
     </sqlQuery>

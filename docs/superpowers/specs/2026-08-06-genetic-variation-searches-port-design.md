@@ -361,6 +361,73 @@ constrained organism only implicitly, through `CNV_strain`'s organism-scoped voc
 the sample list now coming from an EDA study, the constraint must be explicit or a sample
 name colliding across organisms would leak rows.
 
+### 5.4 `VariationVQ.SamplesMetadataByStudyWithRef` — the reference strain (addendum, 2026-08-07)
+
+The port left the sample filter fed purely from `eda.attributevalue_<studyAbbrev>_sample`.
+That study contains only the **resequenced isolates**, so the **reference strain never
+appears in the filter** — even though HSSS has always carried it. Confirmed against the
+build-71 webservice mirror on `cedar`:
+
+| site | reference | `strainIdToName.dat` | EDA study |
+|---|---|---|---|
+| PlasmoDB | `3D7` | strain id **1** | absent (0 rows) |
+| TriTrypDB | `TREU927` | strain id **1** | absent |
+| FungiDB | `Af293` | strain id **1** | absent |
+
+The searches were therefore always able to include the reference; only the UI could not
+offer it. The fix belongs in the filter's feed, not in the plugin.
+
+**New query `SamplesMetadataByStudyWithRef`.** `SamplesMetadataByStudy` plus a `UNION ALL`
+branch synthesizing exactly three attribute rows for the reference. It takes the existing
+`eda_sample_table_suffix` param plus `organismParams.organismSinglePick`
+(`noTranslation="true"`, as `EdaSampleTableSuffix` already does).
+
+Three, not more, because those are the identity a reference strain genuinely has. It has no
+collection site, host, or alignment statistics; inventing values there would be worse than
+leaving them unset, which simply excludes it from those facets.
+
+**Keyed on `provider_label`, not `stable_id`.** `eda.attributegraph.stable_id` is a
+`VAR_<hash>` digest of the provider label — stable per label, but the label is site-specific:
+
+| attribute | PlasmoDB / TriTrypDB | FungiDB |
+|---|---|---|
+| strain | `["parasite_strain"]` → `VAR_b8141c21` | `["fungal_strain"]` → `VAR_ebd0be1b` |
+| organism | `["parasite_organism"]` → `VAR_20565e79` | `["fungus_organism"]` → `VAR_ff020a24` |
+| dataset | `["dataset_id"]` → `VAR_36c1c67a` | `["dataset_id"]` → `VAR_36c1c67a` |
+
+FungiDB is `fungus_organism`, **not** `fungal_organism` — the two halves are not named
+symmetrically, which is exactly the sort of thing a hardcoded hash gets wrong silently. A
+five-value `IN` list on the label keeps one query correct on every site; a site naming things
+differently yields zero extra rows rather than a wrong row.
+
+**Values match the isolates' shape**, so the reference joins the *same* facet buckets instead
+of creating singletons. An isolate reads `parasite strain = 'Plasmodium falciparum B082'`,
+`parasite organism = 'Plasmodium falciparum'` — the scientific names of the strain taxon and
+its parent.
+
+| column | source | PlasmoDB | FungiDB |
+|---|---|---|---|
+| `internal` | `apidb.organism.strain_abbrev` | `3D7` | `Af293` |
+| `*_strain` | `sres.taxonname` of `o.taxon_id` | `Plasmodium falciparum 3D7` | `Aspergillus fumigatus Af293` |
+| `*_organism` | `sres.taxonname` of `taxon.parent_id` | `Plasmodium falciparum` | `Aspergillus fumigatus` |
+| `dataset_id` | `apidbtuning.datasetpresenter.dataset_presenter_id` for `<abbrev>_primary_genome_RSRC` | `DS_1d17c1883c` | `DS_071f05cd56` |
+
+`internal` is `strain_abbrev` rather than the taxon name because that is what
+`strainIdToName.dat` calls the strain, and the plugin passes internals straight through as
+strain names (`strains_are_names = 1`). So §4's invariant — every internal is a strain name
+HSSS knows — still holds.
+
+A `NOT EXISTS` guard on `sample_stable_id = o.strain_abbrev` makes the branch a no-op the day
+EDA does load the reference; the filter must never offer it twice.
+
+**`cnv_sample_meta` keeps the original query.** It is shared by all four filters, so the
+change is a fork rather than an edit. The reference is real for HSSS but not for copy number:
+the CNV searches filter `c.eda_sample_stable_id` against a table with no reference rows
+(§5.2, §5.3), so offering it there would be an option that silently returns nothing. Two
+queries rather than one flag, because the difference is about which data exists.
+
+`GenesByNgsSnps` inherits the change for free — it uses `variation_sample_meta` (§4.5).
+
 ## 6. Questions and categorization
 
 ### 6.1 `GenesByNgsSnps` (`geneQuestions.xml`)
