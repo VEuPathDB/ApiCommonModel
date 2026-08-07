@@ -410,7 +410,7 @@ its parent.
 | `internal` | `apidb.organism.strain_abbrev` | `3D7` | `Af293` |
 | `*_strain` | `sres.taxonname` of `o.taxon_id` | `Plasmodium falciparum 3D7` | `Aspergillus fumigatus Af293` |
 | `*_organism` | `sres.taxonname` of `taxon.parent_id` | `Plasmodium falciparum` | `Aspergillus fumigatus` |
-| `dataset_id` | `apidbtuning.datasetpresenter.dataset_presenter_id` for `<abbrev>_primary_genome_RSRC` | `DS_1d17c1883c` | `DS_071f05cd56` |
+| `dataset_id` | `apidbtuning.datasetpresenter.display_name` for `<abbrev>_primary_genome_RSRC` | `Genome Sequence and Annotation` | `Genome Sequence and Annotation` |
 
 `internal` is `strain_abbrev` rather than the taxon name because that is what
 `strainIdToName.dat` calls the strain, and the plugin passes internals straight through as
@@ -427,6 +427,34 @@ the CNV searches filter `c.eda_sample_stable_id` against a table with no referen
 queries rather than one flag, because the difference is about which data exists.
 
 `GenesByNgsSnps` inherits the change for free — it uses `variation_sample_meta` (§4.5).
+
+### 5.5 Showing dataset display names instead of `DS_` IDs (addendum, 2026-08-07)
+
+EDA stores the dataset attribute as a dataset stable ID (`DS_1d17c1883c`), which is the
+right thing to store and an opaque thing to show — the Dataset facet listed four `DS_`
+hashes. Both metadata queries now `LEFT JOIN apidbtuning.datasetpresenter` and select
+`COALESCE(dp.display_name, av.string_value)`.
+
+Applied to **`SamplesMetadataByStudy` as well as `SamplesMetadataByStudyWithRef`**, so
+`cnv_sample_meta` gets it too. The §5.4 fork is about which *samples* exist, not about
+presentation; the two queries should differ in exactly one respect, and a facet that
+reads `DS_302d3e3bc0` in the CNV searches and a sentence in the variation searches — for
+the same samples — would be a worse bug than the one being fixed.
+
+Details that are load-bearing:
+
+- **`COALESCE`, not a plain join value** — keep the raw ID rather than nulling the
+  attribute when no presenter row exists. On a gated dev instance `datasetpresenter`
+  holds only the loaded datasets, so a miss is a real possibility.
+- **The join is narrowed by `provider_label = '["dataset_id"]'`**, not left to match on
+  the `DS_` shape. Shape-matching works today because no other attribute's value looks
+  like a dataset ID, but that is a coincidence, not a constraint.
+- **No row multiplication** — `dataset_presenter_id` is unique (57/57 distinct here).
+  Verified: row and sample counts are identical before and after (3771/216 and 3774/217).
+- **Display-only** — the filter passes `internal` (sample stable IDs) to the searches;
+  nothing downstream reads these strings. Note this does mean a saved strategy's stored
+  filter value now carries the display name, which is why the change belongs in both
+  queries at once rather than being rolled out one filter at a time.
 
 ## 6. Questions and categorization
 

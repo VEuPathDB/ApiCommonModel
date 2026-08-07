@@ -428,7 +428,23 @@
 
          The same query serves metadataQueryRef and backgroundQueryRef, as the snp
          original did: the background distribution is over all samples in the study,
-         which is exactly what this returns. -->
+         which is exactly what this returns.
+
+         The one place EDA is NOT taken verbatim is the dataset attribute. Its values
+         are EDA dataset stable IDs (DS_1d17c1883c), which is the right thing to store
+         but an opaque thing to show: the Dataset facet listed four DS_ hashes. The
+         LEFT JOIN swaps in apidbtuning.datasetpresenter.display_name. COALESCE keeps
+         the raw ID rather than dropping the sample if a presenter is missing, which on
+         a gated dev instance is a real possibility - datasetpresenter here holds only
+         the loaded datasets.
+
+         The join is narrowed by provider_label so it can only ever fire on the dataset
+         attribute. Matching on the DS_ shape alone would work today (no other
+         attribute's value looks like a dataset ID) but would be a silent coincidence
+         to depend on. dataset_presenter_id is unique, so the join cannot multiply rows.
+
+         Nothing downstream reads these strings - the filter passes `internal` (sample
+         IDs) to the searches - so changing the displayed value is display-only. -->
     <sqlQuery name="SamplesMetadataByStudy" doNotTest="1">
       <paramRef ref="variationParams.eda_sample_table_suffix"/>
       <column name="internal"/>
@@ -440,10 +456,16 @@
         <![CDATA[
           SELECT av.sample_stable_id    AS internal,
                  av.attribute_stable_id AS ontology_term_name,
-                 av.string_value,
+                 COALESCE(dp.display_name, av.string_value) AS string_value,
                  av.number_value,
                  av.date_value
           FROM eda.attributevalue_$$eda_sample_table_suffix$$ av
+          LEFT JOIN apidbtuning.datasetpresenter dp
+                 ON dp.dataset_presenter_id = av.string_value
+                AND av.attribute_stable_id IN
+                    (SELECT stable_id
+                     FROM eda.attributegraph_$$eda_sample_table_suffix$$
+                     WHERE provider_label = '["dataset_id"]')
         ]]>
       </sql>
     </sqlQuery>
@@ -505,10 +527,16 @@
         <![CDATA[
           SELECT av.sample_stable_id    AS internal,
                  av.attribute_stable_id AS ontology_term_name,
-                 av.string_value,
+                 COALESCE(dp.display_name, av.string_value) AS string_value,
                  av.number_value,
                  av.date_value
           FROM eda.attributevalue_$$eda_sample_table_suffix$$ av
+          LEFT JOIN apidbtuning.datasetpresenter dp
+                 ON dp.dataset_presenter_id = av.string_value
+                AND av.attribute_stable_id IN
+                    (SELECT stable_id
+                     FROM eda.attributegraph_$$eda_sample_table_suffix$$
+                     WHERE provider_label = '["dataset_id"]')
 
           UNION ALL
 
@@ -520,7 +548,7 @@
                    WHEN ag.provider_label IN ('["parasite_organism"]', '["fungus_organism"]')
                         THEN tn_parent.name
                    WHEN ag.provider_label = '["dataset_id"]'
-                        THEN dp.dataset_presenter_id
+                        THEN dp.display_name
                  END AS string_value,
                  CAST(NULL AS numeric) AS number_value,
                  CAST(NULL AS date)    AS date_value
