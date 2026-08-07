@@ -203,14 +203,44 @@ That last line is the single most important piece of help text in the section.
 Known *P. falciparum* genes behave as a malaria biologist would expect. Site-normalized
 πN/πS, snpeff:
 
-| gene | | πN/πS | π/site | common missense | call rate |
+Values below are as **delivered** (the ≥5 synonymous-site guard applied). The
+parenthesised figures are the ungated values, shown only to make the guard's effect
+visible — they are not what the page displays.
+
+| gene | | πN/πS delivered | syn sites | common missense | call rate |
 |---|---|---|---|---|---|
-| PF3D7_1133400 | AMA1 | 10.32 | high | 57 / 62 | 0.723 |
-| PF3D7_0206800 | MSP2 | 13.49 | high | 32 / 39 | 0.521 |
-| PF3D7_0930300 | MSP1 | 1.94 | high | 78 / 94 | 0.687 |
-| PF3D7_0304600 | CSP | 3.70 | mid | 14 / 15 | 0.821 |
-| PF3D7_0709000 | PfCRT | 24.99 | mid | 12 / 22 | **0.424** |
-| PF3D7_1343700 | Kelch13 | 3.67 | low | **1 / 8** | 0.480 |
+| PF3D7_0304600 | CSP | 3.70 | 12 | 14 / 15 | 0.821 |
+| PF3D7_0930300 | MSP1 | 1.94 | 28 | 77 / 94 | 0.687 |
+| PF3D7_0206800 | MSP2 | 13.49 | 7 | 32 / 39 | 0.521 |
+| PF3D7_1133400 | AMA1 | **blank** (10.32) | 4 | 57 / 62 | 0.723 |
+| PF3D7_0709000 | PfCRT | **blank** (24.99) | 2 | 12 / 22 | **0.424** |
+| PF3D7_1343700 | Kelch13 | **blank** (3.67) | 3 | **1 / 8** | 0.480 |
+
+### Open question: the ≥5 guard blanks the most-looked-at genes
+
+The guard is statistically right and biologically inconvenient, for the same reason:
+strongly selected genes accumulate **few synonymous** variants, so the genes a malaria
+biologist searches for first are exactly the ones whose denominator is too thin to trust.
+AMA1 (4 synonymous sites), PfCRT (2), and Kelch13 (3) are all suppressed; MSP1 (28)
+survives.
+
+Scale of the effect on pfal: **πN/πS is blank for 57.5%** of genes (3,209 of 5,579).
+Median synonymous sites per gene is 3. Relaxing to ≥3 would recover 895 genes; to ≥1,
+2,258.
+
+Three options, not yet decided:
+
+1. **Keep ≥5.** Statistically honest, but a biologist looking up AMA1 sees nothing and
+   concludes the site has no data.
+2. **Relax to ≥3.** Recovers AMA1 and Kelch13; still blanks PfCRT. Arbitrary.
+3. **Show the value with its denominator.** `tx_n_synonymous_snpeff` is already a column,
+   so the page can render "10.32 (from 4 synonymous sites)" and let the reader discount
+   it. This is the only option that neither hides the signal nor implies false precision,
+   and it fits the "explaining is key" requirement better than a blank.
+
+Recommendation is (3) for display while keeping the guarded column for sorting and
+searching, where a thin-denominator outlier would otherwise dominate a sort. That needs a
+decision before the record wiring, since it changes which columns the page reads.
 
 The vaccine candidates under balancing selection (AMA1, MSP1, MSP2) top the diversity
 ranking with common-missense-dominated spectra. Kelch13, conserved with only rare

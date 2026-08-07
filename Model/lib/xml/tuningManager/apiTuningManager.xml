@@ -938,14 +938,32 @@
                  THEN round((p.pc_n_missense::numeric/p.pc_n_synonymous),2) END AS nonsyn_syn_ratio_product_call,
             round((se.pi_sum_nonsyn/nullif(gs.nonsyn_sites,0))::numeric,6) AS pi_nonsyn_snpeff,
             round((se.pi_sum_syn   /nullif(gs.syn_sites,0))::numeric,6)    AS pi_syn_snpeff,
+            -- GUARDED twin: for sorting, searching and filtering, where a gene with 2
+            -- synonymous sites would otherwise dominate a descending sort.
             CASE WHEN se.tx_n_synonymous >= 5 THEN
               round(((se.pi_sum_nonsyn/nullif(gs.nonsyn_sites,0))
                     /nullif(se.pi_sum_syn/nullif(gs.syn_sites,0),0))::numeric,3) END AS pi_n_pi_s_snpeff,
+            -- UNGATED twin: for DISPLAY, rendered next to tx_n_synonymous_snpeff so the
+            -- reader can discount a thin denominator themselves ("10.32, from 4 synonymous
+            -- sites"). Needed because the guard blanks 57.5% of pfal genes, including
+            -- precisely the most-searched ones - strongly selected genes accumulate few
+            -- SYNONYMOUS variants, so AMA1 (4 sites), PfCRT (2) and Kelch13 (3) all
+            -- suppress while MSP1 (28) survives. A blank reads as "no data".
+            --
+            -- This column cannot be dropped in favour of the model dividing
+            -- pi_nonsyn_snpeff by pi_syn_snpeff: those are stored rounded to 6 decimals
+            -- and pi is ~1e-3, so a reconstructed ratio drifts up to 0.048 from this one
+            -- (9% of genes differ). Two code paths must not yield two different numbers
+            -- for the same statistic.
+            round(((se.pi_sum_nonsyn/nullif(gs.nonsyn_sites,0))
+                  /nullif(se.pi_sum_syn/nullif(gs.syn_sites,0),0))::numeric,3) AS pi_n_pi_s_snpeff_ungated,
             round((pp.pi_sum_nonsyn/nullif(gs.nonsyn_sites,0))::numeric,6) AS pi_nonsyn_product_call,
             round((pp.pi_sum_syn   /nullif(gs.syn_sites,0))::numeric,6)    AS pi_syn_product_call,
             CASE WHEN pp.tx_n_synonymous >= 5 THEN
               round(((pp.pi_sum_nonsyn/nullif(gs.nonsyn_sites,0))
                     /nullif(pp.pi_sum_syn/nullif(gs.syn_sites,0),0))::numeric,3) END AS pi_n_pi_s_product_call,
+            round(((pp.pi_sum_nonsyn/nullif(gs.nonsyn_sites,0))
+                  /nullif(pp.pi_sum_syn/nullif(gs.syn_sites,0),0))::numeric,3) AS pi_n_pi_s_product_call_ungated,
             round((se.pi_sum_all/nullif(gs.syn_sites+gs.nonsyn_sites,0))::numeric,6) AS pi_per_site_cds,
             se.tx_n_missense   AS tx_n_missense_snpeff,
             se.tx_n_synonymous AS tx_n_synonymous_snpeff,
