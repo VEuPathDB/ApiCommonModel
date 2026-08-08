@@ -2145,6 +2145,80 @@
 
 
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Genes By Variant Characteristics -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <!-- The precomputed sibling of GenesByNgsSnps. Both answer "which genes have
+         variants like this", and the difference is not performance:
+
+           GenesByNgsSnps   HSSS computes over the SAMPLE SET THE USER PICKED.
+                            Minutes. Read-frequency, MAF and percent-called thresholds
+                            are the point of the search.
+           this query       reads statistics precomputed over the WHOLE LOADED COHORT.
+                            Milliseconds. No sample set, no thresholds, and the numbers
+                            are the same ones the gene record page shows.
+
+         Keep both. Replacing that one with this one would delete the sample-set
+         comparison; not having this one leaves the record page and the search
+         disagreeing about the same gene with no explanation.
+
+         All the filtering lives in geneParams.gene_variant_stats, so this query has no
+         per-statistic predicates and nothing to keep in sync when a statistic is added
+         - see that param for why a filterParam rather than a set of numberRangeParams.
+         FilterParamNewHandler.toInternalValue returns "SELECT internal FROM (...)",
+         a cached SUBQUERY rather than a value list, which is what makes IN () sound
+         here at 27k genes.
+
+         The organism predicate is not redundant with the filter's own organism scoping:
+         it keeps partition pruning available on TranscriptAttributes. -->
+    <sqlQuery name="GenesByVariantCharacteristics">
+      <paramRef ref="organismParams.organism_select_none" queryRef="organismVQ.withVariantSummary"/>
+      <paramRef ref="geneParams.gene_variant_stats"/>
+      <column name="source_id"/>
+      <column name="gene_source_id"/>
+      <column name="project_id"/>
+      <column name="matched_result"/>
+      <column name="gvs_total_variants"/>
+      <column name="gvs_variants_per_kb"/>
+      <column name="gvs_n_missense"/>
+      <column name="gvs_n_lof"/>
+      <column name="gvs_n_common"/>
+      <column name="gvs_n_singleton"/>
+      <column name="gvs_max_maf"/>
+      <column name="gvs_pi_n_pi_s"/>
+      <column name="gvs_most_severe_impact"/>
+      <sql>
+        <![CDATA[
+          SELECT ta.source_id
+               , ta.gene_source_id
+               , ta.project_id
+               , 'Y' AS matched_result
+               , gvs.total_variants             AS gvs_total_variants
+               , gvs.variants_per_kb            AS gvs_variants_per_kb
+               , gvs.n_missense                 AS gvs_n_missense
+               , gvs.n_lof                      AS gvs_n_lof
+               , gvs.n_common                   AS gvs_n_common
+               , gvs.n_singleton                AS gvs_n_singleton
+               , gvs.max_minor_allele_frequency AS gvs_max_maf
+               , gvs.pi_n_pi_s_snpeff           AS gvs_pi_n_pi_s
+               , gvs.most_severe_impact         AS gvs_most_severe_impact
+          -- join to TranscriptAttributes, not a bare select from the summary:
+          -- GeneVariationSummary is one row per GENE but this search returns
+          -- TranscriptRecordClass rows, so every transcript of a matching gene must
+          -- come back. GenesByNgsSnps reaches the same end with postCacheUpdateSql
+          -- because a processQuery has no join to hang this on; a sqlQuery does.
+          FROM ApidbTuning.GeneVariationSummary gvs
+          JOIN ApidbTuning.TranscriptAttributes ta
+            ON ta.gene_source_id = gvs.gene_source_id
+           AND ta.project_id     = gvs.project_id
+          WHERE gvs.org_abbrev IN ($$organism_select_none$$)
+            AND ta.source_id IN ($$gene_variant_stats$$)
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- Ortholog pattern -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 

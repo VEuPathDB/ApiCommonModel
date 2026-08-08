@@ -2391,6 +2391,61 @@ products of your selected type (or types).<br><br>
     </stringParam>
 
 
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Variant characteristics (apidbtuning.GeneVariationSummary)    -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- ONE filterParam, not a dozen numberRangeParams. That was the first shape this
+         took, and it was wrong in a way worth recording, because the same temptation
+         will come back with the next statistics table.
+
+         A numberRangeParam cannot express "I did not touch this". It always has a
+         value, so every range applies on every run, and any gene NULL in that column
+         is excluded. GeneVariationSummary NULLs its frequency statistics below their
+         allele floors on purpose (see the tuningTable comment), and for tbruTREU927
+         that is 100% of rows for three columns - so merely putting those params on the
+         form excluded an entire organism. Working around it meant a hardcoded
+         "is the range still at full span" escape clause in the SQL, which in turn
+         meant declaring bounds by hand, keeping them in sync across two files, and
+         discovering that NumberRangeParamHandler rounds a value onto the declared
+         ceiling and silently re-triggers the escape.
+
+         A filterParam has none of those problems, because it inverts the model: a gene
+         with no value simply contributes no metadata row for that property, and a
+         property the user has not touched contributes no constraint. Bounds come from
+         the data instead of from a comment, distributions are shown from the real
+         population, and adding a statistic is one row in the ontology query plus one
+         VALUES tuple in the metadata query - no new param, no new predicate, no
+         constant to keep in sync.
+
+         Scoped by organism on purpose. Variant density differs by an order of
+         magnitude between the loaded organisms (median 12.2/kb in pfal3D7 against
+         100.8/kb in afumAf293), so a distribution pooled across them would be bimodal
+         and useless for setting a threshold in either. -->
+    <filterParam name="gene_variant_stats"
+                 ontologyQueryRef="GeneVQ.GeneVariantStatsOntology"
+                 metadataQueryRef="GeneVQ.GeneVariantStatsMetadata"
+                 backgroundQueryRef="GeneVQ.GeneVariantStatsMetadata"
+                 countPredictsAnswerCount="false"
+                 prompt="Variant Characteristics"
+                 dependedParamRef="organismParams.organism_select_none"
+                 trimMetadataTerms="true">
+      <visibleHelp><![CDATA[
+        Choose an organism first; the distributions below are drawn from that organism's
+        genes. Each statistic is summarized across every sample loaded for the organism,
+        and is the same value shown in the Genetic Variation section of the gene record page.
+        <br><br>
+        Statistics that depend on allele frequency - common and singleton counts, highest
+        minor allele frequency, and the diversity ratios - are only defined where enough
+        alleles were sampled at a locus. Genes below that floor carry no value and are
+        simply absent from that statistic's distribution rather than being counted as zero.
+        ]]>
+      </visibleHelp>
+      <help>
+        Filter genes by their summarized variant statistics. Choose an organism first.
+      </help>
+    </filterParam>
+
+
 
     <enumParam name="include_reichenowi"
                prompt="Include P. reichenowi"
@@ -6379,6 +6434,164 @@ products of your selected type (or types).<br><br>
   <!--===========================================================================-->
 
     <querySet name="GeneVQ" queryType="vocab" isCacheable="true">
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- geneParams.gene_variant_stats : ontology + metadata          -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <!-- Declares the filterable statistics. Every term here must have a matching
+         tuple in GeneVariantStatsMetadata below and vice versa; that pair is the only
+         thing to edit when a statistic is added or dropped.
+
+         is_range=1 makes WDK render a histogram with a range selector, 0 makes it a
+         checkbox list of observed values. precision is the number of decimal places
+         to show, and is set from what the tuning table actually rounds each column to
+         - promising more precision than the column carries just prints noise. -->
+    <sqlQuery name="GeneVariantStatsOntology" isCacheable="false">
+      <column name="ontology_term_name"/>
+      <column name="parent_ontology_term_name"/>
+      <column name="display_name"/>
+      <column name="description"/>
+      <column name="type"/>
+      <column name="units"/>
+      <column name="precision"/>
+      <column name="is_range"/>
+      <sql>
+        <![CDATA[
+          SELECT ontology_term_name, parent_ontology_term_name, display_name,
+                 description, type, units, precision, is_range
+          FROM (
+            VALUES
+              ('variant_burden', NULL, 'Variant burden', NULL,
+               NULL, NULL, NULL, 0, 0),
+              ('total_variants', 'variant_burden', 'Total variants',
+               'Variant loci within the gene, SNVs and small indels together.',
+               'number', 'variants', 0, 1, 1),
+              ('variants_per_kb', 'variant_burden', 'Variants per kb',
+               'Normalized by the gene''s genomic span - start to end, introns and UTRs included - not by CDS length. Reported exactly as the gene record page reports it.',
+               'number', 'variants/kb', 2, 1, 2),
+              ('n_snv', 'variant_burden', 'SNVs',
+               'Single-nucleotide variants.', 'number', 'variants', 0, 1, 3),
+              ('n_indel', 'variant_burden', 'Indels',
+               'Small insertions and deletions.', 'number', 'variants', 0, 1, 4),
+
+              ('variant_consequence', NULL, 'Consequence', NULL,
+               NULL, NULL, NULL, 0, 10),
+              ('n_missense', 'variant_consequence', 'Missense variants',
+               'Loci whose most severe consequence in this gene is a missense change.',
+               'number', 'variants', 0, 1, 11),
+              ('n_synonymous', 'variant_consequence', 'Synonymous variants',
+               'Loci whose most severe consequence in this gene is synonymous.',
+               'number', 'variants', 0, 1, 12),
+              ('n_lof', 'variant_consequence', 'Loss-of-function variants',
+               'Predicted to disrupt the protein: frameshift, stop gained, or splice-disrupting.',
+               'number', 'variants', 0, 1, 13),
+              ('most_severe_impact', 'variant_consequence', 'Most severe impact',
+               'The severity of the worst consequence any variant has in this gene, as classified by SnpEff.',
+               'string', NULL, NULL, 0, 14),
+
+              ('variant_frequency', NULL, 'Allele frequency', NULL,
+               NULL, NULL, NULL, 0, 20),
+              ('n_common', 'variant_frequency', 'Common variants (MAF > 5%)',
+               'Loci with a minor allele frequency above 5%. Counted only where at least 20 alleles were sampled at the locus; genes with no qualifying locus carry no value and are absent from this distribution.',
+               'number', 'variants', 0, 1, 21),
+              ('n_singleton', 'variant_frequency', 'Singleton variants',
+               'Loci seen in exactly one allele copy. Requires at least 100 sampled alleles at the locus.',
+               'number', 'variants', 0, 1, 22),
+              ('max_minor_allele_frequency', 'variant_frequency', 'Highest minor allele frequency',
+               'The largest minor allele frequency at any locus in the gene. 0.5 is its ceiling by definition.',
+               'number', NULL, 4, 1, 23),
+
+              ('variant_selection', NULL, 'Diversity and selection', NULL,
+               NULL, NULL, NULL, 0, 30),
+              ('pi_n_pi_s_snpeff', 'variant_selection', 'piN/piS',
+               'Nonsynonymous over synonymous nucleotide diversity for the representative transcript, normalized by Nei-Gojobori site counts derived from the genetic code. Below 1 suggests purifying selection, above 1 diversifying. Unlike a raw nonsynonymous/synonymous count ratio this does not carry the codon-bias distortion. Defined only where enough alleles were sampled.',
+               'number', NULL, 3, 1, 31),
+              ('pi_per_site_cds', 'variant_selection', 'Nucleotide diversity per CDS site',
+               'Mean pairwise nucleotide diversity over the representative transcript''s coding sites.',
+               'number', NULL, 6, 1, 32),
+              ('nonsyn_syn_ratio_snpeff', 'variant_selection', 'Nonsynonymous / synonymous count ratio',
+               'The raw count ratio. Kept for continuity with the older SNP searches; piN/piS above is the normalized statistic and is the better measure.',
+               'number', NULL, 2, 1, 33),
+
+              ('variant_sampling', NULL, 'Sampling depth', NULL,
+               NULL, NULL, NULL, 0, 40),
+              ('max_called_strain_count', 'variant_sampling', 'Strains sampled',
+               'The largest number of strains with a call at any locus in the gene. Use this to judge how much weight the frequency statistics can carry.',
+               'number', 'strains', 0, 1, 41),
+              ('avg_call_rate', 'variant_sampling', 'Average call rate',
+               'Mean fraction of sampled strains with a call, across the gene''s loci.',
+               'number', NULL, 3, 1, 42)
+          ) AS t(ontology_term_name, parent_ontology_term_name, display_name,
+                 description, type, units, precision, is_range, display_order)
+          ORDER BY display_order
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <!-- One row per (transcript, statistic). Two different identifiers, and the
+         distinction is load-bearing:
+
+           internal        the TRANSCRIPT source_id, because the search returns
+                           TranscriptRecordClass rows. The filter hands the id query a
+                           subquery over this column.
+           filter_item_id  the GENE source_id, because the statistics are per gene.
+                           Without it the distributions would count multi-transcript
+                           genes more than once.
+
+         The final WHERE is the whole point of preferring a filterParam here: a gene
+         whose statistic is NULL contributes NO ROW for that term, so it is absent from
+         that distribution rather than being counted as zero, and it is excluded only
+         when the user actually filters on that term. GeneVariationSummary suppresses
+         rather than degrades its frequency statistics by design, and this is the
+         representation that carries that decision through to the UI intact.
+
+         LATERAL VALUES rather than a UNION ALL of twenty scans: the table is read once
+         and each row expands in place. -->
+    <sqlQuery name="GeneVariantStatsMetadata" isCacheable="false">
+      <paramRef ref="organismParams.organism_select_none"/>
+      <column name="ontology_term_name"/>
+      <column name="internal"/>
+      <column name="filter_item_id"/>
+      <column name="number_value"/>
+      <column name="date_value"/>
+      <column name="string_value"/>
+      <sql>
+        <![CDATA[
+          SELECT ta.source_id           AS internal,
+                 gvs.gene_source_id     AS filter_item_id,
+                 m.ontology_term_name,
+                 m.number_value,
+                 m.string_value,
+                 cast(null as timestamp) AS date_value
+          FROM ApidbTuning.GeneVariationSummary gvs
+          JOIN ApidbTuning.TranscriptAttributes ta
+            ON ta.gene_source_id = gvs.gene_source_id
+           AND ta.project_id     = gvs.project_id
+          CROSS JOIN LATERAL (
+            VALUES
+              ('total_variants',             gvs.total_variants::numeric,   cast(null as varchar(20))),
+              ('variants_per_kb',            gvs.variants_per_kb,           null),
+              ('n_snv',                      gvs.n_snv::numeric,            null),
+              ('n_indel',                    gvs.n_indel::numeric,          null),
+              ('n_missense',                 gvs.n_missense::numeric,       null),
+              ('n_synonymous',               gvs.n_synonymous::numeric,     null),
+              ('n_lof',                      gvs.n_lof::numeric,            null),
+              ('n_common',                   gvs.n_common::numeric,         null),
+              ('n_singleton',                gvs.n_singleton::numeric,      null),
+              ('max_minor_allele_frequency', gvs.max_minor_allele_frequency, null),
+              ('pi_n_pi_s_snpeff',           gvs.pi_n_pi_s_snpeff,          null),
+              ('pi_per_site_cds',            gvs.pi_per_site_cds,           null),
+              ('nonsyn_syn_ratio_snpeff',    gvs.nonsyn_syn_ratio_snpeff,   null),
+              ('max_called_strain_count',    gvs.max_called_strain_count,   null),
+              ('avg_call_rate',              gvs.avg_call_rate,             null),
+              ('most_severe_impact',         null,                          gvs.most_severe_impact)
+          ) AS m(ontology_term_name, number_value, string_value)
+          WHERE gvs.org_abbrev IN ($$organism_select_none$$)
+            AND (m.number_value IS NOT NULL OR m.string_value IS NOT NULL)
+        ]]>
+      </sql>
+    </sqlQuery>
 
     <sqlQuery name="GeneModelCharOntology" isCacheable="false">
    <paramRef ref="geneParams.gene_or_transcript" />

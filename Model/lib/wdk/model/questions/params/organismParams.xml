@@ -639,6 +639,46 @@
     </sqlQuery>
 
 
+    <!--===================================-->
+    <!-- with a GeneVariationSummary row   -->
+    <!--===================================-->
+
+    <!-- Scopes GenesByVariantCharacteristics to organisms that actually have a
+         per-gene variation summary. Derived from the tuning table itself rather than
+         from apidb.datasource, so it can never offer an organism the search would
+         return nothing for: if the tuning table gains or loses an organism, this
+         follows automatically.
+
+         Deliberately the same output shape as withGenes - term / parentTerm /
+         string_agg(abbrev) AS internal - because consumers pair it with the
+         multi-pick organismParams.organism and write org_abbrev IN ($$organism$$).
+         A different internal shape would silently change the quoting contract.
+
+         Distinct from withVariantsTree, which scopes the HSSS searches: that one
+         asks "can we run a sample-set computation for this organism" (needs an
+         isolates/Dna_Seq datasource, and yields taxon names for HSSS file paths);
+         this one asks "have we precomputed gene-level statistics". -->
+    <sqlQuery name="withVariantSummary" isCacheable="true">
+      <column name="internal"/>
+      <column name="term"/>
+      <column name="parentTerm"/>
+      <sql>
+        <![CDATA[
+          WITH FilterQuery AS (
+            SELECT DISTINCT organism, org_abbrev AS abbrev
+            FROM ApidbTuning.GeneVariationSummary
+            WHERE (project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
+          )
+          SELECT DISTINCT term, parentTerm, string_agg(fq.abbrev, ', ') AS internal
+          FROM ApidbTuning.OrganismTree ot, FilterQuery fq
+          WHERE ot.organism = fq.organism
+          GROUP BY term, parentTerm
+          ORDER BY parentTerm, term
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
     <!--=======================-->
     <!-- with NGS SNP datasets -->
     <!--=======================-->
