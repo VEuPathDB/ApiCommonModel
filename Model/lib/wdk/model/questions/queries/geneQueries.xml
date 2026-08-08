@@ -2145,6 +2145,62 @@
 
 
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Genes By Variant Characteristics -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
+
+    <!-- The precomputed sibling of GenesByNgsSnps. Both answer "which genes have
+         variants like this", and the difference is not performance:
+
+           GenesByNgsSnps   HSSS computes over the SAMPLE SET THE USER PICKED.
+                            Minutes. Read-frequency, MAF and percent-called thresholds
+                            are the point of the search.
+           this query       reads statistics precomputed over the WHOLE LOADED COHORT.
+                            Milliseconds. No sample set, no thresholds, and the numbers
+                            are the same ones the gene record page shows.
+
+         Keep both. Replacing that one with this one would delete the sample-set
+         comparison; not having this one leaves the record page and the search
+         disagreeing about the same gene with no explanation.
+
+         All the filtering lives in geneParams.gene_variant_stats, so this query has no
+         per-statistic predicates and nothing to keep in sync when a statistic is added
+         - see that param for why a filterParam rather than a set of numberRangeParams.
+         FilterParamNewHandler.toInternalValue returns "SELECT internal FROM (...)",
+         a cached SUBQUERY rather than a value list, which is what makes IN () sound
+         here at 27k genes.
+
+         The organism predicate is not redundant with the filter's own organism scoping:
+         it keeps partition pruning available on TranscriptAttributes. -->
+    <sqlQuery name="GenesByVariantCharacteristics">
+      <paramRef ref="organismParams.organism_select_none" queryRef="organismVQ.withVariantSummary"/>
+      <paramRef ref="geneParams.gene_variant_stats"/>
+      <column name="source_id"/>
+      <column name="gene_source_id"/>
+      <column name="project_id"/>
+      <column name="matched_result"/>
+      <sql>
+        <![CDATA[
+          SELECT ta.source_id
+               , ta.gene_source_id
+               , ta.project_id
+               , 'Y' AS matched_result
+          -- join to TranscriptAttributes, not a bare select from the summary:
+          -- GeneVariationSummary is one row per GENE but this search returns
+          -- TranscriptRecordClass rows, so every transcript of a matching gene must
+          -- come back. GenesByNgsSnps reaches the same end with postCacheUpdateSql
+          -- because a processQuery has no join to hang this on; a sqlQuery does.
+          FROM ApidbTuning.GeneVariationSummary gvs
+          JOIN ApidbTuning.TranscriptAttributes ta
+            ON ta.gene_source_id = gvs.gene_source_id
+           AND ta.project_id     = gvs.project_id
+          WHERE gvs.org_abbrev IN ($$organism_select_none$$)
+            AND ta.source_id IN ($$gene_variant_stats$$)
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- Ortholog pattern -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
@@ -2753,7 +2809,6 @@
     <!-- Genes By NGS Snps -->
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 
-<!-- UNCOMMENT WHEN SNPS are AVAILABLE 
     <processQuery name="GenesByNgsSnps"
                   includeProjects="AmoebaDB,CryptoDB,FungiDB,MicrosporidiaDB,PiroplasmaDB,PlasmoDB,TriTrypDB,ToxoDB,UniDB"
                   processName="org.apidb.apicomplexa.wsfplugin.highspeedsnpsearch.FindGenesWithSnpCharsPlugin">
@@ -2761,7 +2816,7 @@
       <postCacheUpdateSql>
         <sql>
           <![CDATA[
-            ## set source_id
+            -- set source_id
             UPDATE ##WDK_CACHE_TABLE##
             SET source_id = (
               SELECT min(source_id)
@@ -2776,11 +2831,11 @@
       <postCacheUpdateSql excludeProjects="UniDB">
         <sql>
           <![CDATA[
-            ## insert missing transcripts of included genes
-            ## query-specific version
+            -- insert missing transcripts of included genes
+            -- query-specific version
             INSERT INTO ##WDK_CACHE_TABLE##
               ( wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, project_id, matched_result, cds_snp_density
-              , ngs_dn_ds_ratio, ngs_num_synonymous, ngs_num_non_synonymous, num_noncoding, num_nonsense, ngs_total_snps)
+              , span_snp_density, ngs_dn_ds_ratio, ngs_num_synonymous, ngs_num_non_synonymous, num_noncoding, num_nonsense, ngs_total_snps)
             WITH matches AS (
               SELECT *
               FROM ##WDK_CACHE_TABLE##
@@ -2801,7 +2856,7 @@
               FROM matches
             )
             SELECT ##WDK_CACHE_INSTANCE_ID##, row_number() OVER () + the_max, 0, mm.source_id, mm.gene_source_id, mm.project_id, 'Y'
-                 , wct.cds_snp_density, wct.ngs_dn_ds_ratio, wct.ngs_num_synonymous, wct.ngs_num_non_synonymous, wct.num_noncoding
+                 , wct.cds_snp_density, wct.span_snp_density, wct.ngs_dn_ds_ratio, wct.ngs_num_synonymous, wct.ngs_num_non_synonymous, wct.num_noncoding
                  , wct.num_nonsense, wct.ngs_total_snps
             FROM row_offset ro, mismatches mm, ##WDK_CACHE_TABLE## wct
             WHERE mm.gene_source_id = wct.gene_source_id;
@@ -2811,10 +2866,10 @@
       <postCacheUpdateSql includeProjects="UniDB">
         <sql>
           <![CDATA[
-            ## insert missing transcripts of included genes
-            ## query-specific version
+            -- insert missing transcripts of included genes
+            -- query-specific version
             INSERT INTO ##WDK_CACHE_TABLE## 
-            ( wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, matched_result, cds_snp_density, ngs_dn_ds_ratio
+            ( wdk_instance_id, wdk_row_id, wdk_weight, source_id, gene_source_id, matched_result, cds_snp_density, span_snp_density, ngs_dn_ds_ratio
             , ngs_num_synonymous, ngs_num_non_synonymous, num_noncoding, num_nonsense, ngs_total_snps)
             WITH matches AS (
               SELECT *
@@ -2836,37 +2891,45 @@
               FROM matches
             )
             SELECT ##WDK_CACHE_INSTANCE_ID##, row_number() OVER () + the_max, 0, mm.source_id, mm.gene_source_id, 'Y', wct.cds_snp_density
-                 , wct.ngs_dn_ds_ratio, wct.ngs_num_synonymous, wct.ngs_num_non_synonymous, wct.num_noncoding, wct.num_nonsense
+                 , wct.span_snp_density, wct.ngs_dn_ds_ratio, wct.ngs_num_synonymous, wct.ngs_num_non_synonymous, wct.num_noncoding, wct.num_nonsense
                  , wct.ngs_total_snps
             FROM row_offset ro, mismatches mm, ##WDK_CACHE_TABLE## wct
             WHERE mm.gene_source_id = wct.gene_source_id
           ]]>
         </sql>
       </postCacheUpdateSql>
-      <testParamValues includeProjects="CryptoDB">
-        <paramValue name="ngsSnp_strain_meta">IowaII</paramValue>
-      </testParamValues>
-      <testParamValues includeProjects="ToxoDB">
-        <paramValue name="ngsSnp_strain_meta">GT1</paramValue>
-      </testParamValues>
-      <testParamValues includeProjects="TriTrypDB">
-        <paramValue name="ngsSnp_strain_meta">Tb-927</paramValue>
-      </testParamValues>
-        <paramRef ref="organismParams.organismSinglePick" displayType="treeBox" queryRef="organismVQ.withNgsSNPsTree" quote="false" noTranslation="true">
-        <help>The organism you choose will determine the strains/isolates from which you can identify SNPs.</help>
-      </paramRef>
+      <!-- The same override the four working variation searches use (variationQueries.xml
+           lines 44, 87, 127, 170). The original named organismVQ.withNgsSNPsTree, which
+           reads apidbtuning.snpstrains - a table that does not exist in this build.
 
-      <paramRef ref="snpParams.ngsSnp_strain_meta" prompt="Set of Samples">
-        <help>SNPs are defined here as sequence differences between the selected strains. If you want to include
-          sequence differences between the selected strains and the reference genome, then also include the reference
-          strain in your search.
+           The override is required, not cosmetic. Plain organismSinglePick falls back to
+           organismVQ.withGenes, i.e. every annotated organism in the project. Choosing one
+           with no dnaseq study makes variantParams.eda_sample_table_suffix return zero
+           rows, so the samples filter has nothing to render and the search breaks rather
+           than returning an empty result. withVariantsTree restricts to organisms having
+           an isolates/Dna_Seq datasource. -->
+      <paramRef ref="organismParams.organismSinglePick" prompt="Organism"
+                displayType="treeBox" quote="false" noTranslation="true"
+                queryRef="organismVQ.withVariantsTree">
+        <help>The organism you choose will determine the samples from which you can identify SNPs.</help>
+      </paramRef>
+      <paramRef ref="variantParams.eda_sample_table_suffix"/>
+
+      <!-- variation_sample_meta is a CONTRACT with the Java plugin, not a preference:
+           FindGenesWithSnpCharsPlugin extends FindPolymorphismsPlugin and therefore
+           inherits getStrainFilterParamName() returning exactly this string. A mismatch
+           fails at run time, not at build time. -->
+      <paramRef ref="variantParams.variation_sample_meta" prompt="Set of Samples">
+        <help>SNPs are defined here as sequence differences between the selected samples. If you want to include
+          sequence differences between the selected samples and the reference genome, then also include the reference
+          sample in your search.
         </help>
       </paramRef>
-      <paramRef ref="snpParams.WebServicesPath"/>
-      <paramRef ref="snpParams.ReadFrequencyPercent"/>
+      <paramRef ref="variantParams.WebServicesPath"/>
+      <paramRef ref="variantParams.ReadFrequencyPercent"/>
 
-      <paramRef ref="snpParams.MinPercentMinorAlleles"/>
-      <paramRef ref="snpParams.MinPercentIsolateCalls"/>
+      <paramRef ref="variantParams.MinPercentMinorAlleles"/>
+      <paramRef ref="variantParams.MinPercentIsolateCalls"/>
       <paramRef ref="geneParams.snp_class"/>
       <paramRef ref="geneParams.occurrences_lower"/>
       <paramRef ref="geneParams.occurrences_upper"/>
@@ -2879,6 +2942,7 @@
       <wsColumn name="project_id"/>
       <wsColumn name="matched_result" width="1" wsName="matched_result"/>
       <wsColumn name="cds_snp_density" columnType="float"/>
+      <wsColumn name="span_snp_density" columnType="float"/>
       <wsColumn name="ngs_dn_ds_ratio" columnType="float"/>
       <wsColumn name="ngs_num_synonymous" columnType="number"/>
       <wsColumn name="ngs_num_non_synonymous" columnType="number"/>
@@ -2886,7 +2950,6 @@
       <wsColumn name="num_nonsense" columnType="number"/>
       <wsColumn name="ngs_total_snps" columnType="number"/>
     </processQuery>
--->
 
     <!--++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
     <!-- SecondaryStructure -->
@@ -5499,8 +5562,15 @@ select distinct ta.gene_source_id
     </sqlQuery>
 
     <sqlQuery name="GenesByCopyNumber" includeProjects="AmoebaDB,CryptoDB,PlasmoDB,ToxoDB,TriTrypDB,FungiDB,UniDB">
-      <paramRef ref="organismParams.organismSinglePickCnv"/> <!-- queryRef="organismVQ.CNV"/ -->
-      <paramRef ref="sharedParams.CNV_strain"/>
+      <!-- organismSinglePick with a vocabulary override, NOT a new param:
+           variantParams.eda_sample_table_suffix and cnv_sample_meta both declare
+           dependedParamRef on organismSinglePick and interpolate $$organismSinglePick$$.
+           A different organism param would leave that chain dangling, and the samples
+           filter would silently stop being scoped by organism. -->
+      <paramRef ref="organismParams.organismSinglePick" queryRef="organismVQ.CNVGene"
+                quote="true" noTranslation="true"/>
+      <paramRef ref="variantParams.eda_sample_table_suffix"/>
+      <paramRef ref="variantParams.cnv_sample_meta"/>
       <paramRef ref="geneParams.medianOrIndividual"/>
       <paramRef ref="geneParams.CNV_type"/>
       <paramRef ref="geneParams.operator" quote="false"/>
@@ -5526,26 +5596,28 @@ select distinct ta.gene_source_id
             SELECT DISTINCT g.project_id
               , g.source_id
               , g.gene_source_id
-              , g.strain
+              , g.eda_sample_stable_id AS strain
               , g.raw_estimate
               , g.ref_cn
               , g.haploid_number
               , c.ploidy
               , g.chromosome
-            FROM webready.GeneCopyNumbers_p g
-             , webready.ChrCopyNumbers_p c
-            WHERE c.output_pan_id IN ($$CNV_strain$$)
-              AND g.input_pan_id = c.input_pan_id
+            FROM apidbtuning.GeneCopyNumbers g
+             , apidbtuning.ChrCopyNumbers c
+            WHERE c.eda_sample_stable_id IN ($$cnv_sample_meta$$)
+              AND g.eda_sample_stable_id = c.eda_sample_stable_id
               AND g.na_sequence_id = c.na_sequence_id
-              AND g.org_abbrev = $$organismSinglePickCnv$$ 
-              AND c.org_abbrev = $$organismSinglePickCnv$$ 
+              AND g.organism = $$organismSinglePick$$
+              AND c.organism = $$organismSinglePick$$
           )
           , medians AS (
             SELECT s.gene_source_id
-              , median (s.ploidy) AS median_ploidy
-              , median (s.raw_estimate) AS median_raw
-              , median (s.haploid_number) AS median_haploid
-              , median (s.ploidy * s.haploid_number) AS median_gene_dose
+              -- percentile_cont, not Oracle's median(): median() does not exist in
+              -- Postgres. The sibling hit_medians CTE below already uses this form.
+              , percentile_cont(0.5) WITHIN GROUP (ORDER BY s.ploidy) AS median_ploidy
+              , percentile_cont(0.5) WITHIN GROUP (ORDER BY s.raw_estimate) AS median_raw
+              , percentile_cont(0.5) WITHIN GROUP (ORDER BY s.haploid_number) AS median_haploid
+              , percentile_cont(0.5) WITHIN GROUP (ORDER BY s.ploidy * s.haploid_number) AS median_gene_dose
             FROM bySample s
             GROUP BY s.gene_source_id
           )
@@ -5598,8 +5670,15 @@ select distinct ta.gene_source_id
 
     <sqlQuery name="GenesByCopyNumberComparison"
               includeProjects="AmoebaDB,CryptoDB,PlasmoDB,ToxoDB,TriTrypDB,FungiDB,UniDB">
-      <paramRef ref="organismParams.organismSinglePickCnv"/> <!-- queryRef="organismVQ.CNV"/ -->
-      <paramRef ref="sharedParams.CNV_strain"/>
+      <!-- organismSinglePick with a vocabulary override, NOT a new param:
+           variantParams.eda_sample_table_suffix and cnv_sample_meta both declare
+           dependedParamRef on organismSinglePick and interpolate $$organismSinglePick$$.
+           A different organism param would leave that chain dangling, and the samples
+           filter would silently stop being scoped by organism. -->
+      <paramRef ref="organismParams.organismSinglePick" queryRef="organismVQ.CNVGene"
+                quote="true" noTranslation="true"/>
+      <paramRef ref="variantParams.eda_sample_table_suffix"/>
+      <paramRef ref="variantParams.cnv_sample_meta"/>
       <paramRef ref="geneParams.medianOrIndividual"/>
       <paramRef ref="geneParams.comparisonOperator" quote="false"/>
       <column name="project_id"/>
@@ -5623,25 +5702,27 @@ select distinct ta.gene_source_id
             SELECT DISTINCT g.project_id
               , g.source_id
               , g.gene_source_id
-              , g.strain
+              , g.eda_sample_stable_id AS strain
               , g.raw_estimate
               , g.ref_cn
               , g.haploid_number
               , c.ploidy
               , g.chromosome
-            FROM webready.GeneCopyNumbers_p g
-              , webready.ChrCopyNumbers_p c
-            WHERE c.output_pan_id IN ($$CNV_strain$$)
-              AND g.input_pan_id = c.input_pan_id
+            FROM apidbtuning.GeneCopyNumbers g
+              , apidbtuning.ChrCopyNumbers c
+            WHERE c.eda_sample_stable_id IN ($$cnv_sample_meta$$)
+              AND g.eda_sample_stable_id = c.eda_sample_stable_id
               AND g.na_sequence_id = c.na_sequence_id
-              AND g.org_abbrev = $$organismSinglePickCnv$$ 
-              AND c.org_abbrev = $$organismSinglePickCnv$$ 
+              AND g.organism = $$organismSinglePick$$
+              AND c.organism = $$organismSinglePick$$
           ) , medians AS (
             SELECT s.gene_source_id
-              , median (s.ploidy) AS median_ploidy
-              , median (s.raw_estimate) AS median_raw
-              , median (s.haploid_number) AS median_haploid
-              , median (s.ploidy * s.haploid_number) AS median_gene_dose
+              -- percentile_cont, not Oracle's median(): median() does not exist in
+              -- Postgres. The sibling hit_medians CTE below already uses this form.
+              , percentile_cont(0.5) WITHIN GROUP (ORDER BY s.ploidy) AS median_ploidy
+              , percentile_cont(0.5) WITHIN GROUP (ORDER BY s.raw_estimate) AS median_raw
+              , percentile_cont(0.5) WITHIN GROUP (ORDER BY s.haploid_number) AS median_haploid
+              , percentile_cont(0.5) WITHIN GROUP (ORDER BY s.ploidy * s.haploid_number) AS median_gene_dose
             FROM bySample s
             GROUP BY s.gene_source_id
           ) , hit_medians AS (

@@ -1,30 +1,59 @@
 :CREATE_AND_POPULATE
+            -- Mirrors the GeneCopyNumbers tuningTable in apiTuningManager.xml, which
+            -- carries the searches until this file's next workflow run. Any edit here
+            -- MUST be mirrored there. See
+            -- docs/superpowers/specs/2026-08-06-genetic-variation-searches-port-design.md s7.
+            --
+            -- The PANIO_p join was removed: study.Input has no rows, so PANIO_p is empty
+            -- and this table came out empty. Organism identity now comes from
+            -- TranscriptAttributes_p and sample identity from the protocolappnode name.
+            --
+            -- ref_cn is computed from the annotation (same ortholog group, same chromosome)
+            -- and deliberately IGNORES apidb.genecopynumber.ref_copy_number, which the
+            -- loader computes per sample and which therefore undercounts for partially
+            -- covered samples. That made ref_cn vary per gene, and hit_medians GROUPs BY it,
+            -- so WDK rejected the answer with a row-count mismatch.
+            WITH grp AS (
+              SELECT DISTINCT ta.gene_source_id, ta.chromosome, oga.group_id
+              FROM :SCHEMA.TranscriptAttributes_p ta
+              JOIN apidb.orthologgroupaasequence oga ON oga.aa_sequence_id = ta.aa_sequence_id
+              WHERE ta.org_abbrev = ':ORG_ABBREV'
+            ), refcn AS (
+              SELECT a.gene_source_id, count(DISTINCT b.gene_source_id) AS ref_cn
+              FROM grp a
+              JOIN grp b ON b.group_id = a.group_id AND b.chromosome = a.chromosome
+              GROUP BY 1
+            )
             SELECT DISTINCT ':PROJECT_ID' as project_id
             , ':ORG_ABBREV' as org_abbrev
+            , ta.organism
+            , ta.taxon_id
             , current_timestamp as modification_date
             , ta.source_id
             , ta.gene_source_id
-            , REGEXP_REPLACE(pan.name, '_[A-Za-z0-9]+ (.+)$', '') AS strain
+            , regexp_replace(pan.name, '_GeneCNV$', '') AS eda_sample_stable_id
             , gcn.haploid_number AS raw_estimate
-            , gcn.ref_copy_number AS ref_cn
+            -- 1 = the gene itself, for a gene in no ortholog group (67 such in pfal).
+            -- CAUTION: ref_cn=1 is also the NORMAL result - 89% of pfal genes have no
+            -- same-chromosome paralog - so if this table is built before the orthomcl
+            -- load has run, it is silently indistinguishable from a correct one for most
+            -- rows. The tuningManager copy guards this with an externalDependency on
+            -- apidb.OrthologGroupAaSequence; here it is a workflow ORDERING requirement.
+            , COALESCE(r.ref_cn, 1) AS ref_cn
             , CASE WHEN (gcn.haploid_number < 0.01) THEN 0
                 WHEN (0.01 < gcn.haploid_number AND gcn.haploid_number < 1.85) THEN 1
                 ELSE round(gcn.haploid_number) END AS haploid_number
             , ta.chromosome
             , ta.na_sequence_id
-            , io.input_pan_id
-            , io.output_pan_id
             FROM apidb.genecopynumber gcn
-            , study.protocolappnode pan
-            , :SCHEMA.TranscriptAttributes_p ta
-            , :SCHEMA.PANIO_p io
-            WHERE gcn.protocol_app_node_id = pan.protocol_app_node_id
-            AND gcn.na_feature_id = ta.gene_na_feature_id
-            AND gcn.protocol_app_node_id = io.output_pan_id
-            AND (ta.gene_type = 'protein coding' or ta.gene_type = 'protein coding gene')
-            AND ta.org_abbrev = ':ORG_ABBREV'
-            AND io.org_abbrev = ':ORG_ABBREV';
-        
-    
-:DECLARE_PARTITION;
+            JOIN study.protocolappnode pan
+                 ON pan.protocol_app_node_id = gcn.protocol_app_node_id
+            JOIN :SCHEMA.TranscriptAttributes_p ta
+                 ON ta.gene_na_feature_id = gcn.na_feature_id
+            LEFT JOIN refcn r
+                 ON r.gene_source_id = ta.gene_source_id
+            WHERE ta.gene_type IN ('protein coding', 'protein coding gene')
+              AND ta.org_abbrev = ':ORG_ABBREV';
 
+
+:DECLARE_PARTITION;

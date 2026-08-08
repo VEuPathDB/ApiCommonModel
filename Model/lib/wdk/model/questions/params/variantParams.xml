@@ -1,0 +1,663 @@
+<wdkModel>
+
+  <paramSet name="variantParams"
+            includeProjects="AmoebaDB,CryptoDB,FungiDB,MicrosporidiaDB,PiroplasmaDB,PlasmoDB,TriTrypDB,ToxoDB,UniDB">
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Short variant ID -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Matches source_id exactly. source_id has the form
+         Variant_<sequence_source_id>_<location>. If tolerance for a coordinate-style
+         input is ever wanted, extend VariantAttributes.VariantAlias rather than any
+         search's SQL, so every entry point benefits. See the searches spec section 5.1. -->
+    <datasetParam name="variant_id"
+                  recordClassRef="VariantRecordClasses.VariantRecordClass"
+                  prompt="Short Variant ID input set">
+      <help>Input a comma delimited set of Short Variant IDs, or upload a file</help>
+      <suggest includeProjects="PlasmoDB"  default="Variant_Pf3D7_01_v3_100057"/>
+      <suggest includeProjects="TriTrypDB" default="Variant_11L3_v3_26886"/>
+      <suggest includeProjects="FungiDB"   default="Variant_Chr1_A_fumigatus_Af293_1000005"/>
+      <suggest includeProjects="UniDB"     default="Variant_Pf3D7_01_v3_100057"/>
+      <!-- AmoebaDB, CryptoDB, MicrosporidiaDB, PiroplasmaDB and ToxoDB owe a suggest
+           default once their short variant data loads. Omitted rather than invented. -->
+    </datasetParam>
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- EDA sample table suffix (hidden, derived) -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Carries <studyAbbrev>_<entityAbbrev> so the EDA filter queries can name
+         eda.attributevalue_<suffix> / eda.attributegraph_<suffix>. SQL cannot
+         parameterize a table name from a subquery result, so the value has to
+         arrive as a param and be interpolated textually.
+
+         quote="false" because it is interpolated into an identifier, not compared
+         as a string. visible="false" because it is derived from the organism, not
+         chosen. The interpolation is safe: the value can only ever be one of the
+         rows VariantVQ.EdaSampleTableSuffix returns, never free user text. -->
+    <flatVocabParam name="eda_sample_table_suffix"
+                    queryRef="VariantVQ.EdaSampleTableSuffix"
+                    prompt="EDA sample table suffix"
+                    quote="false"
+                    visible="false"
+                    dependedParamRef="organismParams.organismSinglePick">
+      <help>Derived from the selected organism. Not user-visible.</help>
+    </flatVocabParam>
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Samples (EDA-driven filter) -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- The name variation_sample_meta is a CONTRACT with the Java plugin:
+         FindPolymorphismsPlugin.getStrainFilterParamName() returns exactly this
+         string and FindPolymorphismsAbstractPlugin lists it among its required
+         params. Renaming it breaks the search at run time, not at build time.
+
+         So it kept the variation_ prefix when the rest of this record was renamed
+         to variant. Changing it means changing ApiCommonWebService's HSSS plugins
+         and rebuilding them in the same release - not a model-only edit.
+
+         Internal values are EDA sample stable IDs, which are a strict subset of the
+         strain names in HSSS's strainIdToName.dat - no mapping layer needed. The
+         plugin writes them to a strains file and passes strains_are_names = 1.
+
+         One internal is NOT an EDA sample stable ID: the reference strain, which HSSS
+         carries as strain id 1 but EDA's dnaseq study omits, is synthesized by
+         SamplesMetadataByStudyWithRef from apidb.organism.strain_abbrev. That value is
+         chosen precisely because it is what strainIdToName.dat calls the strain, so the
+         invariant the paragraph above states - internal is a strain name HSSS knows -
+         still holds. See that query for the derivation.
+
+         minSelectedCount=2 as the snp original: polymorphism within a group of one
+         is meaningless.
+
+         organismSinglePick is declared as a depended param even though neither
+         query reads it: WDK validates only that every query param is declared, not
+         the converse, and declaring it keeps the filter visibly downstream of the
+         organism choice it is in fact scoped by. -->
+    <filterParam name="variation_sample_meta"
+                 metadataQueryRef="VariantVQ.SamplesMetadataByStudyWithRef"
+                 backgroundQueryRef="VariantVQ.SamplesMetadataByStudyWithRef"
+                 ontologyQueryRef="VariantVQ.SampleOntologyByStudy"
+                 prompt="Samples"
+                 minSelectedCount="2"
+                 dependedParamRef="organismParams.organismSinglePick,variantParams.eda_sample_table_suffix">
+      <help>
+        Select a set of samples whose genomic sequences will be compared. Use the
+        sample characteristics to narrow the group, or accept all samples for the
+        organism you chose.
+      </help>
+    </filterParam>
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Samples for the copy-number searches -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Reuses the same three EDA queries as variation_sample_meta. WDK clones a dependent
+         param's queries per param, so sharing the definitions costs nothing - the same
+         arrangement variation_sample_meta_a and _b already use.
+
+         Deliberately NO minSelectedCount, unlike variation_sample_meta which requires 2.
+         Polymorphism within a group of one is undefined, which is why that search needs a
+         minimum; a copy-number query on a single sample is perfectly meaningful.
+
+         Unlike variation_sample_meta, this name is NOT a plugin contract - the CNV searches
+         are plain sqlQueries with no plugin behind them. It is a separate param anyway,
+         because the minSelectedCount differs and because a param named for short variants should
+         not be what a genomic-sequence ploidy search depends on.
+
+         Also deliberately points at SamplesMetadataByStudy, NOT the ...WithRef variant
+         the three short variant filters use. The reference-strain row set is real for HSSS,
+         which searches it as strain id 1, but not for copy number: the CNV searches
+         filter c.eda_sample_stable_id against a CNV table that has no reference rows
+         (genomicQueries.xml, geneQueries.xml), so offering it here would be an option
+         that silently returns nothing. Two queries rather than one flag because the
+         difference is about which data exists, not about presentation.
+
+         This lives in variantParams.xml rather than a neutral file by decision, not
+         oversight: see docs/superpowers/specs/2026-08-06-genetic-variation-searches-port-design.md s9.1. -->
+    <filterParam name="cnv_sample_meta"
+                 metadataQueryRef="VariantVQ.SamplesMetadataByStudy"
+                 backgroundQueryRef="VariantVQ.SamplesMetadataByStudy"
+                 ontologyQueryRef="VariantVQ.SampleOntologyByStudy"
+                 prompt="Strain/Sample"
+                 dependedParamRef="organismParams.organismSinglePick,variantParams.eda_sample_table_suffix">
+      <help>
+        Choose the resequenced strains or samples to examine. Use the sample characteristics
+        to narrow the group, or accept all samples for the organism you chose.
+      </help>
+    </filterParam>
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- HSSS path and thresholds -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- These four are copied from snpParams.xml rather than referenced there.
+         snpParams.xml is imported INSIDE the commented-out snp block in
+         apiCommonModel.xml, so the snpParams paramSet is absent from the assembled
+         model (wdkXml lists it nowhere) and every paramRef to it would fail model
+         load. Uncommenting that one import fails too: the file references
+         SnpRecordClasses.SnpRecordClass, also commented out. The originals are
+         unimported dead code, so this is migration, not duplication.
+         See the design doc, section 4.4. -->
+
+    <!-- The plugin substitutes PROJECT_GOES_HERE itself. %%buildNumber%% is
+         model-wide; the dnaseq files exist only under build-71. -->
+    <enumParam name="WebServicesPath"
+               prompt="wsPath" quote="false" visible="false">
+      <enumList>
+        <enumValue default="true">
+          <term>dflt</term>
+          <internal>@WEBSERVICEMIRROR@/PROJECT_GOES_HERE/build-%%buildNumber%%</internal>
+        </enumValue>
+      </enumList>
+    </enumParam>
+
+    <!-- One definition, unlike snpParams which declares this twice
+         (excludeProjects/includeProjects ToxoDB) differing only in help text, the
+         ToxoDB copy phrased for the two-group search. That distinction does not
+         apply to a single-group search. The four internals must match the
+         readFreq* directory names exactly. -->
+    <enumParam name="ReadFrequencyPercent"
+               prompt="Read frequency threshold" quote="false">
+      <help>
+        This parameter applies to the sequencing reads of individual samples and
+        defines a stringency for data supporting a variant call between a sample and
+        the reference genome (Organism). Each nucleotide position of each sample is
+        compared to the reference genome and a call is made if the portion of the
+        sample's aligned reads that support the variant is above the Read Frequency
+        Threshold (RFT). Find high quality haploid variants with 80% RFT or
+        heterozygous diploid/aneuploid variants with 40%. See the Description below
+        for more.
+      </help>
+      <enumList>
+        <enumValue default="true">
+          <term>80%</term>
+          <internal>80</internal>
+        </enumValue>
+        <enumValue>
+          <term>60%</term>
+          <internal>60</internal>
+        </enumValue>
+        <enumValue>
+          <term>40%</term>
+          <internal>40</internal>
+        </enumValue>
+        <enumValue>
+          <term>20%</term>
+          <internal>20</internal>
+        </enumValue>
+      </enumList>
+    </enumParam>
+
+    <stringParam name="MinPercentMinorAlleles"
+                 prompt="Minor allele frequency &gt;= "
+                 number="true">
+      <help>
+        This parameter applies to your group of samples. A variant can occur in any
+        number of samples in your group and the least frequent call across all
+        samples is the Minor Allele Frequency. A variant will be returned by the
+        search if the frequency of the minor allele is equal to or greater than your
+        Minor Allele Frequency. See the Description below the Get Answer button for
+        more.
+      </help>
+      <suggest default="0"/>
+      <regex>\d\d?</regex>
+    </stringParam>
+
+    <stringParam name="MinPercentIsolateCalls"
+                 prompt="Percent samples with a base call &gt;= "
+                 number="true">
+      <help>
+        This parameter applies to the selected set of aligned sample sequences. At
+        any given nucleotide position, some samples in your group may not have data
+        supporting a base call because the Read Frequency Threshold was not met or
+        fewer than our minimum of 5 reads aligned. 'Percent samples with a base call'
+        defines the fraction of the selected samples that must have a base call
+        before a variant is returned for that nucleotide position, based on the
+        remaining samples that do have data. See the Description below for more
+        information.
+      </help>
+      <suggest default="20"/>
+      <regex>\d\d?|100</regex>
+    </stringParam>
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Chromosome (by-location search) -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- The name is a CONTRACT with the Java plugin:
+         FindPolymorphismsWithSeqFilterPlugin.PARAM_CHROMOSOME returns exactly this
+         string and lists it among the plugin's required params. It lives here rather
+         than in sharedParams because only short variant searches use it.
+
+         This is the fallback when the user leaves the Genomic sequence ID box empty.
+         That handoff is not obvious from either side: sharedParams.sequenceId carries
+         allowEmpty plus emptyValue="No Match" on each of its twelve per-project
+         suggest elements, and the plugin tests seq.contains("No Match"). Do not
+         "simplify" either half. See the design doc, section 4.3. -->
+    <flatVocabParam name="chromosomeOptionalForVariations"
+                    queryRef="VariantVQ.ChromosomeForVariants"
+                    prompt="Chromosome"
+                    multiPick="false"
+                    quote="true"
+                    dependedParamRef="organismParams.organismSinglePick">
+      <help>
+        <![CDATA[
+          Select a chromosome. Used when you leave the Genomic sequence ID box empty;
+          a sequence ID you type takes precedence.
+        ]]>
+      </help>
+    </flatVocabParam>
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Sample groups A and B (two-group comparison) -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Both names are CONTRACTS with the Java plugin:
+         FindMajorAllelesPlugin.PARAM_STRAIN_FILTER_A and _B return exactly these
+         strings and list them among the plugin's required params.
+
+         Both reuse the one-group search's EDA queries. WDK clones a dependent
+         param's queries and sets the context param per param, so three filter
+         params sharing two query definitions get three independent instances. The
+         snp original shared one query between its two groups the same way.
+
+         Deliberately NO minSelectedCount, unlike variation_sample_meta which
+         requires 2. Polymorphism within a group of one is undefined, which is why
+         the one-group search needs a minimum. Comparing the major allele BETWEEN
+         two groups of one is a meaningful strain-versus-strain comparison, and the
+         snp original set no minimum on either group. See the design doc, 4.2. -->
+    <filterParam name="variation_sample_meta_a"
+                 metadataQueryRef="VariantVQ.SamplesMetadataByStudyWithRef"
+                 backgroundQueryRef="VariantVQ.SamplesMetadataByStudyWithRef"
+                 ontologyQueryRef="VariantVQ.SampleOntologyByStudy"
+                 prompt="Set A Samples"
+                 dependedParamRef="organismParams.organismSinglePick,variantParams.eda_sample_table_suffix">
+      <help>
+        Select the first group of samples to compare. Use the sample characteristics
+        to narrow the group, or accept all samples for the organism you chose.
+      </help>
+    </filterParam>
+
+    <filterParam name="variation_sample_meta_b"
+                 metadataQueryRef="VariantVQ.SamplesMetadataByStudyWithRef"
+                 backgroundQueryRef="VariantVQ.SamplesMetadataByStudyWithRef"
+                 ontologyQueryRef="VariantVQ.SampleOntologyByStudy"
+                 prompt="Set B Samples"
+                 dependedParamRef="organismParams.organismSinglePick,variantParams.eda_sample_table_suffix">
+      <help>
+        Select the second group of samples to compare. It must differ from Set A;
+        comparing a group against itself returns nothing useful.
+      </help>
+    </filterParam>
+
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Two-group thresholds -->
+    <!--++++++++++++++++++++++++++++++++++++++++++++++++-->
+    <!-- Copied from snpParams.xml, which is imported inside a commented-out block
+         and so is absent from the assembled model; a paramRef to it fails model
+         load. See the design doc, section 5.
+
+         Only Set B gets "Two" variants. Set A's read frequency and percent-called
+         params are the unsuffixed ones the one-group search already defines, because
+         those are the plugin's own Set A constants. -->
+
+    <stringParam name="MinPercentMajorAlleles"
+                 prompt="Major allele frequency &gt;= "
+                 number="true">
+      <help>
+        This parameter applies to the Set A aligned sample sequences. When a Set A
+        locus has a major allele frequency greater than or equal to this value, it
+        will be compared to the equivalent locus in Set B samples. Note that 100% is
+        permissible and is the most stringent setting, since the search first
+        identifies an allele in this set and then compares it with the allele in
+        Set B. See the Description below the Get Answer button for more.
+      </help>
+      <suggest default="80"/>
+      <regex>\d\d?|100</regex>
+    </stringParam>
+
+    <stringParam name="MinPercentMajorAllelesTwo"
+                 prompt="Major allele frequency &gt;= "
+                 number="true">
+      <help>
+        This parameter applies to the aligned sample sequences of Set B. When a Set B
+        locus has a major allele frequency greater than or equal to this value, it
+        will be compared to the equivalent locus in Set A samples. Note that 100% is
+        permissible, since the search first identifies loci from Set A and then
+        compares them with loci from Set B. See the Description below the Get Answer
+        button for more.
+      </help>
+      <suggest default="80"/>
+      <regex>\d\d?|100</regex>
+    </stringParam>
+
+    <stringParam name="MinPercentIsolateCallsTwo"
+                 prompt="Percent samples with a base call &gt;= "
+                 number="true">
+      <help>
+        This parameter applies to the Set B aligned sample sequences. At any given
+        nucleotide position, some samples in Set B may not have data supporting a
+        call because the Read Frequency Threshold was not met. This defines the
+        fraction of Set B samples that must have a base call before a locus is
+        returned for that position, based on the remaining samples that do have data.
+        See the Description below for more information.
+      </help>
+      <suggest default="20"/>
+      <regex>\d\d?|100</regex>
+    </stringParam>
+
+    <!-- One definition, unlike snpParams which declares this twice
+         (excludeProjects/includeProjects ToxoDB) differing only in help text. The
+         four internals must match the readFreq* directory names exactly. -->
+    <enumParam name="ReadFrequencyPercentTwo"
+               prompt="Read frequency threshold" quote="false">
+      <help>
+        This parameter applies to the sequencing reads of individual samples in Set B
+        and defines a stringency for data supporting a variant call between a sample
+        and the reference genome (Organism). Each nucleotide position of each sample
+        is compared to the reference genome and a call is made if the portion of the
+        sample's aligned reads that support the variant is above the Read Frequency
+        Threshold (RFT). Find high quality haploid variants with 80% RFT or
+        heterozygous diploid/aneuploid variants with 40%. See the Description below
+        for more.
+      </help>
+      <enumList>
+        <enumValue default="true">
+          <term>80%</term>
+          <internal>80</internal>
+        </enumValue>
+        <enumValue>
+          <term>60%</term>
+          <internal>60</internal>
+        </enumValue>
+        <enumValue>
+          <term>40%</term>
+          <internal>40</internal>
+        </enumValue>
+        <enumValue>
+          <term>20%</term>
+          <internal>20</internal>
+        </enumValue>
+      </enumList>
+    </enumParam>
+
+  </paramSet>
+
+  <!-- Vocabulary queries for the short variant searches. Lives in the params file,
+       following this codebase's convention (organismVQ is in organismParams.xml,
+       SnpVQ was in snpParams.xml). -->
+  <querySet name="VariantVQ" queryType="vocab" isCacheable="true">
+
+    <!-- Returns exactly one row: the <studyAbbrev>_<entityAbbrev> suffix for the
+         chosen organism's dnaseq EDA study. One param rather than two because the
+         two abbreviations are only ever used concatenated, so there is one
+         interpolation point to get wrong instead of two.
+
+         The abbreviation is LOOKED UP, not recomputed. eda.study.internal_abbrev
+         is a reproducible SHA-1 digest, but hardcoding that convention into model
+         XML fails invisibly: a changed convention yields a well-formed abbreviation
+         for a study that does not exist, surfacing much later as
+         'relation "eda.attributevalue_s<hash>_sample" does not exist'. A lookup
+         yields zero rows, so the organism dropdown is visibly empty instead.
+         apiTuningManager.xml:3846-3863 builds these same names the same way. -->
+    <sqlQuery name="EdaSampleTableSuffix">
+      <paramRef ref="organismParams.organismSinglePick" noTranslation="true"/>
+      <column name="internal"/>
+      <column name="term"/>
+      <sql>
+        <![CDATA[
+          SELECT DISTINCT
+            s.internal_abbrev || '_' || lower(e.internal_abbrev) AS internal,
+            s.internal_abbrev || '_' || lower(e.internal_abbrev) AS term
+          FROM apidb.datasource ds
+          JOIN apidb.organism o  ON o.taxon_id = ds.taxon_id
+          JOIN sres.taxonname tn ON tn.taxon_id = o.taxon_id
+                                AND tn.name_class = 'scientific name'
+          JOIN sres.externaldatabase ed
+               ON ed.name = ds.name
+          JOIN sres.externaldatabaserelease edr
+               ON edr.external_database_id = ed.external_database_id
+          JOIN eda.studyexternaldatabaserelease sedr
+               ON sedr.external_database_release_id = edr.external_database_release_id
+          JOIN eda.study s
+               ON s.study_id = sedr.study_id
+          JOIN eda.entitytypegraph e
+               ON e.study_id = s.study_id
+          WHERE ds.type = 'isolates' AND ds.subtype = 'Dna_Seq'
+            AND tn.name = '$$organismSinglePick$$'
+            AND s.internal_abbrev IS NOT NULL
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <!-- Metadata and background for the samples filterParam. WDK's contract is
+         internal / ontology_term_name / string_value / number_value / date_value,
+         which EDA's attributevalue table supplies almost verbatim.
+
+         The same query serves metadataQueryRef and backgroundQueryRef, as the snp
+         original did: the background distribution is over all samples in the study,
+         which is exactly what this returns.
+
+         The one place EDA is NOT taken verbatim is the dataset attribute. Its values
+         are EDA dataset stable IDs (DS_1d17c1883c), which is the right thing to store
+         but an opaque thing to show: the Dataset facet listed four DS_ hashes. The
+         LEFT JOIN swaps in apidbtuning.datasetpresenter.display_name. COALESCE keeps
+         the raw ID rather than dropping the sample if a presenter is missing, which on
+         a gated dev instance is a real possibility - datasetpresenter here holds only
+         the loaded datasets.
+
+         The join is narrowed by provider_label so it can only ever fire on the dataset
+         attribute. Matching on the DS_ shape alone would work today (no other
+         attribute's value looks like a dataset ID) but would be a silent coincidence
+         to depend on. dataset_presenter_id is unique, so the join cannot multiply rows.
+
+         Nothing downstream reads these strings - the filter passes `internal` (sample
+         IDs) to the searches - so changing the displayed value is display-only. -->
+    <sqlQuery name="SamplesMetadataByStudy" doNotTest="1">
+      <paramRef ref="variantParams.eda_sample_table_suffix"/>
+      <column name="internal"/>
+      <column name="ontology_term_name"/>
+      <column name="string_value"/>
+      <column name="number_value"/>
+      <column name="date_value"/>
+      <sql>
+        <![CDATA[
+          SELECT av.sample_stable_id    AS internal,
+                 av.attribute_stable_id AS ontology_term_name,
+                 COALESCE(dp.display_name, av.string_value) AS string_value,
+                 av.number_value,
+                 av.date_value
+          FROM eda.attributevalue_$$eda_sample_table_suffix$$ av
+          LEFT JOIN apidbtuning.datasetpresenter dp
+                 ON dp.dataset_presenter_id = av.string_value
+                AND av.attribute_stable_id IN
+                    (SELECT stable_id
+                     FROM eda.attributegraph_$$eda_sample_table_suffix$$
+                     WHERE provider_label = '["dataset_id"]')
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <!-- SamplesMetadataByStudy plus a synthesized row set for the REFERENCE STRAIN.
+
+         The EDA dnaseq study holds only the resequenced isolates, so the reference
+         strain has no attributevalue rows and cannot be picked - even though HSSS
+         has always carried it as strain id 1 in strainIdToName.dat (verified 3D7 on
+         PlasmoDB, TREU927 on TriTrypDB, Af293 on FungiDB). The gap is in the filter's
+         feed, not in the search, so it is fixed here rather than in the plugin.
+
+         Three attributes, chosen because they are the identity a reference strain
+         genuinely has: its strain, its organism, and the dataset it came from. The
+         reference has no collection site, host, or alignment statistics, so inventing
+         values for the other nodes would be worse than leaving them null - an unset
+         attribute simply excludes the reference from that facet, which is correct.
+
+         Keyed on provider_label, NOT on stable_id. eda.attributegraph stable_ids are
+         VAR_<hash> digests of the provider label, so they are stable per label but the
+         label itself is site-specific: parasite_strain/parasite_organism on PlasmoDB
+         and TriTrypDB, fungal_strain/FUNGUS_organism on FungiDB (fungus, not fungal -
+         the two halves are not named symmetrically). Matching the label keeps one query
+         correct everywhere; a site that names things differently yields zero extra rows
+         instead of a wrong row.
+
+         The values deliberately match the shape the isolates already use, so the
+         reference lands in the SAME facet buckets rather than creating singletons:
+         an isolate's parasite strain reads 'Plasmodium falciparum B082' and its
+         parasite organism 'Plasmodium falciparum', which are the scientific names of
+         the strain taxon and its parent. Hence tn_self / tn_parent below. internal is
+         apidb.organism.strain_abbrev because that - not the taxon name - is what HSSS
+         calls the strain, and the plugin passes internals through as strain names.
+
+         The NOT EXISTS guard makes this a no-op the day EDA does load the reference:
+         the filter must never offer it twice.
+
+         cnv_sample_meta deliberately does NOT use this query - see its definition.
+
+         NOTE the BARE $$organismSinglePick$$ below, with no surrounding quotes. The
+         param is quote="true", so WDK supplies the quotes. The two vocab queries in
+         this same querySet - EdaSampleTableSuffix and ChromosomeForVariants - write
+         it as '$$organismSinglePick$$' and are correct, because a flatVocabParam's
+         vocab query resolves its depended values on a different path that substitutes
+         raw. This is a filter param's metadata query, which goes through
+         SqlQueryInstance and gets the quoting. Copying the quoted form here yields
+         ''Plasmodium falciparum 3D7'' and a 500 from the searches service, not a build
+         error. The non-vocab queries elsewhere (genomicQueries.xml, geneQueries.xml)
+         all use the bare form; match those, not the neighbours. -->
+    <sqlQuery name="SamplesMetadataByStudyWithRef" doNotTest="1">
+      <paramRef ref="variantParams.eda_sample_table_suffix"/>
+      <paramRef ref="organismParams.organismSinglePick" noTranslation="true"/>
+      <column name="internal"/>
+      <column name="ontology_term_name"/>
+      <column name="string_value"/>
+      <column name="number_value"/>
+      <column name="date_value"/>
+      <sql>
+        <![CDATA[
+          SELECT av.sample_stable_id    AS internal,
+                 av.attribute_stable_id AS ontology_term_name,
+                 COALESCE(dp.display_name, av.string_value) AS string_value,
+                 av.number_value,
+                 av.date_value
+          FROM eda.attributevalue_$$eda_sample_table_suffix$$ av
+          LEFT JOIN apidbtuning.datasetpresenter dp
+                 ON dp.dataset_presenter_id = av.string_value
+                AND av.attribute_stable_id IN
+                    (SELECT stable_id
+                     FROM eda.attributegraph_$$eda_sample_table_suffix$$
+                     WHERE provider_label = '["dataset_id"]')
+
+          UNION ALL
+
+          SELECT o.strain_abbrev AS internal,
+                 ag.stable_id    AS ontology_term_name,
+                 CASE
+                   WHEN ag.provider_label IN ('["parasite_strain"]', '["fungal_strain"]')
+                        THEN tn_self.name
+                   WHEN ag.provider_label IN ('["parasite_organism"]', '["fungus_organism"]')
+                        THEN tn_parent.name
+                   WHEN ag.provider_label = '["dataset_id"]'
+                        THEN dp.display_name
+                 END AS string_value,
+                 CAST(NULL AS numeric) AS number_value,
+                 CAST(NULL AS date)    AS date_value
+          FROM eda.attributegraph_$$eda_sample_table_suffix$$ ag
+          CROSS JOIN apidb.organism o
+          JOIN sres.taxon     tx        ON tx.taxon_id = o.taxon_id
+          JOIN sres.taxonname tn_self   ON tn_self.taxon_id = o.taxon_id
+                                       AND tn_self.name_class = 'scientific name'
+          JOIN sres.taxonname tn_parent ON tn_parent.taxon_id = tx.parent_id
+                                       AND tn_parent.name_class = 'scientific name'
+          JOIN apidbtuning.datasetpresenter dp
+                                        ON dp.name = o.abbrev || '_primary_genome_RSRC'
+          WHERE tn_self.name = $$organismSinglePick$$
+            AND ag.provider_label IN ('["parasite_strain"]', '["fungal_strain"]',
+                                      '["parasite_organism"]', '["fungus_organism"]',
+                                      '["dataset_id"]')
+            AND NOT EXISTS (SELECT 1
+                            FROM eda.attributevalue_$$eda_sample_table_suffix$$ av2
+                            WHERE av2.sample_stable_id = o.strain_abbrev)
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <!-- The filter tree. Two things here are load-bearing:
+
+         1. The CASE on the parent. EDA's attribute graph has no row for the entity
+            itself, so seven category nodes point at parent 'sample' and no node has
+            stable_id 'sample'. WDK's validateOntologyItems throws
+            "Parent ontology ID 'sample' ... cannot be found" on exactly that.
+            Mapping unresolvable parents to NULL makes WDK adopt them under its
+            synthetic master root. Written as a membership test rather than
+            = 'sample' so it stays correct if the entity abbreviation differs -
+            and it is already dynamic in the table name.
+
+         2. The type mapping is pinned to WDK's OntologyItemType enum, which accepts
+            exactly string / number / date / multiFilter, and treats NULL as a BRANCH
+            node. EDA's category rows have no data_type, so they map to NULL, which is
+            what makes them the tree's internal nodes. 'integer' folds into 'number'
+            because WDK has no integer type. -->
+    <sqlQuery name="SampleOntologyByStudy" doNotTest="1">
+      <paramRef ref="variantParams.eda_sample_table_suffix"/>
+      <column name="ontology_term_name"/>
+      <column name="parent_ontology_term_name"/>
+      <column name="display_name"/>
+      <column name="description"/>
+      <column name="type"/>
+      <column name="units"/>
+      <column name="precision"/>
+      <column name="is_range"/>
+      <sql>
+        <![CDATA[
+          SELECT ag.stable_id AS ontology_term_name,
+                 CASE WHEN ag.parent_stable_id IN
+                           (SELECT stable_id FROM eda.attributegraph_$$eda_sample_table_suffix$$)
+                      THEN ag.parent_stable_id
+                 END AS parent_ontology_term_name,
+                 ag.display_name,
+                 ag.definition AS description,
+                 CASE ag.data_type
+                   WHEN 'string'  THEN 'string'
+                   WHEN 'number'  THEN 'number'
+                   WHEN 'integer' THEN 'number'
+                 END AS type,
+                 ag.unit AS units,
+                 ag.precision,
+                 CASE WHEN ag.data_shape = 'continuous' THEN 1 ELSE 0 END AS is_range
+          FROM eda.attributegraph_$$eda_sample_table_suffix$$ ag
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <!-- Chromosome vocabulary for the by-location search. Rewritten rather than
+         reused: the snp original (SharedVQ.ChromosomeForNgsSnps) overrides the
+         organism param to organismVQ.withNgsSNPs, which reads apidbtuning.snpstrains
+         and does not exist in this build, and its SQL keys on org_abbrev while our
+         organism param carries the taxon name (see the design doc, sections 3 and
+         4.2). Keying on organism forfeits partition pruning on this LIST-partitioned
+         table; measured at 26ms, which is well inside what a vocabulary needs.
+
+         internal is the sequence source_id, which is what the HSSS files use, so the
+         chosen chromosome feeds the position filter directly.
+
+         The 'Choose chromosome' sentinel is deliberate: it gives "no chromosome
+         picked" a real value rather than an empty param. -->
+    <sqlQuery name="ChromosomeForVariants" doNotTest="1">
+      <paramRef ref="organismParams.organismSinglePick" noTranslation="true"/>
+      <column name="internal"/>
+      <column name="term"/>
+      <sql>
+        <![CDATA[
+          SELECT * FROM (
+              SELECT DISTINCT s.chromosome AS term,
+                              s.source_id  AS internal,
+                              s.chromosome_order_num
+              FROM webready.GenomicSeqAttributes_p s
+              WHERE s.organism = '$$organismSinglePick$$'
+                AND s.chromosome IS NOT NULL
+            UNION
+              SELECT 'Choose chromosome' AS term, 'choose' AS internal, -1 AS chromosome_order_num
+          ) t
+          ORDER BY chromosome_order_num
+        ]]>
+      </sql>
+    </sqlQuery>
+
+  </querySet>
+
+</wdkModel>
