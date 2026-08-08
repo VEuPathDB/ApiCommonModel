@@ -17,17 +17,17 @@ main(){
   # Needs three options because of where the files live and how their headers parse:
   # - match everything before first space as the ID
   # - match "transcript(.*?) " as the ID (so we can index proteins by their transcript)
-  # - dnaseq consensus sequences, which come from the workflow dir and are bgzipped
+  # - dnaseq sequences, which come from the workflow dir rather than the download site
   # Any of the three may be empty, so you can rebuild just one kind of file.
   FILES_ID_BEFORE_FIRST_SPACE="${5:-}"
   FILES_ID_TRANSCRIPT_FIELD="${6:-}"
-  FILES_DNASEQ_CONSENSUS="${7:-}"
+  FILES_DNASEQ="${7:-}"
 
   # Check the arguments and if they don't seem right print the usage message and exit
   if [ "$#" -lt 4 ] || [ "$#" -gt 7 ] \
-    || [ ! "$FILES_ID_BEFORE_FIRST_SPACE" -a ! "$FILES_ID_TRANSCRIPT_FIELD" -a ! "$FILES_DNASEQ_CONSENSUS" ] \
+    || [ ! "$FILES_ID_BEFORE_FIRST_SPACE" -a ! "$FILES_ID_TRANSCRIPT_FIELD" -a ! "$FILES_DNASEQ" ] \
     || [ ! -f "$STAGING_DIR_PATHS_CONFIG" ] ; then
-    echo "Usage: $0 STAGING_DIR_PATHS_CONFIG OUTPUT_DIR FASTA_SUFFIX SQLITE_SUFFIX [FILES_ID_BEFORE_FIRST_SPACE] [FILES_ID_TRANSCRIPT_FIELD] [FILES_DNASEQ_CONSENSUS]"
+    echo "Usage: $0 STAGING_DIR_PATHS_CONFIG OUTPUT_DIR FASTA_SUFFIX SQLITE_SUFFIX [FILES_ID_BEFORE_FIRST_SPACE] [FILES_ID_TRANSCRIPT_FIELD] [FILES_DNASEQ]"
     echo "e.g. $0 ../config/stagingDirPaths.tab ./output fa fa.fai.sqlite Genome,ESTs,Isolates AnnotatedProteins dnaseq"
     echo "     $0 ../config/stagingDirPaths.tab ./output fa fa.fai.sqlite Genome            # just the genome"
     echo "     $0 ../config/stagingDirPaths.tab ./output fa fa.fai.sqlite '' '' dnaseq      # just dnaseq"
@@ -38,7 +38,7 @@ main(){
   # Go through the different files that need to be made
   iterSeq "removeAfterSpaceFromHeader:$FILES_ID_BEFORE_FIRST_SPACE" \
           "chooseTranscriptFieldForHeader:$FILES_ID_TRANSCRIPT_FIELD" \
-          "dnaseqConsensusHeader:$FILES_DNASEQ_CONSENSUS" \
+          "dnaseqHeader:$FILES_DNASEQ" \
   | while read SEQUENCE_TYPE PROG; do
     # For each desired result ...
     RESULT_SEQ_FASTA=$OUTPUT_DIR/${SEQUENCE_TYPE}.${FASTA_SUFFIX}
@@ -49,8 +49,8 @@ main(){
 
     # Where do the source fastas live? dnaseq is not on the download site.
     case $PROG in
-      dnaseqConsensusHeader) FIND_SOURCE_FASTAS=findDnaseqConsensusFastas ;;
-      *)                     FIND_SOURCE_FASTAS=findDownloadSiteFastas ;;
+      dnaseqHeader) FIND_SOURCE_FASTAS=findDnaseqFastas ;;
+      *)            FIND_SOURCE_FASTAS=findDownloadSiteFastas ;;
     esac
 
     # Find the source fastas and concatenate into one big fasta
@@ -89,17 +89,42 @@ findDownloadSiteFastas(){
   done
 }
 
-# dnaseq consensus sequences are not published on the download site - they are read
-# straight out of the GenomicsDB workflow results. The config gives us the workflow
-# data root; the layout underneath it is fixed:
+# dnaseq sequences are not published on the download site - they are read straight out
+# of the GenomicsDB workflow results. The config gives us the workflow data root; the
+# layout underneath it is fixed:
 #   <root>/<project>/<organism>/dnaseq/<experiment>/dnaseqNextflow/analysisDir/results/<sample>/<sample>_consensus.fa.gz
+#   <root>/<project>/<organism>/loadGenome/genomicSeqs.fa
 # Left unquoted on purpose so the shell expands the glob - much faster than find,
 # which would otherwise walk the whole workflow tree.
-findDnaseqConsensusFastas(){
+findDnaseqFastas(){
   config="$1"
   readDnaseqWorkflowRootFromConfig $config \
   | while read -r DNASEQ_ROOT; do
       ls -1d ${DNASEQ_ROOT%/}/*/*/dnaseq/*/dnaseqNextflow/analysisDir/results/*/*_consensus.fa.gz 2>/dev/null
+  done \
+  | addReferenceGenomes
+}
+
+# Each organism's reference genome goes in alongside its consensus sequences, so every
+# sample sits next to the reference it was called against. Only organisms that actually
+# produced consensus output get one - an organism whose dnaseq directory exists but
+# yielded no results contributes nothing, and so needs no reference genome.
+# The paths arrive grouped by organism because the glob above is sorted, so remembering
+# only the previous one is enough to emit each reference genome exactly once.
+addReferenceGenomes(){
+  LAST_ORGANISM_DIR=
+  while read -r SOURCE_FASTA; do
+    ORGANISM_DIR=${SOURCE_FASTA%%/dnaseq/*}
+    if [ "$ORGANISM_DIR" != "$LAST_ORGANISM_DIR" ]; then
+      REFERENCE_GENOME=$ORGANISM_DIR/loadGenome/genomicSeqs.fa
+      if [ -f "$REFERENCE_GENOME" ]; then
+        echo "$REFERENCE_GENOME"
+      else
+        echo "Warning: no reference genome at $REFERENCE_GENOME" >&2
+      fi
+      LAST_ORGANISM_DIR=$ORGANISM_DIR
+    fi
+    echo "$SOURCE_FASTA"
   done
 }
 
@@ -124,11 +149,15 @@ chooseTranscriptFieldForHeader(){
   perl -pe 'if(m{^>} and m{transcript=(.*?) }){$_ = ">$1\n";}' "$@"
 }
 
-# dnaseq consensus fastas are bgzipped, so decompress on the way through. Their headers
-# are already "<sample>_<contig>" with no description, which keeps IDs unique across
-# samples - the ID rule is the same as for the download site fastas.
-dnaseqConsensusHeader(){
-  zcat "$@" | removeAfterSpaceFromHeader
+# The consensus fastas are bgzipped and the reference genomes are not, so decompress only
+# what needs it. Consensus headers are already "<sample>_<contig>" with no description,
+# which keeps IDs unique across samples, and reference headers are bare contig IDs - the
+# ID rule is the same as for the download site fastas either way.
+dnaseqHeader(){
+  case "$1" in
+    *.gz) zcat "$@" ;;
+    *)    cat  "$@" ;;
+  esac | removeAfterSpaceFromHeader
 }
 
 indexFasta(){
