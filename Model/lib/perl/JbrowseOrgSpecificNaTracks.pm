@@ -5,7 +5,6 @@ use lib $ENV{GUS_HOME} . "/lib/perl";
 
 use ApiCommonModel::Model::JBrowseTrackConfig::ReferenceSequenceTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedMassSpecTrackConfig;
-use ApiCommonModel::Model::JBrowseTrackConfig::UnifiedSnpTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::CentromereTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::TrnaTrackConfig;
@@ -66,7 +65,7 @@ sub processOrganism {
   &addHaplotypeBlock($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addFeatureBindingSite($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
   &addUnifiedMassSpec($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
-  &addUnifiedSnp($datasetProps, $applicationType, $result);
+  &addMergedShortVariants($applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $webservicesDir, $organismAbbrev);
 
   #  &addSynteny($applicationType, $dbh, $result);
 
@@ -838,18 +837,52 @@ sub makeTreeNode {
 }
 
 
-sub addUnifiedSnp {
-  my ($datasetProps, $applicationType, $result) = @_;
-    my $hasSnp = $datasetProps->{hasSnp} ? $datasetProps->{hasSnp} : {};
-        if($hasSnp == 1) {
-#    my $projectUrl = lc($projectName) . "\.org";
+# The dnaseq pipeline's merged annotated VCF: one call set per organism, merged across every
+# DNASeq experiment. This is the JBrowse face of the Variant record, and it replaces the
+# "SNPs by coding potential" unified SNP track that used to be emitted here (backed by the
+# SNP:Population REST feature, part of the SNP infrastructure the Variant record supersedes;
+# already unreachable, since no organism in build 71 set the hasSnp property that gated it).
+#
+# It lives on this ORGANISM-SPECIFIC endpoint rather than the dnaseq one for two reasons.
+# It is a per-organism file, so it never belonged in a per-dataset loop. And the gene page's
+# SNP links use the geneticVariationTracks set, which includes this endpoint's ~100 tracks
+# but not dnaseq's ~1600 - putting the VCF here means those links no longer load and parse
+# every per-sample coverage and density track just to draw variants.
+sub addMergedShortVariants {
+  my ($applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $webservicesDir, $organismAbbrev) = @_;
 
-    my $snpTrack = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedSnpTrackConfig->new({application_type => $applicationType,
-											  #project_url => $projectUrl,
-											  })->getConfigurationObject();
-		
-    push @{$result->{tracks}}, $snpTrack;
-  };
+  my $relativePathToVcfFile = "$nameForFileNames/dnaseq/vcf/merged.ann.vcf.gz";
+
+  # Not every organism has a merged call set; absence is normal and silent.
+  return unless(-e "$webservicesDir/$projectName/build-$buildNumber/$relativePathToVcfFile");
+
+  my $track = ApiCommonModel::Model::JBrowseTrackConfig::VcfTrackConfig->new({
+    project_name          => $projectName,
+    build_number          => $buildNumber,
+    application_type      => $applicationType,
+    organism_abbrev       => $organismAbbrev,
+    relative_path_to_file => $relativePathToVcfFile,
+    key                   => "Short variants from all DNA-Seq samples",
+    label                 => "${organismAbbrev}_dnaseq_merged_short_variants",
+    study_display_name    => "All DNA-Seq samples",
+    # Doubles as the legend: shape and colour are the only channels distinguishing variant
+    # type and effect on screen.
+    summary               => "Single nucleotide variants and short indels called across "
+                           . "every DNA-Seq sample for this organism, merged into one "
+                           . "annotated call set. Substitutions are drawn as diamonds and "
+                           . "indels as boxes. Colour shows the most severe predicted "
+                           . "effect: red = truncation or stop gained, purple = "
+                           . "non-synonymous, green = synonymous, blue = intron or other.",
+    # Empty rather than undef on purpose: getMetadata uri_unescapes attribution
+    # unconditionally, and an undef there warns - which, because the service merges this
+    # process's stderr into its stdout, would corrupt the JSON response.
+    attribution           => "",
+    track_type_display    => "Merged VCF",
+    glyph                 => "{variantGlyphFxn}",
+    color                 => "{variantEffectColorFxn}",
+  })->getConfigurationObject();
+
+  push @{$result->{tracks}}, $track if($track);
 }
 
 

@@ -4,7 +4,6 @@ use strict;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig;
-use ApiCommonModel::Model::JBrowseTrackConfig::VcfTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::DatasetConfig;
 use File::Basename;
 
@@ -191,9 +190,6 @@ sub processOrganism {
                             $buildNumber, $applicationType, $publicAbbrevForFiles, $result);
     }
   }
-
-  &addMergedVcfTrack($organismAbbrev, $projectName, $buildNumber, $applicationType,
-                     $publicAbbrevForFiles, $dnaSeqDir, $result);
 }
 
 
@@ -275,54 +271,6 @@ sub indexBigwigFiles {
   }
 
   return $index;
-}
-
-
-# The merged, annotated VCF is one file per organism - a merge across every dnaseq
-# experiment - so it is emitted once, outside the per-dataset loop, and has no single
-# presenter to draw display metadata from. This is the genome-browser face of the Variant
-# record.
-sub addMergedVcfTrack {
-  my ($organismAbbrev, $projectName, $buildNumber, $applicationType,
-      $publicAbbrevForFiles, $dnaSeqDir, $result) = @_;
-
-  my $vcfFile = "$dnaSeqDir/vcf/merged.ann.vcf.gz";
-
-  # Unlike the bigwig directory this is not required: an organism can have DNASeq coverage
-  # without a merged variant call set.
-  return unless(-e $vcfFile);
-
-  my $track = ApiCommonModel::Model::JBrowseTrackConfig::VcfTrackConfig->new({
-    project_name          => $projectName,
-    build_number          => $buildNumber,
-    application_type      => $applicationType,
-    organism_abbrev       => $organismAbbrev,
-    relative_path_to_file => "$publicAbbrevForFiles/dnaseq/vcf/merged.ann.vcf.gz",
-    key                   => "Short variants from all DNA-Seq samples",
-    label                 => "${organismAbbrev}_dnaseq_merged_short_variants",
-    # Both resolved per feature from functions.conf: diamond for SNVs and a box for
-    # indels, coloured by the most severe snpEff effect class across the variant's ANN
-    # entries.
-    glyph                 => "{variantGlyphFxn}",
-    color                 => "{variantEffectColorFxn}",
-    study_display_name    => "All DNA-Seq samples",
-    # The summary doubles as the track's legend: shape and colour are the only channels
-    # distinguishing variant type and effect on screen, so what they mean is spelled out
-    # rather than left to be inferred.
-    summary               => "Single nucleotide variants and short indels called across "
-                           . "every DNA-Seq sample for this organism, merged into one "
-                           . "annotated call set. Substitutions are drawn as diamonds and "
-                           . "indels as boxes. Colour shows the most severe predicted "
-                           . "effect: red = truncation or stop gained, purple = "
-                           . "non-synonymous, green = synonymous, blue = intron or other.",
-    # Empty rather than undef on purpose: getMetadata uri_unescapes attribution
-    # unconditionally, and an undef there warns - which, because the service merges this
-    # process's stderr into its stdout, would corrupt the JSON response.
-    attribution           => "",
-    track_type_display    => "Merged VCF",
-  })->getConfigurationObject();
-
-  push @{$result->{tracks}}, $track if($track);
 }
 
 1;
