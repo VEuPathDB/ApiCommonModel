@@ -1,91 +1,46 @@
 package org.apidb.apicommon.model.datasetInjector;
 
 import org.apidb.apicommon.datasetPresenter.DatasetInjector;
-import java.util.List;
 
 /**
  * DNASeq dataset injector.
  *
- * Both method bodies are commented out for the dnaseq-merge-experiments work: DNASeq
- * datasets are processed differently now, so neither what this injected nor what it
- * referenced describes them any more. Concretely:
+ * Injects the per-DATASET jbrowse properties only. The per-SAMPLE properties this used to
+ * inject are gone on purpose: which samples an experiment has, and which measures each of
+ * those samples has, are now read from the webservices tree at request time by
+ * ApiCommonModel::Model::JbrowseDnaSeqTracks. So this class supplies what only a presenter
+ * can know (display name, summary, attribution, category) and the filesystem supplies what
+ * only the pipeline can know (samples and their files). One fact, one owner.
  *
- *   - injectTemplates() derived per-sample gbrowse/jbrowse databases from getSampleList(),
- *     which keys samples on organismAbbrev + datasetClassCategory + experimentName. The new
- *     dnaseqExperiment class carries an empty category while its samples span two
- *     ("Genetic variation" for SNPs, "Structural variation" for CNVs), so that key cannot
- *     match and getSampleList() throws.
- *   - addModelReferences() registered SnpQuestions / SnpRecordClasses references. That XML
- *     is not in the compiled model and is to be superseded by the variation record.
+ * That split is also what fixes the breakage it replaced. The old per-sample loop called
+ * getSampleList(), which keys samples on organismAbbrev + datasetClassCategory +
+ * experimentName by scanning sibling dataset props. The merged dnaseqExperiment class
+ * carries an empty category while its samples span two ("Genetic variation" for SNPs,
+ * "Structural variation" for CNVs), so that key cannot match and getSampleList() throws.
+ * Removing the per-sample path removes the only caller.
  *
- * The class stays in place as a no-op so presenters may keep naming it while the new
- * processing lands; getPropertiesDeclaration() is left alone so the hasCNVData prop that
- * presenters still supply remains declared.
+ * hasCNVData deliberately survives as declared-but-unused. Presenters still supply it (118
+ * say true, 77 say false) but the pipeline now emits _normalisedCoverage.bw regardless, so
+ * the flag no longer describes the data. It stays declared here because presenters pass it
+ * and getPropertiesDeclaration is what validates presenter props; it is no longer emitted
+ * into the conf, and nothing reads it.
+ *
+ * addModelReferences() stays commented out: it registered SnpQuestions / SnpRecordClasses
+ * references, XML which is not in the compiled model and which the Variant record
+ * supersedes.
  */
 public class IsolatesHTS extends DatasetInjector {
 
   @Override
   public void injectTemplates() {
-      /* commented out for dnaseq-merge-experiments; see the class comment above
-      String datasetName = getDatasetName();
       setOrganismAbbrevFromDatasetName();
 
-      String experimentName = getPropValue("name");
-      setPropValue("experimentName", experimentName);
-
-      //      injectTemplate("jbrowseDNASeq");
-
-      // : is a reserved character in gbrowse 
-      String datasetDisplayName = getPropValue("datasetDisplayName");
-      setPropValue("datasetDisplayName", datasetDisplayName.replace("-", ""));
-
-      // use getSampleList method, refer to - https://redmine.apidb.org/issues/16510
-      String organismAbbrev = getPropValue("organismAbbrev");
-      String sampleNameSuffix = "_HTS_SNPSample_RSRC";
-      List<String> sampleNames = getSampleList();
-
-      String organismAbbrevDisplay = getPropValue("organismAbbrevDisplay");
-      setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
-
-      for (int i=0; i<sampleNames.size(); i++){
-          setPropValue("sampleName", sampleNames.get(i));
-
-          String gbrowseDBName = organismAbbrev + "_" + experimentName + "_" + sampleNames.get(i) + sampleNameSuffix;
-          setPropValue("gbrowseDBName", gbrowseDBName);
-
-          injectTemplate("htsSnpSampleDatabase");
-          injectTemplate("htsSnpSampleCoverageXYTrack");
-
-          //          setPropValue("gbrowseTrackName", gbrowseDBName);
-          //          injectTemplate("gbrowseTrackCategory");
-
-          injectTemplate("htsSnpSampleCoverageDensityTracks");
-          injectTemplate("htsSnpSampleAlignmentTrack");
-	  
-          injectTemplate("jbrowseDnaSeqSampleBuildProps");
-
-      }
+      // collapse the presenter's wrapped CDATA summary onto one line; it becomes a
+      // single key=value line in datasetAndPresenterProps.conf, which is parsed linewise
       setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
       setPropValue("summary", getPropValue("summary").replaceAll(" +", " "));
-      //String shortAttribution = getPropValue("shortAttribution");
+
       injectTemplate("jbrowseDnaSeqBuildProps");
-
-      if(getPropValueAsBoolean("hasCNVData")) {
-
-          setPropValue("datasetName", datasetName.replaceFirst("_HTS_SNP_", "_copyNumberVariations_"));
-          
-          for (int i=0; i<sampleNames.size(); i++) {
-              setPropValue("sampleName", sampleNames.get(i));
-              injectTemplate("copyNumberVariationsDatabase");
-              injectTemplate("copyNumberVariationsTrack");
-
-              //              setPropValue("gbrowseTrackName", getPropValue("datasetName") + getPropValue("sampleName"));
-              //              injectTemplate("gbrowseTrackCategory");
-          }       
-      }
-
-	//System.err.println("short attribution" + getPropValue("shortAttribution"));
-      */
   }
 
   @Override
