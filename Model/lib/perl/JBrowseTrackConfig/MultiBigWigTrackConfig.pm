@@ -31,12 +31,20 @@ sub new {
 
     my $alignmentDisplay;
 
+    # has_alignment => 0 is for callers with no read-alignment split at all (dnaseq).
+    # Without it every track claims "unique and non-unique", which then shows up as an
+    # RNA-Seq Alignment facet value on a track that has no such notion.
+    my $hasAlignment = exists($args->{has_alignment}) ? $args->{has_alignment} : 1;
+
     if($alignment && $alignment eq 'unique') {
       $alignmentDisplay = "Unique Only";
-    } 
-    else {
+    }
+    elsif($hasAlignment) {
       $alignmentDisplay = "Unique And Non-Unique";
       $self->setAlignment("unique and non-unique");
+    }
+    else {
+      $alignmentDisplay = "";
     }
 
     my $subclassName = ref($self);
@@ -63,6 +71,17 @@ sub new {
 
     }
 
+    # Explicit label/id/track type win, and are applied last so they also beat the
+    # jbrowse2 branch above. Every derived form is keyed on the DATASET, which is fine
+    # for one multi track per dataset but collides immediately for a caller emitting one
+    # per sample - label is the JBrowse track id and must be unique across the response.
+    #
+    # NOTE track_type_display is deliberately NOT overridable here: the ::Density and ::XY
+    # subclasses set it after SUPER::new returns, so anything set here would be silently
+    # clobbered. A caller wanting its own wording calls setTrackTypeDisplay on the
+    # constructed object instead.
+    $self->setLabel($args->{label}) if(defined($args->{label}) && length($args->{label}));
+    $self->setId($args->{id}) if(defined($args->{id}) && length($args->{id}));
 
     return $self;
 }

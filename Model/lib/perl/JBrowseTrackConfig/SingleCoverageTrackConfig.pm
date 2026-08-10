@@ -45,14 +45,30 @@ sub new {
     $self->setId("$studyDisplayName - $displayName $displayNameSuffix");
     }
 
-    if ($dbid){
-    $self->setLabel("$datasetName $dbid Coverage");        
+    # An explicit label wins. label is the JBrowse track id, so it must be unique across
+    # the whole response; callers that emit several tracks per sample (dnaseq emits up to
+    # five measures each) need that uniqueness by construction rather than by luck of the
+    # sample names happening to be distinct. Both derived forms below remain the default,
+    # so existing callers are unaffected.
+    if (defined($args->{label}) && length($args->{label})) {
+    $self->setLabel($args->{label});
+    }
+    elsif ($dbid){
+    $self->setLabel("$datasetName $dbid Coverage");
     }
     else {
     $self->setLabel("$displayName $displayNameSuffix");
     }
     
-    if (!defined($order) && !defined($dbid)) {
+    # An explicit track type display wins; this string is shown to users in the track
+    # selector. The ploidy-normalised default below is only correct for the CNV coverage
+    # track, which was the sole order-less and dbid-less caller when it was written; a
+    # caller emitting other per-sample measures (SNP density, LOH, ...) must be able to
+    # say what its track actually is instead of inheriting that label.
+    if (defined($args->{track_type_display}) && length($args->{track_type_display})) {
+    $self->setTrackTypeDisplay($args->{track_type_display});
+    }
+    elsif (!defined($order) && !defined($dbid)) {
     $self->setTrackTypeDisplay("Coverage (ploidy Normalized)");;
     }
 
