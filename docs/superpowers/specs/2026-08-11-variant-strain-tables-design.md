@@ -238,14 +238,49 @@ for lack of a country, or the shortfall reads as data loss.
 
 ### 7.1 The grouping attribute is declared, not hardcoded
 
-Legacy baked in `geographic_location`. Ours names the EDA attribute in model XML so other
-sites can point at their own without a code change. Hardcoding a per-instance identifier
-into shared model XML is the failure mode the dataset-gate notes in `CLAUDE.md` warn
-about.
+The attribute is named in model XML so other sites can point at their own without a code
+change. Hardcoding a per-instance identifier into shared model XML is the failure mode the
+dataset-gate notes in `CLAUDE.md` warn about.
 
-**Open:** the exact EDA attribute for the *P. falciparum* dnaseq study — whether its
-`display_name` is `Country`, `Geographic location`, or something else — must be confirmed
-against `eda.attributegraph_<suffix>` before the value is written into XML.
+**Key on `provider_label`, not `stable_id`.** EDA `stable_id`s are `VAR_<hash>` digests of
+the provider label — stable per label, but the label itself is site-specific. Same
+reasoning `SamplesMetadataByStudyWithRef` records for its own attribute matching.
+
+The value is **`["country"]`**; its `display_name` is the lowercase `country`.
+
+**Not `geographic_location`, which is what legacy used.** Both attributes exist in the
+*P. falciparum* dnaseq study (`s3be28bbe14_sample`), so a naive port would have taken the
+wrong one:
+
+| provider_label | display_name | samples with a value | distinct values |
+|---|---|---|---|
+| `["country"]` | country | **536 / 537** | 20 |
+| `["geographic_location"]` | Geographic location | 111 / 537 | 10 |
+| `["collection_site"]` | Collection site | 180 / 537 | 5 |
+
+The EDA study holds exactly 537 samples, matching the VCF's 537 sample columns. The single
+sample with no country is `707A`. Top countries: Thailand 181, French Guiana 169,
+Senegal 70, Gambia 65, Mali 23, Uganda 11.
+
+### 7.2 Not every organism has the attribute, and there is no fallback
+
+**14 of the 62 dnaseq EDA studies have no `["country"]` attribute at all** — not null
+values, but no row in `eda.attributegraph_<suffix>`. On PlasmoDB these are the rodent
+malaria lines (*P. chabaudi*, *P. vinckei*, *P. yoelii*); elsewhere *L. major*,
+*L. mexicana*, *L. braziliensis*, the three *T. cruzi* assemblies, *T. brucei gambiense*,
+*T. evansi*, *Crithidia fasciculata*, *S. cerevisiae* S288C, and *Coccidioides immitis*.
+
+**A fallback to `geographic_location` or `collection_site` is deliberately not built.** 13
+of those 14 studies have no geography attribute of any kind. The exception, *P. yoelii*
+17X, has a `geographic_location` attribute whose only populated value across 6 samples is
+`Lowlands West and Central Africa` — not a country and not aggregatable. A fallback chain
+would rescue nothing while adding a branch that silently changes what the column means.
+
+These are lab lines and reference assemblies with no collection geography, which is normal.
+Most hold 1–14 samples; the one substantial study is *S. cerevisiae* S288C at 230.
+
+So table B renders as **empty, without error**, when the organism's study has no country
+attribute — the same way an absent merged VCF yields an empty table (§9).
 
 ## 8. Deliverable C — the record-page strain filter
 
