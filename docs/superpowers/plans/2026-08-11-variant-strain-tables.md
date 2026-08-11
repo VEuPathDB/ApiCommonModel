@@ -453,10 +453,22 @@ within a slot on ';', bare 'r' means reference-with-no-CDS-annotation."
 
 `Read Frequency` is **the fraction of reads supporting the called allele**:
 
-- alt call → `AO[altIndex] / (RO + AO[altIndex]) * 100`
-- reference call with real `RO`/`AO` → `RO / (RO + AO_total) * 100`
+- alt call → `AO[altIndex] / (RO + AO[altIndex]) * 100`, where `altIndex` is the index of
+  the allele THIS sample carries — `vc.getAlleleIndex(allele) - 1`, since `getAlleleIndex`
+  is 0 for the reference. Not `sum(AO)`: on a multi-allelic record that would dilute the
+  called allele with reads supporting an alt the sample does not carry.
+- reference call with real `RO`/`AO` → `RO / (RO + AO_total) * 100`. Summing IS correct
+  here — reference support is measured against all non-reference reads.
 - coverage-filled reference call (all of `AD/RO/QR/AO/QA` absent) → `100.00`
 - no call → `null`
+
+The asymmetry between the two branches is deliberate; do not "simplify" them to match.
+
+**The published file is biallelic by construction.** `write_vcf_entry` emits one record per
+unique alt, so the multi-allelic path is defensive, not hot. Measured on the real file:
+548,040 alt calls across 40,000 loci, none with more than one nonzero `AO` and no record
+with more than one ALT. The indexed form is still what the code must implement, because a
+formula that only happens to be right is a trap for the next reader.
 
 This deliberately differs from `processSequenceVariations.jl`'s `compute_percent`, which always
 reports the *alt* fraction and returns `0.0` for a reference-only genotype. That convention suits
@@ -717,7 +729,7 @@ public class MergedVcfReader implements AutoCloseable {
         genotypeString(vc, g),
         depth,
         allele(g, ref),
-        readFrequency(g, ro, ao, filled),
+        readFrequency(vc, g, ro, ao, filled),
         cann.aminoAcidsFor(asString(g.getExtendedAttribute("CA"))),
         chromosomeAlleles(g),
         g.getPloidy(),
@@ -757,7 +769,8 @@ public class MergedVcfReader implements AutoCloseable {
     return bases.get(0);
   }
 
-  private String readFrequency(Genotype g, int[] ro, int[] ao, boolean filled) {
+  private String readFrequency(VariantContext vc, Genotype g, int[] ro, int[] ao,
+                               boolean filled) {
     if (filled) return "100.00";
     if (ro.length == 0 && ao.length == 0) return null;
 
@@ -765,12 +778,28 @@ public class MergedVcfReader implements AutoCloseable {
     int altTotal = 0;
     for (int v : ao) altTotal += v;
 
-    int total = refCount + altTotal;
-    if (total <= 0) return null;
+    if (g.isHomRef()) {
+      // Reference support is measured against ALL non-reference reads, so summing is right.
+      int total = refCount + altTotal;
+      return total <= 0 ? null
+          : String.format(Locale.ROOT, "%.2f", refCount * 100.0 / total);
+    }
 
-    // Support for the allele actually called, not for the alt unconditionally.
-    int supporting = g.isHomRef() ? refCount : altTotal;
-    return String.format(Locale.ROOT, "%.2f", supporting * 100.0 / total);
+    // Alt support must come from the entry for the allele THIS sample carries, not a sum
+    // over every alt. The published file is biallelic (the pipeline emits one record per
+    // alt), so this is defensive rather than hot - but a formula that is only accidentally
+    // right is a trap. Fall back to the sum if the index is out of range rather than throw.
+    int altCount = altTotal;
+    for (Allele a : g.getAlleles()) {
+      if (a.isNoCall() || a.isReference()) continue;
+      int i = vc.getAlleleIndex(a) - 1;
+      if (i >= 0 && i < ao.length) altCount = ao[i];
+      break;
+    }
+
+    int total = refCount + altCount;
+    return total <= 0 ? null
+        : String.format(Locale.ROOT, "%.2f", altCount * 100.0 / total);
   }
 
   /**
