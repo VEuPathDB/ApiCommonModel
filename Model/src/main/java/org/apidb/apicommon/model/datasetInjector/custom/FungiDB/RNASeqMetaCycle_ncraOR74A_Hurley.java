@@ -24,13 +24,20 @@ public class RNASeqMetaCycle_ncraOR74A_Hurley extends RNASeqMetaCycle {
     } 
 
   @Override
-  public void injectTemplates() { }
-  public void TODO_injectTemplates() {
+  public void injectTemplates() {
+      // an unsubstituted ${datasetClassCategoryIri}/${cleanDatasetName} macro yields
+      // unparseable OWL, and this class never calls super.injectTemplates() (see the
+      // class comment), so both must be set here explicitly - matching RNASeq.java.
+      setPropValue("datasetClassCategoryIri", "http://purl.obolibrary.org/obo/OBI_0001271");
+
       setShortAttribution();
 
       String projectName = getPropValue("projectName");
       String datasetName = getDatasetName();
-      
+
+      String cleanDatasetName = datasetName.replace('.', '_');
+      setPropValue("cleanDatasetName", cleanDatasetName);
+
       Boolean switchStrandsGBrowse = getPropValueAsBoolean("switchStrandsGBrowse");
       Boolean switchStrandsProfiles = getPropValueAsBoolean("switchStrandsProfiles");
 
