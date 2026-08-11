@@ -822,19 +822,36 @@ public class MergedVcfReader implements AutoCloseable {
     return o == null ? null : String.valueOf(o);
   }
 
-  /** Parses a comma-separated integer FORMAT value; '.' and absent both yield empty. */
+  /** A slot whose value was '.', empty, or unparseable. Read counts are never negative. */
+  static final int NO_VALUE = -1;
+
+  /**
+   * Parses a comma-separated integer FORMAT value, PRESERVING SLOT POSITIONS.
+   *
+   * Dropping a '.' slot rather than keeping a placeholder would compact the array and
+   * silently misalign every later index: AO="1,.,4" would become [1,4], so a sample
+   * called for alt2 (index 1) would read alt3's support as its own. That defeats the
+   * indexed lookup in readFrequency, which exists precisely for the multi-allelic case.
+   *
+   * An absent or wholly-'.' value yields an empty array, which is what the
+   * coverage-filled discrimination keys on.
+   */
   private static int[] intsOf(Object raw) {
     String s = asString(raw);
     if (s == null || s.isEmpty() || ".".equals(s)) return new int[0];
-    String[] parts = s.split(",");
-    List<Integer> vals = new ArrayList<>();
-    for (String p : parts) {
-      if (p.isEmpty() || ".".equals(p)) continue;
-      try { vals.add(Integer.valueOf(p.trim())); } catch (NumberFormatException ignored) { }
+
+    String[] parts = s.split(",", -1);
+    int[] out = new int[parts.length];
+    boolean anyValue = false;
+    for (int i = 0; i < parts.length; i++) {
+      String p = parts[i].trim();
+      if (p.isEmpty() || ".".equals(p)) { out[i] = NO_VALUE; continue; }
+      try { out[i] = Integer.parseInt(p); anyValue = true; }
+      catch (NumberFormatException e) { out[i] = NO_VALUE; }
     }
-    int[] out = new int[vals.size()];
-    for (int i = 0; i < out.length; i++) out[i] = vals.get(i);
-    return out;
+    // ".,." carries no information, so report it as absent rather than as slots of
+    // NO_VALUE - the coverage-filled test depends on "no AO data at all".
+    return anyValue ? out : new int[0];
   }
 
   @Override

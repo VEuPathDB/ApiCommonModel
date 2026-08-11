@@ -139,9 +139,13 @@ resolve to several amino acids when the locus sits in a multi-transcript gene.
 
 `fill_missing_coverage_gt` (`processSequenceVariations.jl:2452`) rewrites every missing
 genotype whose position `coverage.tsv` reports as covered: `GT = "0"` (or `0/0` at ploidy
-2), `DP = round(coverage)`, **every other FORMAT field `.`**. `handle_variant_record!:2711`
-passes this modified data to `write_vcf_entry`, so these calls are present in the
-published VCF.
+2), `DP = round(coverage)`, and **every other field of the ORIGINAL FORMAT set `.`** —
+`AD/RO/QR/AO/QA`. `handle_variant_record!:2711` passes this modified data to
+`write_vcf_entry`, so these calls are present in the published VCF.
+
+`CA` and `DFS` are appended by `write_vcf_entry` *after* the fill, so a filled row does
+carry both, and they must NOT be used to detect one. The discrimination keys on `AO`/`RO`
+absence alone.
 
 Two consequences:
 
