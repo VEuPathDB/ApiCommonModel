@@ -898,6 +898,24 @@ The fixture reproduces the real file's under-declared header on purpose."
 - Create: `.../variants/VariantLocusResolver.java`
 - Create: `.../variants/SampleMetadataLookup.java`
 
+> **As-built note (commit `6c0371b`).** Three changes were made during review; the code in
+> git is authoritative over the snippets below.
+> 1. The blanket `catch (SQLException) → return Map.of()` was narrowed to SQLState `42P01`
+>    (`undefined_table`) only, rethrowing everything else as `WdkModelException`. Swallowing
+>    every SQLException meant a connection failure rendered an empty Country column
+>    indistinguishable from a legitimately empty one.
+> 2. The EDA-suffix guard was split: null/blank returns an empty map (an organism with no
+>    dnaseq EDA study is a legitimate state — measured unreachable today, all 62
+>    variant-carrying organisms have one, but it would otherwise break the record page for a
+>    new organism), while non-null-but-malformed still throws.
+> 3. `vcfPath` now validates `WEBSERVICEMIRROR` and `getBuildNumber()` and throws
+>    `WdkModelException`, rather than concatenating a null into the literal path
+>    `build-null`. It therefore declares `throws WdkModelException`.
+>
+> The `42P01` chain walk carries an `IdentityHashMap` visited set, because a cyclic
+> `getNextException()` chain — which real pooled drivers produce — would otherwise recurse
+> until `StackOverflowError`.
+
 No unit test: both are thin wrappers over SQL that cannot run without an appDb. They are
 exercised end-to-end in Task 6. The SQL in both was verified against `genomicsdb_071n` on
 2026-08-11 and returned `Pf3D7_01_v3|100057|Pfalciparum3D7|s3be28bbe14_sample` for
