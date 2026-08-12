@@ -248,21 +248,24 @@ prop=datasetName
 prop=edaStudyStableId
 prop=edaEntityAbbrev
 >templateTextStart<
-UNION
-SELECT genes.string_value AS gene,
-       ag.display_name AS variable,
-       av.string_value,
-       av.number_value,
-       av.date_value,
+-- UNION ALL, not UNION: a measurement is identified by its sample, and two
+-- samples may legitimately record the same intensity for the same gene. Under
+-- UNION those rows collapse into one and the table silently loses data.
+UNION ALL
+SELECT genes.gene AS gene,
+       anc.sample_stable_id AS sample,
+       av.number_value AS value,
        '${datasetName}' AS dataset_id
 FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev} av,
-     eda.attributegraph_${edaStudyStableId}_${edaEntityAbbrev} ag,
-     (SELECT av.${edaEntityAbbrev}_stable_id, MIN(gi.gene) as string_value
+     -- The measurement entity is a child of the sample entity: the value lives
+     -- here, but the identity of what was measured lives one level up.
+     eda.ancestors_${edaStudyStableId}_${edaEntityAbbrev} anc,
+     (SELECT av.${edaEntityAbbrev}_stable_id, MIN(gi.gene) AS gene
       FROM eda.attributevalue_${edaStudyStableId}_${edaEntityAbbrev} av
       JOIN apidbtuning.GeneId gi ON gi.id = av.string_value
       WHERE av.attribute_stable_id = 'VEUPATHDB_GENE_ID'
       GROUP BY av.${edaEntityAbbrev}_stable_id) genes
-WHERE av.attribute_stable_id = ag.stable_id
+WHERE av.attribute_stable_id = 'NORMALIZED_INTENSITY'
   AND av.${edaEntityAbbrev}_stable_id = genes.${edaEntityAbbrev}_stable_id
-  AND av.attribute_stable_id != 'VEUPATHDB_GENE_ID'
+  AND anc.${edaEntityAbbrev}_stable_id = av.${edaEntityAbbrev}_stable_id
 >templateTextEnd<
