@@ -19,6 +19,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::ProteinExpressionMassSpec;
 use ApiCommonModel::Model::JBrowseTrackConfig::SmallNcRnaSeq;
 use ApiCommonModel::Model::JBrowseTrackConfig::ApolloGffTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::VcfTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::VariantTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::SyntenyTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::LongReadRNASeqTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::AntiSmashTrackConfig;
@@ -856,7 +857,7 @@ sub addMergedShortVariants {
   # Not every organism has a merged call set; absence is normal and silent.
   return unless(-e "$webservicesDir/$projectName/build-$buildNumber/$relativePathToVcfFile");
 
-  my $track = ApiCommonModel::Model::JBrowseTrackConfig::VcfTrackConfig->new({
+  my $track = ApiCommonModel::Model::JBrowseTrackConfig::VariantTrackConfig->new({
     project_name          => $projectName,
     build_number          => $buildNumber,
     application_type      => $applicationType,
@@ -865,8 +866,8 @@ sub addMergedShortVariants {
     key                   => "Short variants from all DNA-Seq samples",
     label                 => "${organismAbbrev}_dnaseq_merged_short_variants",
     study_display_name    => "All DNA-Seq samples",
-    # Doubles as the legend: shape and colour are the only channels distinguishing variant
-    # type and effect on screen.
+    # Doubles as the legend: shape and colour - set by VariantTrackConfig, not here - are
+    # the only channels distinguishing variant type and effect on screen.
     summary               => "Single nucleotide variants and short indels called across "
                            . "every DNA-Seq sample for this organism, merged into one "
                            . "annotated call set. Substitutions are drawn as diamonds and "
@@ -877,9 +878,6 @@ sub addMergedShortVariants {
     # unconditionally, and an undef there warns - which, because the service merges this
     # process's stderr into its stdout, would corrupt the JSON response.
     attribution           => "",
-    track_type_display    => "Merged VCF",
-    glyph                 => "{variantGlyphFxn}",
-    color                 => "{variantEffectColorFxn}",
   })->getConfigurationObject();
 
   push @{$result->{tracks}}, $track if($track);

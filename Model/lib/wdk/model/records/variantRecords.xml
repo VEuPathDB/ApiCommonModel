@@ -193,6 +193,55 @@
         <columnAttribute name="ref_allele_frequency"  displayName="Reference Allele Frequency" align="center"/>
       </attributeQueryRef>
 
+      <!-- ===== Genome browser =====
+           Mirrors the Gene record's SnpsGbrowseUrl (geneRecord.xml): the same
+           geneticVariationTracks endpoint and the same
+           <abbrev>_dnaseq_merged_short_variants track, so a variant looks the same
+           whichever page you reach it from.
+
+           VariantGbrowseUrl is a RENDER ANCHOR, not a link. The client's generic
+           RecordAttribute wrapper (componentWrappers.jsx) matches an attribute's name
+           against Gbrowse.contexts and, on a hit, swaps in an iframe built from the
+           two URLs below - so the anchor's own text is never displayed. Adding the
+           attribute here without the matching Gbrowse.contexts entry would render the
+           raw URL as text. -->
+      <attributeQueryRef ref="VariantAttributes.VariantBrowser">
+        <columnAttribute name="organism_abbrev"       internal="true" inReportMaker="false"/>
+        <columnAttribute name="jbrowse_context_start" internal="true" inReportMaker="false"/>
+        <columnAttribute name="jbrowse_context_end"   internal="true" inReportMaker="false"/>
+
+        <!-- The iframe. highlight is the single variant position, so the locus stays
+             obvious inside the 2kb window. -->
+        <!-- NOT internal: an internal attribute is never sent to the client, so the
+             Gbrowse wrapper would read undefined and the iframe would resolve a
+             relative app route. It stays off the page because nothing in
+             individuals.txt references it. -->
+        <textAttribute name="variantJbrowseUrl" displayName="Genome Browser"
+                       inReportMaker="false">
+          <text><![CDATA[/a/jbrowse/index.html?data=@JBROWSE_SERVICE_URL@/geneticVariationTracks/$$organism_abbrev$$&loc=$$sequence_source_id$$:$$jbrowse_context_start$$..$$jbrowse_context_end$$&tracks=gene%2C$$organism_abbrev$$_dnaseq_merged_short_variants&highlight=$$sequence_source_id$$:$$location$$..$$location$$]]></text>
+        </textAttribute>
+
+        <!-- The "view in JBrowse" link above and below the iframe. -->
+        <!-- NOT internal: an internal attribute is never sent to the client, so the
+             Gbrowse wrapper would read undefined and the iframe would resolve a
+             relative app route. It stays off the page because nothing in
+             individuals.txt references it. -->
+        <textAttribute name="variantJbrowseFullUrl" displayName="Genome Browser"
+                       inReportMaker="false">
+          <text><![CDATA[@JBROWSE_WEBPAGE_URL@?loc=$$sequence_source_id$$:$$jbrowse_context_start$$..$$jbrowse_context_end$$&data=@JBROWSE_SERVICE_URL@/tracks/$$organism_abbrev$$&tracks=gene%2C$$organism_abbrev$$_dnaseq_merged_short_variants&highlight=$$sequence_source_id$$:$$location$$..$$location$$]]></text>
+        </textAttribute>
+
+        <textAttribute name="VariantGbrowseUrl" displayName="Short Variants in the Genome Browser"
+                       inReportMaker="false" sortable="false"
+                       help="This variant and its neighbours in the genome browser, 4&#160;kb
+                             either side. Substitutions are drawn as diamonds and indels as
+                             boxes; colour shows the most severe predicted effect: red =
+                             truncation or stop gained, purple = non-synonymous, green =
+                             synonymous, blue = intron or other.">
+          <text><![CDATA[ $$variantJbrowseUrl$$ ]]></text>
+        </textAttribute>
+      </attributeQueryRef>
+
       <textAttribute name="organism" displayName="Organism" inReportMaker="true"
                      help="The biological sample used to sequence this genome">
         <display><![CDATA[ <i>$$organism_text$$</i> ]]></display>
@@ -240,6 +289,14 @@
           </div>
           ]]>
         </text>
+      </textAttribute>
+
+      <!-- Render anchor only. The client's RecordAttributeSection override replaces this
+           attribute with the strain filter; the text is the organism the filter needs. -->
+      <textAttribute name="variant_strain_form"
+                     displayName="Explore Sample Details and Multiple Sequence Alignment Tool"
+                     inReportMaker="false" sortable="false">
+        <text><![CDATA[ $$organism_text$$ ]]></text>
       </textAttribute>
 
       <attributesList
@@ -304,6 +361,64 @@
                                frameshift and reports 'downstream_frameshift'. The two callers
                                disagree at some loci; both are shown rather than one being
                                chosen, because the disagreement is informative."/>
+      </table>
+
+      <!-- One row per strain, read live from the merged VCF. A diploid het stays on ONE
+           row as an IUPAC code rather than splitting into two, which is what the legacy
+           SNP record did. -->
+      <table name="VariantStrains" displayName="Strains / Samples"
+             queryRef="VariantTables.VariantStrains">
+        <columnAttribute name="strain"  displayName="Strain"/>
+        <columnAttribute name="country" displayName="Country"/>
+        <!-- Hidden on the page: once a locus spans several merged VCF records the raw
+             GT is no longer one real VCF genotype (see MergedVcfReader.mergeSample), so
+             it is not meaningful to show, but it is preserved for downloads. -->
+        <columnAttribute name="genotype" displayName="GT" align="center" internal="true" inReportMaker="true"
+                         help="Raw VCF genotype: 0 is the reference allele, 1 the first
+                               alternate. 'No call' means no sequencing coverage here."/>
+        <columnAttribute name="allele" displayName="Allele" align="center"
+                         help="The called allele. A heterozygous call of two single-base
+                               alleles is shown as its IUPAC ambiguity code; anything else
+                               heterozygous is slash-joined. 'No call' means no sequencing
+                               coverage here."/>
+        <columnAttribute name="depth" displayName="Coverage" align="center"
+                         help="Depth of aligned reads at this position for this strain."/>
+        <columnAttribute name="read_frequency" displayName="Read Frequency" align="center"
+                         help="Percentage of reads supporting the called allele. A call
+                               inferred from coverage alone shows 100."/>
+        <columnAttribute name="aa_product" displayName="Amino Acid" align="center"
+                         help="Amino acid(s) this strain's allele produces. More than one
+                               value means the locus sits in a multi-transcript gene; see
+                               Variant Products by Transcript for the per-transcript detail."/>
+      </table>
+
+      <!-- Only samples that HAVE a country appear. Frequencies use each country's own
+           chromosome count as the denominator, so they deliberately differ from the
+           locus-wide figures in the overview panel. -->
+      <table name="VariantCountrySummary" displayName="Country Summary"
+             queryRef="VariantTables.VariantCountrySummary">
+        <columnAttribute name="country" displayName="Country"/>
+        <columnAttribute name="strain_count" displayName="Strains" align="center"
+                         help="Genotyped strains from this country. Strains with no country
+                               recorded are not shown here, so these counts do not sum to the
+                               record's Called Strain Count; the Strains / Samples table above
+                               lists every strain, with an empty Country where none is known."/>
+        <columnAttribute name="major_allele" displayName="Major Allele" align="center"
+                         help="Most frequent allele within this country, with its frequency.
+                               The denominator is this country's own chromosomes, so these
+                               frequencies differ from the locus-wide values in the Overview."/>
+        <columnAttribute name="minor_allele" displayName="Minor Allele" align="center"
+                         help="Second most frequent allele within this country, with its frequency.
+                               Blank when fewer than two distinct alleles were called in this
+                               country, which is common: a country whose strains are all
+                               monomorphic here has no second allele to report."/>
+        <columnAttribute name="other_allele" displayName="Other Allele" align="center"
+                         help="Third most frequent allele within this country, with its frequency.
+                               At a locus with more than three alleles in one country, alleles
+                               beyond the third are not shown, so the frequencies in a row may
+                               sum to less than 1. Blank when fewer than three distinct alleles
+                               were called in this country, which is the usual case: at a
+                               biallelic SNP this column is blank in every row."/>
       </table>
 
     </recordClass>

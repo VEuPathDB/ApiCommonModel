@@ -39,18 +39,10 @@ sub new {
 
     $self->setStore($store);
 
-    # A caller may supply its own glyph, including a "{someFxn}" reference resolved per
-    # feature, so one track can shape SNVs and indels differently. Defaults to the diamond
-    # every existing caller expects.
-    $self->setGlyph($args->{glyph} ? $args->{glyph} : "EbrcTracks/View/FeatureGlyph/Diamond");
-
-    # The historic default names VectorBase because the only caller was VectorBase's
-    # per-sample ebi_VCF tracks. It is shown to users in the track selector, so a caller
-    # serving some other VCF must be able to say what it actually is rather than
-    # mislabel it.
-    $self->setTrackTypeDisplay($args->{track_type_display}
-                                 ? $args->{track_type_display}
-                                 : "VCF from VectorBase");
+    # Per-sample VCFs: one shape, one label. A call set whose positions are Variant records
+    # is a different thing and lives in VariantTrackConfig, which overrides both.
+    $self->setGlyph("EbrcTracks/View/FeatureGlyph/Diamond");
+    $self->setTrackTypeDisplay("VCF from VectorBase");
 
     return $self;
 }
@@ -62,21 +54,11 @@ sub getJBrowseObject{
 
     $jbrowseObject->{urlTemplate}= $self->getStore()->getUrlTemplate();
 
-    # Store-level fetch ceilings, not allocations: when a region needs more than this the
-    # store abandons it rather than rendering. The merged multi-sample call sets are far
-    # larger than the per-sample VCFs these were first sized for. Emitted as numbers
-    # rather than the quoted string this used to send.
-    $jbrowseObject->{chunkSizeLimit} = 50000000;
-    $jbrowseObject->{fetchSizeLimit} = 150000000;
-
-    # This - NOT chunkSizeLimit - is what produces "Too many features to show" when zoomed
-    # out. CanvasFeatures.fillBlock refuses to draw a block whose feature density exceeds
-    # it, and the JBrowse default is 0.5 features/pixel. The merged call set runs about 6.8
-    # variants/kb, so in a ~1000px window a 300kb view is already ~2 features/pixel and a
-    # full 3.3Mb P. falciparum chromosome is ~22 - both far past 0.5. 50 clears a whole
-    # chromosome with roughly 2x headroom. Deliberately not the 9999999 that
-    # RNASeqJunctionTrackConfig uses: that invites drawing 100k+ glyphs at genome scale.
-    $jbrowseObject->{maxFeatureScreenDensity} = 50;
+    # Sized for a single-sample VCF: the original per-sample default, unchanged since
+    # before merged-VCF support existed. A number, not the quoted string this field used
+    # to send. The merged call set needs far more headroom and sets its own ceilings in
+    # VariantTrackConfig.
+    $jbrowseObject->{chunkSizeLimit} = 10000000;
 
     $jbrowseObject->{glyph} = $self->getGlyph();
     return $jbrowseObject;
