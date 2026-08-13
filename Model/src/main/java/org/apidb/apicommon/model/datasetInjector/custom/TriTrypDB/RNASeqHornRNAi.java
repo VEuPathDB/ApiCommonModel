@@ -5,13 +5,14 @@ import org.apidb.apicommon.datasetPresenter.DatasetInjector;
 public class RNASeqHornRNAi extends DatasetInjector {
 
   @Override
-  public void injectTemplates() { }
-  public void TODO_injectTemplates() {
+  public void injectTemplates() {
       setPropValue("datasetClassCategoryIri", "http://edamontology.org/topic_3298");
       setPropValue("includeProjectsExcludeEuPathDB", "TriTrypDB,UniDB");
       setShortAttribution();
       String organismAbbrevDisplay = "T. brucei brucei TREU927"; //getPropValue("organismAbbrevDisplay");
       setPropValue("organismAbbrevDisplay", organismAbbrevDisplay.replace(":", ""));
+
+      setPropValue("cleanDatasetName", getDatasetName().replace('.', '_'));
 
       injectTemplate("datasetCategory");
       injectTemplate("profileSampleAttributesCategory");
