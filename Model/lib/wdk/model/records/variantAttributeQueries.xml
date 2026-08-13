@@ -1,0 +1,210 @@
+<wdkModel>
+
+  <querySet name="VariantAttributes" queryType="attribute" isCacheable="false"
+            includeProjects="AmoebaDB,CryptoDB,FungiDB,MicrosporidiaDB,PiroplasmaDB,PlasmoDB,TriTrypDB,ToxoDB,UniDB">
+
+    <defaultTestParamValues includeProjects="PlasmoDB,UniDB">
+      <paramValue name="source_id">Variant_Pf3D7_01_v3_100057</paramValue>
+      <paramValue name="project_id">PlasmoDB</paramValue>
+    </defaultTestParamValues>
+
+    <defaultTestParamValues includeProjects="TriTrypDB">
+      <paramValue name="source_id">Variant_11L3_v3_26886</paramValue>
+      <paramValue name="project_id">TriTrypDB</paramValue>
+    </defaultTestParamValues>
+
+    <defaultTestParamValues includeProjects="FungiDB">
+      <paramValue name="source_id">Variant_Chr1_A_fumigatus_Af293_1000005</paramValue>
+      <paramValue name="project_id">FungiDB</paramValue>
+    </defaultTestParamValues>
+
+    <testRowCountSql>
+      SELECT count(*) FROM ApidbTuning.VariationAttributes
+    </testRowCountSql>
+
+    <!-- Alias query: no historical ID remapping exists for this new record, so old
+         IDs are simply the current IDs. Mirrors SnpAttributes.SnpAlias. -->
+    <sqlQuery name="VariantAlias" doNotTest="true">
+      <column name="source_id"/>
+      <column name="project_id"/>
+      <column name="old_source_id"/>
+      <column name="old_project_id"/>
+      <sql>
+        <![CDATA[
+          SELECT source_id,
+                 project_id,
+                 source_id  AS old_source_id,
+                 project_id AS old_project_id
+          FROM ApidbTuning.VariationAttributes
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <!-- Derived / aggregated / join-requiring columns. Intrinsic per-locus facts come
+         from apidb.VariationFeature via VariantFeatureBase instead: that table is
+         already one row per locus with a unique source_id, so there is no reason to
+         copy its columns here. -->
+    <sqlQuery name="VariantTuning">
+      <column name="source_id"/>
+      <column name="project_id"/>
+      <column name="sequence_source_id" sortingColumn="chromosome_order_num"/>
+      <column name="location" sortingColumn="location"/>
+      <column name="location_text" sortingColumn="location"/>
+      <column name="chromosome_order_num"/>
+      <column name="organism_text" ignoreCase="true"/>
+      <column name="formatted_organism" sortingColumn="organism_text"/>
+      <column name="ncbi_tax_id"/>
+      <column name="dataset" ignoreCase="true"/>
+      <column name="gene_ids" ignoreCase="true"/>
+      <column name="gene_count"/>
+      <column name="most_severe_impact_snpeff" sortingColumn="most_severe_impact_snpeff_rank"/>
+      <column name="most_severe_impact_product_call" sortingColumn="most_severe_impact_product_call_rank"/>
+      <column name="most_severe_impact_snpeff_rank"/>
+      <column name="most_severe_impact_product_call_rank"/>
+      <column name="effect_summary_snpeff"/>
+      <column name="effect_summary_product_call"/>
+      <column name="collapsed_allele"/>
+      <column name="collapsed_minor_allele_frequency"/>
+      <sql>
+        <![CDATA[
+          SELECT va.source_id, va.project_id,
+                 va.sequence_source_id, va.location, va.location_text,
+                 va.chromosome_order_num,
+                 va.organism AS organism_text,
+                 CONCAT('<i>', SUBSTR(va.organism, 1, 1), '.',
+                        REGEXP_REPLACE(SUBSTR(va.organism, strpos(va.organism, ' ')),
+                                       '[[:space:]]+', CONCAT(chr(38), 'nbsp;')),
+                        '</i>') AS formatted_organism,
+                 va.ncbi_tax_id,
+                 va.dataset
+                 , va.gene_ids, va.gene_count
+                 , va.most_severe_impact_snpeff, va.most_severe_impact_product_call
+                 , va.effect_summary_snpeff, va.effect_summary_product_call
+                 , va.collapsed_allele, va.collapsed_minor_allele_frequency
+                 , CASE va.most_severe_impact_snpeff
+                     WHEN 'HIGH' THEN 4 WHEN 'MODERATE' THEN 3
+                     WHEN 'LOW' THEN 2 WHEN 'MODIFIER' THEN 1 END AS most_severe_impact_snpeff_rank
+                 , CASE va.most_severe_impact_product_call
+                     WHEN 'HIGH' THEN 4 WHEN 'MODERATE' THEN 3
+                     WHEN 'LOW' THEN 2 WHEN 'MODIFIER' THEN 1 END AS most_severe_impact_product_call_rank
+          FROM ApidbTuning.VariationAttributes va
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <!-- Coordinates and identifiers the JBrowse URLs need. Deliberately NOT folded
+         into VariantTuning: that query backs result grids too, and the organism join
+         would be paid on every row of every search to serve two attributes only the
+         record page reads.
+
+         The window is the variant position +/- 4kb. GREATEST clamps the left edge so
+         a variant near the start of a sequence does not ask JBrowse for a negative
+         coordinate. organism_abbrev comes from apidb.organism (pfal3D7, not the
+         scientific name) because that is what both the geneticVariationTracks path
+         and the track name are keyed on. LEFT JOINs so an organism missing from
+         sres.taxonname yields a null abbrev rather than dropping the record. -->
+    <sqlQuery name="VariantBrowser">
+      <column name="source_id"/>
+      <column name="project_id"/>
+      <column name="organism_abbrev"/>
+      <column name="jbrowse_context_start"/>
+      <column name="jbrowse_context_end"/>
+      <sql>
+        <![CDATA[
+          SELECT va.source_id, va.project_id,
+                 o.abbrev                        AS organism_abbrev,
+                 GREATEST(1, va.location - 4000) AS jbrowse_context_start,
+                 va.location + 4000              AS jbrowse_context_end
+          FROM ApidbTuning.VariationAttributes va
+          LEFT JOIN sres.taxonname tn
+                 ON tn.name = va.organism AND tn.name_class = 'scientific name'
+          LEFT JOIN apidb.organism o
+                 ON o.taxon_id = tn.taxon_id
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <!-- Intrinsic per-locus facts, read straight from the base table. It is already
+         one row per locus with a unique source_id, which is what makes the hybrid
+         sourcing rule work. Joined to the tuning table only for project_id. -->
+    <sqlQuery name="VariantFeatureBase">
+      <column name="source_id"/>
+      <column name="project_id"/>
+      <column name="variant_type"/>
+      <column name="is_coding"/>
+      <column name="reference_strain"/>
+      <column name="snp_ref_allele"/>
+      <column name="snp_major_allele"/>
+      <column name="snp_major_allele_frequency"/>
+      <column name="snp_major_allele_strain_count"/>
+      <column name="snp_minor_allele"/>
+      <column name="snp_minor_allele_frequency"/>
+      <column name="snp_minor_allele_strain_count"/>
+      <column name="snp_major_genomic_hgvs"/>
+      <column name="snp_minor_genomic_hgvs"/>
+      <column name="indel_ref_allele"/>
+      <column name="indel_major_allele"/>
+      <column name="indel_major_allele_frequency"/>
+      <column name="indel_major_allele_strain_count"/>
+      <column name="indel_minor_allele"/>
+      <column name="indel_minor_allele_frequency"/>
+      <column name="indel_minor_allele_strain_count"/>
+      <column name="indel_major_genomic_hgvs"/>
+      <column name="indel_minor_genomic_hgvs"/>
+      <column name="snp_major_allele_and_freq"/>
+      <column name="snp_minor_allele_and_freq"/>
+      <column name="indel_major_allele_and_freq"/>
+      <column name="indel_minor_allele_and_freq"/>
+      <column name="indel_frame_effect"/>
+      <column name="distinct_strain_count"/>
+      <column name="called_strain_count"/>
+      <column name="no_call_strain_count"/>
+      <column name="call_rate"/>
+      <column name="total_ploidy_count"/>
+      <column name="het_strain_count"/>
+      <column name="ref_allele_frequency"/>
+      <sql>
+        <![CDATA[
+          SELECT vf.source_id, va.project_id,
+                 vf.variant_type,
+                 CASE vf.is_coding WHEN 1 THEN 'coding' ELSE 'non-coding' END AS is_coding,
+                 vf.reference_strain,
+                 vf.snp_ref_allele, vf.snp_major_allele,
+                 vf.snp_major_allele_frequency, vf.snp_major_allele_strain_count,
+                 vf.snp_minor_allele,
+                 vf.snp_minor_allele_frequency, vf.snp_minor_allele_strain_count,
+                 vf.snp_major_genomic_hgvs, vf.snp_minor_genomic_hgvs,
+                 vf.indel_ref_allele, vf.indel_major_allele,
+                 vf.indel_major_allele_frequency, vf.indel_major_allele_strain_count,
+                 vf.indel_minor_allele,
+                 vf.indel_minor_allele_frequency, vf.indel_minor_allele_strain_count,
+                 vf.indel_major_genomic_hgvs, vf.indel_minor_genomic_hgvs,
+                 vf.indel_frame_effect,
+                 vf.distinct_strain_count, vf.called_strain_count,
+                 vf.no_call_strain_count, vf.call_rate,
+                 vf.total_ploidy_count, vf.het_strain_count,
+                 vf.ref_allele_frequency,
+                 -- "allele (frequency)" assembled here rather than in a textAttribute, whose
+                 -- template would render a bare " ()" for the absent allele class. NULL lets
+                 -- the client drop the row entirely.
+                 CASE WHEN vf.snp_major_allele IS NOT NULL
+                      THEN concat(vf.snp_major_allele, ' (', vf.snp_major_allele_frequency, ')')
+                 END AS snp_major_allele_and_freq,
+                 CASE WHEN vf.snp_minor_allele IS NOT NULL
+                      THEN concat(vf.snp_minor_allele, ' (', vf.snp_minor_allele_frequency, ')')
+                 END AS snp_minor_allele_and_freq,
+                 CASE WHEN vf.indel_major_allele IS NOT NULL
+                      THEN concat(vf.indel_major_allele, ' (', vf.indel_major_allele_frequency, ')')
+                 END AS indel_major_allele_and_freq,
+                 CASE WHEN vf.indel_minor_allele IS NOT NULL
+                      THEN concat(vf.indel_minor_allele, ' (', vf.indel_minor_allele_frequency, ')')
+                 END AS indel_minor_allele_and_freq
+          FROM apidb.VariationFeature vf,
+               ApidbTuning.VariationAttributes va
+          WHERE va.source_id = vf.source_id
+        ]]>
+      </sql>
+    </sqlQuery>
+
+  </querySet>
+</wdkModel>

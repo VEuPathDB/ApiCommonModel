@@ -1,0 +1,384 @@
+:CREATE_AND_POPULATE
+            -- Mirrors the GeneVariationSummary tuningTable in apiTuningManager.xml, which
+            -- carries the gene-record attributes until this file's next workflow run. Any
+            -- edit here MUST be mirrored there. Full design, validation evidence, and the
+            -- biologist-facing help text:
+            -- docs/superpowers/specs/2026-08-07-gene-variation-summary-design.md
+            --
+            -- Replaces six attributes retired from geneRecord.xml (total_hts_snps,
+            -- hts_nonsynonymous_snps, hts_synonymous_snps, hts_noncoding_snps,
+            -- hts_stop_codon_snps, hts_nonsyn_syn_ratio), already commented out on master
+            -- along with the TranscriptAttributes_p psql that fed them. The old
+            -- "synonymous" was a RESIDUAL (total - nonsyn - stop - noncoding), so anything
+            -- the old pipeline failed to classify inflated it; the retired values are not
+            -- a target to reproduce.
+            --
+            -- THIS FILE IS ORG-SPECIFIC. Everything below is scoped to :ORG_ABBREV, so the
+            -- effective ploidy, allele counts, and site fractions are all per-organism -
+            -- which is correct, because they genuinely differ (pfal 1.01, tbru 2.27,
+            -- afum 2.01).
+            --
+            -- THREE THINGS THAT LOOK LIKE STYLE BUT ARE LOAD-BEARING:
+            --
+            -- 1. TWO GRAINS. Display counts are per GENE (unioned across transcripts,
+            --    most-severe-wins). The pi statistics are confined to the REPRESENTATIVE
+            --    longest-CDS transcript, stored as rep_transcript_source_id. piN/piS is
+            --    defined for one CDS; counting variants across all transcripts while
+            --    normalizing by one transcript's site counts would let a variant in a
+            --    transcript-specific exon enter the numerator while that exon's sites
+            --    never enter the denominator.
+            --
+            -- 2. SUPPRESS, NEVER DEGRADE. Frequency-derived statistics accumulate only
+            --    over loci clearing an allele floor (pi >= 4, common >= 20, rare >= 100)
+            --    and are NULL below it, never 0. Sample size is a PER-LOCUS property:
+            --    min(called_strain_count) is 1 in every loaded organism and 35% of pfal
+            --    loci have <100 alleles. At the 2-allele floor (one sample plus a
+            --    reference) MAF can only be 0.5, so pi degenerates to a rescaled variant
+            --    density. Rendering 0.00 there would reproduce the exact defect of the
+            --    retired hts_nonsyn_syn_ratio, which reported 0 for genes with no
+            --    synonymous sites and so displayed maximal signal as minimal. The
+            --    n_loci_* columns publish how many loci contributed.
+            --
+            -- 3. PLOIDY IS DERIVED, NEVER HARDCODED (total_ploidy_count /
+            --    called_strain_count). afum measures 2.01 despite being a HAPLOID fungus
+            --    called as diploid; a hardcoded lookup would encode that calling bug as
+            --    truth, a measured value self-corrects when it is fixed.
+            --
+            -- MAF is a true ALLELE frequency (verified to within 2e-5 against pfal using
+            -- total_ploidy_count as denominator), so 2p(1-p) holds at any ploidy. But
+            -- *_minor_allele_strain_count is a STRAIN count - different units - so
+            -- "singleton" is defined on allele copies, round(maf * total_ploidy_count) = 1.
+            --
+            -- Source is apidb.VariationEffect ALONE: at gene x locus grain
+            -- VariationTranscriptProduct contributes 0 pairs it lacks, so the defensive
+            -- UNION in VariationAttributes is dead code at this grain.
+            --
+            -- Site counts are Nei-Gojobori (1986), derived inline from the genetic code
+            -- rather than hardcoded, so the code table is the single source of truth. The
+            -- pooled synonymous-site fraction in pfal is 17.49%, NOT the textbook ~25% -
+            -- an AT-bias effect worth 1.43x on every gene. Without this normalization the
+            -- median piN/piS is 2.0 (implying genome-wide positive selection); with it,
+            -- 0.512 (the expected purifying-selection signature).
+            --
+            -- COST NOTE: the cds_codons CTE expands every CDS into one row per codon. This
+            -- is the expensive step. Unavoidable for per-gene codon composition.
+            WITH code(codon, aa) AS (VALUES
+              ('TTT','F'),('TTC','F'),('TTA','L'),('TTG','L'),
+              ('CTT','L'),('CTC','L'),('CTA','L'),('CTG','L'),
+              ('ATT','I'),('ATC','I'),('ATA','I'),('ATG','M'),
+              ('GTT','V'),('GTC','V'),('GTA','V'),('GTG','V'),
+              ('TCT','S'),('TCC','S'),('TCA','S'),('TCG','S'),
+              ('CCT','P'),('CCC','P'),('CCA','P'),('CCG','P'),
+              ('ACT','T'),('ACC','T'),('ACA','T'),('ACG','T'),
+              ('GCT','A'),('GCC','A'),('GCA','A'),('GCG','A'),
+              ('TAT','Y'),('TAC','Y'),('TAA','*'),('TAG','*'),
+              ('CAT','H'),('CAC','H'),('CAA','Q'),('CAG','Q'),
+              ('AAT','N'),('AAC','N'),('AAA','K'),('AAG','K'),
+              ('GAT','D'),('GAC','D'),('GAA','E'),('GAG','E'),
+              ('TGT','C'),('TGC','C'),('TGA','*'),('TGG','W'),
+              ('CGT','R'),('CGC','R'),('CGA','R'),('CGG','R'),
+              ('AGT','S'),('AGC','S'),('AGA','R'),('AGG','R'),
+              ('GGT','G'),('GGC','G'),('GGA','G'),('GGG','G')
+            ),
+            -- Nei-Gojobori: per codon position, the fraction of the 3 possible single-base
+            -- changes that are synonymous. Stop codons excluded; a change creating a stop
+            -- is nonsynonymous (falls out, since the amino acid differs). Validated
+            -- against known degeneracy: ATG and TGG give 0 synonymous sites, four-fold
+            -- codons exactly 1.0, two-fold 1/3, TTA 0.667 (via TTA<->CTA), CGA 1.333.
+            nbr AS (
+              SELECT c.codon, c.aa, p.pos, b.base,
+                     overlay(c.codon placing b.base from p.pos for 1) AS mutated
+              FROM code c
+              CROSS JOIN generate_series(1,3) AS p(pos)
+              CROSS JOIN (VALUES ('A'),('C'),('G'),('T')) AS b(base)
+              WHERE c.aa <> '*' AND substr(c.codon, p.pos, 1) <> b.base
+            ),
+            posf AS (
+              SELECT n.codon, n.pos, count(*) FILTER (WHERE m.aa = n.aa)::numeric / 3 AS f
+              FROM nbr n JOIN code m ON m.codon = n.mutated
+              GROUP BY 1,2
+            ),
+            codon_sites AS (
+              SELECT codon, sum(f) AS syn_sites, 3 - sum(f) AS nonsyn_sites
+              FROM posf GROUP BY codon
+            ),
+            rep AS (
+              SELECT DISTINCT ON (gene_source_id)
+                     gene_source_id, organism, taxon_id, chromosome, gene_na_feature_id,
+                     transcript_source_id, na_feature_id AS rep_na_feature_id,
+                     (gene_end_max - gene_start_min + 1) AS gene_length, cds_length
+              FROM :SCHEMA.TranscriptAttributes_p
+              WHERE org_abbrev = ':ORG_ABBREV'
+              ORDER BY gene_source_id, cds_length DESC NULLS LAST, transcript_source_id
+            ),
+            -- LATERAL, not a flat expansion: postgres streams each CDS's codons through
+            -- the aggregate instead of materializing one row per codon. Measured over all
+            -- 63,082 genes: 31s vs 52s flat, identical results, much smaller peak
+            -- footprint. A PL/pgSQL loop would do the same but forces procedural code into
+            -- both this file and the tuningManager mirror; declarative keeps them
+            -- comparable. Do not "optimize" into a flat expansion - that was 40% slower.
+            --
+            -- The length filter guards against out-of-frame CDS rows, which would yield
+            -- garbage codons (477 of 63,765 genome-wide; none in the loaded organisms).
+            gene_sites AS (
+              SELECT r.gene_source_id, s.syn_sites, s.nonsyn_sites
+              FROM rep r
+              JOIN :SCHEMA.CodingSequence_p cs ON cs.source_id = r.transcript_source_id
+              CROSS JOIN LATERAL (
+                SELECT sum(k.syn_sites)    AS syn_sites,
+                       sum(k.nonsyn_sites) AS nonsyn_sites
+                FROM regexp_matches(upper(cs.sequence), '.{3}', 'g') AS m(arr)
+                JOIN codon_sites k ON k.codon = m.arr[1]
+              ) s
+              WHERE cs.org_abbrev = ':ORG_ABBREV'
+                AND length(cs.sequence) % 3 = 0 AND length(cs.sequence) >= 6
+            ),
+            sev AS (
+              SELECT e.source, t.gene_source_id, e.na_feature_id,
+                     e.sequence_source_id, e.location,
+                     CASE e.effect
+                       WHEN 'frameshift_variant'             THEN 1
+                       WHEN 'stop_gained'                    THEN 2
+                       WHEN 'stop_lost'                      THEN 2
+                       WHEN 'start_lost'                     THEN 2
+                       WHEN 'splice_acceptor_variant'        THEN 3
+                       WHEN 'splice_donor_variant'           THEN 3
+                       WHEN 'conservative_inframe_deletion'  THEN 4
+                       WHEN 'disruptive_inframe_deletion'    THEN 4
+                       WHEN 'conservative_inframe_insertion' THEN 4
+                       WHEN 'disruptive_inframe_insertion'   THEN 4
+                       WHEN 'inframe_deletion_unnormalized'  THEN 4
+                       WHEN 'inframe_insertion_unnormalized' THEN 4
+                       WHEN 'missense_variant'               THEN 5
+                       WHEN 'splice_region_variant'          THEN 6
+                       WHEN 'synonymous_variant'             THEN 7
+                       WHEN 'stop_retained_variant'          THEN 7
+                       WHEN 'start_retained_variant'         THEN 7
+                       WHEN '5_prime_UTR_variant'            THEN 8
+                       WHEN '3_prime_UTR_variant'            THEN 8
+                       WHEN '5_prime_UTR_premature_start_codon_gain_variant' THEN 8
+                       WHEN 'non_coding_transcript_exon_variant' THEN 9
+                       WHEN 'non_coding_transcript_variant'  THEN 9
+                       WHEN 'intron_variant'                 THEN 10
+                       ELSE 11
+                     END AS sev,
+                     CASE e.impact WHEN 'HIGH' THEN 4 WHEN 'MODERATE' THEN 3
+                                   WHEN 'LOW' THEN 2 WHEN 'MODIFIER' THEN 1 END AS imp
+              FROM apidb.VariationEffect e
+              JOIN :SCHEMA.TranscriptAttributes_p t ON t.na_feature_id = e.na_feature_id
+              WHERE t.org_abbrev = ':ORG_ABBREV'
+            ),
+            vf AS (
+              SELECT sequence_source_id, location, variant_type, is_coding, call_rate,
+                     called_strain_count, het_strain_count, indel_frame_effect,
+                     total_ploidy_count AS n_alleles,
+                     nullif(greatest(coalesce(snp_minor_allele_frequency,0),
+                                     coalesce(indel_minor_allele_frequency,0)),0) AS maf
+              FROM apidb.VariationFeature
+            ),
+            gene_locus AS (
+              SELECT source, gene_source_id, sequence_source_id, location,
+                     min(sev) AS sev, max(imp) AS imp
+              FROM sev GROUP BY 1,2,3,4
+            ),
+            gl AS (
+              SELECT g.*, v.variant_type, v.is_coding, v.call_rate, v.called_strain_count,
+                     v.het_strain_count, v.indel_frame_effect, v.n_alleles, v.maf,
+                     round(v.maf * v.n_alleles) AS minor_copies
+              FROM gene_locus g JOIN vf v
+                ON v.sequence_source_id = g.sequence_source_id AND v.location = g.location
+            ),
+            snp_agg AS (
+              SELECT gene_source_id,
+                count(*) AS total_variants,
+                count(*) FILTER (WHERE is_coding=1)          AS n_coding_loci,
+                count(*) FILTER (WHERE variant_type='SNV')   AS n_snv,
+                count(*) FILTER (WHERE variant_type='INDEL') AS n_indel,
+                count(*) FILTER (WHERE variant_type='MIXED') AS n_mixed,
+                count(*) FILTER (WHERE sev=1)  AS n_frameshift,
+                count(*) FILTER (WHERE sev=2)  AS n_nonsense,
+                count(*) FILTER (WHERE sev=3)  AS n_splice_disruptive,
+                count(*) FILTER (WHERE sev=4)  AS n_inframe_indel,
+                count(*) FILTER (WHERE sev=5)  AS n_missense,
+                count(*) FILTER (WHERE sev=6)  AS n_splice_region,
+                count(*) FILTER (WHERE sev=7)  AS n_synonymous,
+                count(*) FILTER (WHERE sev=8)  AS n_utr,
+                count(*) FILTER (WHERE sev=9)  AS n_noncoding_exon,
+                count(*) FILTER (WHERE sev=10) AS n_intron,
+                count(*) FILTER (WHERE sev=11) AS n_other,
+                count(*) FILTER (WHERE sev<=3) AS n_lof,
+                count(*) FILTER (WHERE indel_frame_effect='frameshift') AS n_indel_frameshift,
+                count(*) FILTER (WHERE imp=4) AS n_impact_high,
+                count(*) FILTER (WHERE imp=3) AS n_impact_moderate,
+                count(*) FILTER (WHERE imp=2) AS n_impact_low,
+                count(*) FILTER (WHERE imp=1) AS n_impact_modifier,
+                CASE max(imp) WHEN 4 THEN 'HIGH' WHEN 3 THEN 'MODERATE'
+                              WHEN 2 THEN 'LOW'  WHEN 1 THEN 'MODIFIER' END AS most_severe_impact,
+                max(called_strain_count) AS max_called_strain_count,
+                round(percentile_cont(0.5) WITHIN GROUP (ORDER BY called_strain_count)::numeric,0)
+                  AS median_called_strain_count,
+                max(n_alleles) AS max_alleles,
+                round(avg(n_alleles/nullif(called_strain_count,0))::numeric,2) AS effective_ploidy,
+                round(avg(call_rate)::numeric,3) AS avg_call_rate,
+                round(min(call_rate)::numeric,3) AS min_call_rate,
+                count(*) FILTER (WHERE call_rate < 0.5)      AS n_low_call_rate,
+                count(*) FILTER (WHERE het_strain_count > 0) AS n_het_loci,
+                count(*) FILTER (WHERE n_alleles >= 4)       AS n_loci_pi,
+                count(*) FILTER (WHERE n_alleles >= 20)      AS n_loci_freq20,
+                count(*) FILTER (WHERE n_alleles >= 100)     AS n_loci_freq100,
+                count(*) FILTER (WHERE n_alleles >= 20 AND maf > 0.05) AS n_common_raw,
+                count(*) FILTER (WHERE n_alleles >= 20 AND maf > 0.20) AS n_very_common_raw,
+                count(*) FILTER (WHERE n_alleles >= 20 AND maf > 0.05 AND sev=5)  AS n_missense_common_raw,
+                count(*) FILTER (WHERE n_alleles >= 20 AND maf > 0.05 AND sev=7)  AS n_synonymous_common_raw,
+                count(*) FILTER (WHERE n_alleles >= 20 AND maf > 0.05 AND sev<=3) AS n_lof_common_raw,
+                max(maf) FILTER (WHERE n_alleles >= 20) AS max_maf_raw,
+                count(*) FILTER (WHERE n_alleles >= 100 AND maf <= 0.01)      AS n_rare_raw,
+                count(*) FILTER (WHERE n_alleles >= 100 AND minor_copies = 1) AS n_singleton_raw
+              FROM gl WHERE source='snpeff' GROUP BY 1
+            ),
+            pc_agg AS (
+              SELECT gene_source_id,
+                count(*)                       AS pc_total_coding_variants,
+                count(*) FILTER (WHERE sev=5)  AS pc_n_missense,
+                count(*) FILTER (WHERE sev=7)  AS pc_n_synonymous,
+                count(*) FILTER (WHERE sev<=3) AS pc_n_lof,
+                count(*) FILTER (WHERE sev=11) AS pc_n_unclassified,
+                count(*) FILTER (WHERE n_alleles >= 20 AND maf > 0.05 AND sev=5)  AS pc_n_missense_common_raw,
+                count(*) FILTER (WHERE n_alleles >= 20 AND maf > 0.05 AND sev<=3) AS pc_n_lof_common_raw
+              FROM gl WHERE source='product_call' GROUP BY 1
+            ),
+            tx_locus AS (
+              SELECT s.source, r.gene_source_id, s.sequence_source_id, s.location,
+                     min(s.sev) AS sev
+              FROM sev s JOIN rep r ON r.rep_na_feature_id = s.na_feature_id
+              GROUP BY 1,2,3,4
+            ),
+            -- unbiased heterozygosity: (n/(n-1)) * 2p(1-p). ~0.4% at pfal's 236 alleles,
+            -- ~9% at tbru's 12, 100% at the 2-allele floor - which is why the >= 4 filter
+            -- exists rather than trusting the estimator.
+            tx_pi AS (
+              SELECT t.source, t.gene_source_id,
+                     sum(CASE WHEN t.sev=5 THEN (v.n_alleles/(v.n_alleles-1))*2*v.maf*(1-v.maf) END) AS pi_sum_nonsyn,
+                     sum(CASE WHEN t.sev=7 THEN (v.n_alleles/(v.n_alleles-1))*2*v.maf*(1-v.maf) END) AS pi_sum_syn,
+                     sum((v.n_alleles/(v.n_alleles-1))*2*v.maf*(1-v.maf))                            AS pi_sum_all,
+                     count(*) FILTER (WHERE t.sev=5) AS tx_n_missense,
+                     count(*) FILTER (WHERE t.sev=7) AS tx_n_synonymous,
+                     count(*)                        AS tx_n_loci_pi
+              FROM tx_locus t JOIN vf v
+                ON v.sequence_source_id = t.sequence_source_id AND v.location = t.location
+              WHERE v.n_alleles >= 4 AND v.maf IS NOT NULL
+              GROUP BY 1,2
+            )
+            SELECT ':PROJECT_ID' as project_id
+              , ':ORG_ABBREV' as org_abbrev
+              , current_timestamp as modification_date
+              , r.organism
+              , r.taxon_id
+              , r.gene_source_id
+              , r.gene_na_feature_id
+              , r.chromosome
+              , r.gene_length
+              , r.cds_length
+              , r.transcript_source_id AS rep_transcript_source_id
+              , gs.syn_sites
+              , gs.nonsyn_sites
+              , round((gs.syn_sites/nullif(gs.syn_sites+gs.nonsyn_sites,0))::numeric,4) AS syn_site_fraction
+              , a.max_called_strain_count
+              , a.median_called_strain_count
+              , a.max_alleles
+              , a.effective_ploidy
+              , a.avg_call_rate
+              , a.min_call_rate
+              , a.n_low_call_rate
+              , a.n_het_loci
+              , round((a.n_het_loci::numeric/nullif(a.total_variants,0)),3) AS prop_het_loci
+              , a.n_loci_pi
+              , a.n_loci_freq20
+              , a.n_loci_freq100
+              , a.total_variants
+              , a.n_coding_loci
+              , a.n_snv
+              , a.n_indel
+              , a.n_mixed
+              , round((1000.0*a.total_variants/nullif(r.gene_length,0)),2) AS variants_per_kb
+              , a.n_frameshift
+              , a.n_nonsense
+              , a.n_splice_disruptive
+              , a.n_inframe_indel
+              , a.n_missense
+              , a.n_splice_region
+              , a.n_synonymous
+              , a.n_utr
+              , a.n_noncoding_exon
+              , a.n_intron
+              , a.n_other
+              , a.n_lof
+              , a.n_indel_frameshift
+              , a.n_impact_high
+              , a.n_impact_moderate
+              , a.n_impact_low
+              , a.n_impact_modifier
+              , a.most_severe_impact
+              , p.pc_total_coding_variants
+              , p.pc_n_missense
+              , p.pc_n_synonymous
+              , p.pc_n_lof
+              , p.pc_n_unclassified
+              -- frequency bins: NULL, not 0, when no locus cleared the floor
+              , CASE WHEN a.n_loci_freq20  > 0 THEN a.n_common_raw            END AS n_common
+              , CASE WHEN a.n_loci_freq20  > 0 THEN a.n_very_common_raw       END AS n_very_common
+              , CASE WHEN a.n_loci_freq20  > 0 THEN a.n_missense_common_raw   END AS n_missense_common
+              , CASE WHEN a.n_loci_freq20  > 0 THEN a.n_synonymous_common_raw END AS n_synonymous_common
+              , CASE WHEN a.n_loci_freq20  > 0 THEN a.n_lof_common_raw        END AS n_lof_common
+              , CASE WHEN a.n_loci_freq20  > 0 THEN p.pc_n_missense_common_raw END AS pc_n_missense_common
+              , CASE WHEN a.n_loci_freq20  > 0 THEN p.pc_n_lof_common_raw      END AS pc_n_lof_common
+              , CASE WHEN a.n_loci_freq20  > 0 THEN round(a.max_maf_raw::numeric,4) END AS max_minor_allele_frequency
+              , CASE WHEN a.n_loci_freq100 > 0 THEN a.n_rare_raw      END AS n_rare
+              , CASE WHEN a.n_loci_freq100 > 0 THEN a.n_singleton_raw END AS n_singleton
+              -- count ratios: a denominator under 5 synonymous loci is noise. NOT a
+              -- selection statistic - pfal's median count ratio is 2.22 while its median
+              -- site-normalized piN/piS is 0.512. Label as a raw count ratio on the page.
+              , CASE WHEN a.n_synonymous >= 5
+                     THEN round((a.n_missense::numeric/a.n_synonymous),2) END AS nonsyn_syn_ratio_snpeff
+              , CASE WHEN p.pc_n_synonymous >= 5
+                     THEN round((p.pc_n_missense::numeric/p.pc_n_synonymous),2) END AS nonsyn_syn_ratio_product_call
+              , round((se.pi_sum_nonsyn/nullif(gs.nonsyn_sites,0))::numeric,6) AS pi_nonsyn_snpeff
+              , round((se.pi_sum_syn   /nullif(gs.syn_sites,0))::numeric,6)    AS pi_syn_snpeff
+              -- GUARDED twin: for sorting/searching/filtering, where a gene with 2
+              -- synonymous sites would otherwise dominate a descending sort.
+              , CASE WHEN se.tx_n_synonymous >= 5 THEN
+                  round(((se.pi_sum_nonsyn/nullif(gs.nonsyn_sites,0))
+                        /nullif(se.pi_sum_syn/nullif(gs.syn_sites,0),0))::numeric,3) END AS pi_n_pi_s_snpeff
+              -- UNGATED twin: for DISPLAY next to tx_n_synonymous_snpeff, so the reader can
+              -- discount a thin denominator ("10.32, from 4 synonymous sites"). The guard
+              -- blanks 57.5% of pfal genes including the most-searched ones, because
+              -- strongly selected genes accumulate few SYNONYMOUS variants: AMA1 (4 sites),
+              -- PfCRT (2), Kelch13 (3) all suppress while MSP1 (28) survives, and a blank
+              -- reads as "no data". Cannot be replaced by the model dividing pi_nonsyn by
+              -- pi_syn - those are stored rounded to 6 decimals against a pi of ~1e-3, so a
+              -- reconstructed ratio drifts up to 0.048 (9% of genes differ), and two code
+              -- paths must not yield two different numbers for the same statistic.
+              , round(((se.pi_sum_nonsyn/nullif(gs.nonsyn_sites,0))
+                      /nullif(se.pi_sum_syn/nullif(gs.syn_sites,0),0))::numeric,3) AS pi_n_pi_s_snpeff_ungated
+              , round((pp.pi_sum_nonsyn/nullif(gs.nonsyn_sites,0))::numeric,6) AS pi_nonsyn_product_call
+              , round((pp.pi_sum_syn   /nullif(gs.syn_sites,0))::numeric,6)    AS pi_syn_product_call
+              , CASE WHEN pp.tx_n_synonymous >= 5 THEN
+                  round(((pp.pi_sum_nonsyn/nullif(gs.nonsyn_sites,0))
+                        /nullif(pp.pi_sum_syn/nullif(gs.syn_sites,0),0))::numeric,3) END AS pi_n_pi_s_product_call
+              , round(((pp.pi_sum_nonsyn/nullif(gs.nonsyn_sites,0))
+                      /nullif(pp.pi_sum_syn/nullif(gs.syn_sites,0),0))::numeric,3) AS pi_n_pi_s_product_call_ungated
+              , round((se.pi_sum_all/nullif(gs.syn_sites+gs.nonsyn_sites,0))::numeric,6) AS pi_per_site_cds
+              , se.tx_n_missense   AS tx_n_missense_snpeff
+              , se.tx_n_synonymous AS tx_n_synonymous_snpeff
+              , se.tx_n_loci_pi    AS tx_n_loci_pi_snpeff
+              , pp.tx_n_missense   AS tx_n_missense_product_call
+              , pp.tx_n_synonymous AS tx_n_synonymous_product_call
+            FROM rep r
+            JOIN snp_agg a ON a.gene_source_id = r.gene_source_id
+            LEFT JOIN pc_agg p ON p.gene_source_id = r.gene_source_id
+            LEFT JOIN gene_sites gs ON gs.gene_source_id = r.gene_source_id
+            LEFT JOIN tx_pi se ON se.gene_source_id = r.gene_source_id AND se.source = 'snpeff'
+            LEFT JOIN tx_pi pp ON pp.gene_source_id = r.gene_source_id AND pp.source = 'product_call';
+
+
+:DECLARE_PARTITION;

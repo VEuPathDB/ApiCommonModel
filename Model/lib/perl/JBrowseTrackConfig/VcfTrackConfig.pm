@@ -38,6 +38,9 @@ sub new {
     }
 
     $self->setStore($store);
+
+    # Per-sample VCFs: one shape, one label. A call set whose positions are Variant records
+    # is a different thing and lives in VariantTrackConfig, which overrides both.
     $self->setGlyph("EbrcTracks/View/FeatureGlyph/Diamond");
     $self->setTrackTypeDisplay("VCF from VectorBase");
 
@@ -50,7 +53,13 @@ sub getJBrowseObject{
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
     $jbrowseObject->{urlTemplate}= $self->getStore()->getUrlTemplate();
-    $jbrowseObject->{chunkSizeLimit} = '10000000';
+
+    # Sized for a single-sample VCF: the original per-sample default, unchanged since
+    # before merged-VCF support existed. A number, not the quoted string this field used
+    # to send. The merged call set needs far more headroom and sets its own ceilings in
+    # VariantTrackConfig.
+    $jbrowseObject->{chunkSizeLimit} = 10000000;
+
     $jbrowseObject->{glyph} = $self->getGlyph();
     return $jbrowseObject;
 }

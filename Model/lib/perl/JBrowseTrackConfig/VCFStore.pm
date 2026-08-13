@@ -11,9 +11,6 @@ sub setUrlTemplate {
 }
 
 
-sub getChunkSizeLimit  {$_[0]->{chunk_size_limit} }
-sub setChunkSizeLimit {$_[0]->{chunk_size_limit} = $_[1]}
-
 sub new {
     my ($class, $args) = @_;
     my $self = $class->SUPER::new($args);
@@ -21,7 +18,9 @@ sub new {
     #$self->setUrlTemplate($args->{url_template});
     #$self->setType("JBrowse/View/Track/CanvasVariants");
 
-    $self->setChunkSizeLimit(10000000);
+    # NOTE: chunkSizeLimit is not set here. It is emitted by VcfTrackConfig, which is what
+    # actually reaches the track config; this class used to set a chunk_size_limit that
+    # nothing ever read, so raising it here looked effective and did nothing.
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
         $self->setStoreType("JBrowse/Store/SeqFeature/VCFTabix");

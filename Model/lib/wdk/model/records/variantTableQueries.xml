@@ -1,0 +1,111 @@
+<wdkModel>
+
+  <querySet name="VariantTables" queryType="table" isCacheable="false"
+            includeProjects="AmoebaDB,CryptoDB,FungiDB,MicrosporidiaDB,PiroplasmaDB,PlasmoDB,TriTrypDB,ToxoDB,UniDB">
+
+    <defaultTestParamValues includeProjects="PlasmoDB,UniDB">
+      <paramValue name="source_id">Variant_Pf3D7_01_v3_100057</paramValue>
+      <paramValue name="project_id">PlasmoDB</paramValue>
+    </defaultTestParamValues>
+
+    <defaultTestParamValues includeProjects="TriTrypDB">
+      <paramValue name="source_id">Variant_11L3_v3_26886</paramValue>
+      <paramValue name="project_id">TriTrypDB</paramValue>
+    </defaultTestParamValues>
+
+    <defaultTestParamValues includeProjects="FungiDB">
+      <paramValue name="source_id">Variant_Chr1_A_fumigatus_Af293_1000005</paramValue>
+      <paramValue name="project_id">FungiDB</paramValue>
+    </defaultTestParamValues>
+
+    <sqlQuery name="TranscriptProducts">
+      <column name="source_id"/>
+      <column name="project_id"/>
+      <column name="gene_source_id"/>
+      <column name="transcript_source_id"/>
+      <column name="gene_product"/>
+      <column name="strand"/>
+      <column name="pos_in_cds"/>
+      <column name="pos_in_protein"/>
+      <column name="codon"/>
+      <column name="pos_in_codon"/>
+      <column name="product"/>
+      <column name="matches_ref_codon"/>
+      <column name="matches_ref_product"/>
+      <column name="strain_count"/>
+      <column name="hgvs_p"/>
+      <sql>
+        <![CDATA[
+          SELECT va.source_id, va.project_id,
+                 t.gene_source_id, t.transcript_source_id, t.gene_product, t.strand,
+                 p.pos_in_cds, p.pos_in_protein, p.codon, p.pos_in_codon, p.product,
+                 CASE p.matches_ref_codon   WHEN 1 THEN 'yes' ELSE 'no' END AS matches_ref_codon,
+                 CASE p.matches_ref_product WHEN 1 THEN 'yes' ELSE 'no' END AS matches_ref_product,
+                 p.strain_count, p.hgvs_p
+          FROM apidb.VariationTranscriptProduct p,
+               ApidbTuning.VariationAttributes va,
+               ApidbTuning.TranscriptAttributes t
+          WHERE va.sequence_source_id = p.sequence_source_id
+            AND va.location          = p.location
+            AND t.na_feature_id      = p.na_feature_id
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <sqlQuery name="PredictedEffects">
+      <column name="source_id"/>
+      <column name="project_id"/>
+      <column name="allele"/>
+      <column name="gene_source_id"/>
+      <column name="transcript_source_id"/>
+      <column name="impact"/>
+      <column name="effect"/>
+      <column name="hgvs_c"/>
+      <column name="source"/>
+      <sql>
+        <![CDATA[
+          SELECT va.source_id, va.project_id,
+                 e.allele,
+                 t.gene_source_id, t.transcript_source_id,
+                 e.impact, e.effect, e.hgvs_c, e.source
+          FROM apidb.VariationEffect e
+          JOIN ApidbTuning.VariationAttributes va
+            ON va.sequence_source_id = e.sequence_source_id
+           AND va.location          = e.location
+          LEFT JOIN ApidbTuning.TranscriptAttributes t
+            ON t.na_feature_id = e.na_feature_id
+        ]]>
+      </sql>
+    </sqlQuery>
+
+    <!-- Read straight from the dnaseq pipeline's merged annotated VCF at request time.
+         Record-page table queries run UNCACHED (SingleRecordAnswerValue routes them to
+         TableFieldProcessQueryResult.getUncachedResults), so this costs one tabix seek
+         per page view and persists nothing. -->
+    <processQuery name="VariantStrains"
+                  processName="org.apidb.apicomplexa.wsfplugin.variants.VariantStrainsPlugin">
+      <wsColumn name="source_id"      width="255"/>
+      <wsColumn name="project_id"     width="255"/>
+      <wsColumn name="strain"         width="255"/>
+      <wsColumn name="country"        width="255"/>
+      <wsColumn name="genotype"       width="60"/>
+      <wsColumn name="allele"         width="255"/>
+      <wsColumn name="depth"          width="30"/>
+      <wsColumn name="read_frequency" width="30"/>
+      <wsColumn name="aa_product"     width="255"/>
+    </processQuery>
+
+    <!-- Same uncached-per-page-view read as VariantStrains above, aggregated by country. -->
+    <processQuery name="VariantCountrySummary"
+                  processName="org.apidb.apicomplexa.wsfplugin.variants.VariantCountrySummaryPlugin">
+      <wsColumn name="source_id"    width="255"/>
+      <wsColumn name="project_id"   width="255"/>
+      <wsColumn name="country"      width="255"/>
+      <wsColumn name="strain_count" width="30"/>
+      <wsColumn name="major_allele" width="255"/>
+      <wsColumn name="minor_allele" width="255"/>
+      <wsColumn name="other_allele" width="255"/>
+    </processQuery>
+
+  </querySet>
+</wdkModel>
