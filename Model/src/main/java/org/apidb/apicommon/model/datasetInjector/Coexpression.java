@@ -30,6 +30,11 @@ public class Coexpression extends  DatasetInjector {
       setPropValue("questionName", "GeneQuestions.GenesByCoexpression" + getDatasetName());
       injectTemplate("internalGeneSearchCategory");
 
+      // apidb.genecoexpression rows are keyed by external_database_release_id, resolved
+      // by joining sres.externaldatabaserelease/externaldatabase on name; the loading
+      // workflow names that row by taking this dataset's own name, dropping "_array_",
+      // and inserting "_geneCoexpression" before the trailing "_RSRC".
+      setPropValue("dataSource", getDatasetName().replace("_array_", "_").replaceFirst("_RSRC$", "_geneCoexpression_RSRC"));
 
       injectTemplate("coexpressionQuestion");
       injectTemplate("coexpressionSourceQuery");
@@ -46,8 +51,7 @@ public class Coexpression extends  DatasetInjector {
 
   @Override
   public String[][] getPropertiesDeclaration() {
-    String [][] propertiesDeclaration = { {"dataSource", "data source in the coexpression table"},
-                                          {"exampleGeneIds", "Gene Ids provided as default on coexpression Q page"},
+    String [][] propertiesDeclaration = { {"exampleGeneIds", "Gene Ids provided as default on coexpression Q page"},
                                           {"defaultCoefficient", "Default value of Spearman Coefficient on Q page"},
     };
 
