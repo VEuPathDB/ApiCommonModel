@@ -639,6 +639,45 @@
     </sqlQuery>
 
 
+    <!-- withVariantsTree, narrowed to organisms whose genome is annotated. For a search
+         that RETURNS genes or transcripts rather than variants: having dnaseq isolates and
+         having an annotated genome are independent facts, and a gene search over an
+         unannotated genome has nothing to return.
+
+         The two lists are identical on genomicsdb_071n - all 62 organisms with an
+         isolates/Dna_Seq datasource are is_annotated_genome = 1 - so this changes no
+         behaviour today. That is the point: it states the precondition the gene searches
+         actually depend on, instead of inheriting one that happens to coincide, so loading
+         dnaseq for an unannotated genome cannot silently break them later.
+
+         Any default paired with this vocabulary (primaryVariantOrganism, apiCommonModel.xml)
+         must be a term of BOTH this query and withVariantsTree. -->
+    <sqlQuery name="withVariantsGenesTree">
+      <column name="internal"/>
+      <column name="term"/>
+      <column name="parentTerm"/>
+      <sql>
+        <![CDATA[
+          WITH FilterQuery AS (
+            SELECT DISTINCT tn.name AS organism
+            FROM apidb.datasource ds
+            JOIN apidb.organism o  ON o.taxon_id = ds.taxon_id
+            JOIN sres.taxonname tn ON tn.taxon_id = o.taxon_id
+                                  AND tn.name_class = 'scientific name'
+            WHERE ds.type = 'isolates' AND ds.subtype = 'Dna_Seq'
+              AND o.is_annotated_genome = 1
+          )
+          SELECT DISTINCT ot.term, ot.parentterm,
+                 CASE WHEN ot.term = ot.organism THEN ot.term ELSE '-1' END AS internal
+          FROM apidbtuning.organismtree ot
+          JOIN FilterQuery fq ON fq.organism = ot.organism
+          WHERE (ot.project_id = '@PROJECT_ID@' OR 'UniDB' = '@PROJECT_ID@')
+          ORDER BY ot.parentterm, ot.term
+        ]]>
+      </sql>
+    </sqlQuery>
+
+
     <!--===================================-->
     <!-- with a GeneVariationSummary row   -->
     <!--===================================-->
