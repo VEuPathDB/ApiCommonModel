@@ -238,7 +238,69 @@ Branches: `feat/variant-colocation` in both repos, edited **in place** in
 `~/workspaces/plasmodb`. A git worktree is not carried by mutagen, so builds would verify
 stale code.
 
-## 6. Risk flagged, not solved
+## 6. For the reviewer: four Oracle-isms, and one decision that needs a second opinion
+
+§2 claimed the Oracle→Postgres damage was two lines. **That was wrong.** Live QA found two
+more, both in code paths shared by *every* colocation regardless of record type. The
+corrected picture:
+
+| # | Construct | Where | Scope of breakage | Found by |
+|---|---|---|---|---|
+| 1 | `rownum` | `getStandardSpanSql` | non-gene inputs | reading the code |
+| 2 | `DECODE` | DynSpan branch | genomic segments | reading the code |
+| 3 | `regexp_substr` yields **text**, and `makeRegion` does arithmetic on it | DynSpan coordinates | genomic segments | code review |
+| 4 | `FROM (table_name) alias` | `composeSql` | **all colocation** | live QA |
+| 5 | `getDefaultSchema()` create/drop mismatch | `execute` cleanup | **all colocation** | live QA |
+
+So genomic colocation has been **entirely non-functional since the Postgres migration** —
+not "gene ↔ gene only", as this document originally asserted and as the superseded draft
+claimed in its §7. Nobody has reported it. Treat any remaining "it worked before" intuition
+about this plugin with suspicion.
+
+Note the pattern for reviewers: #1 and #2 were found by reading, #3 by review, and #4 and #5
+only by running the thing. Unit tests asserting on generated SQL fragments passed throughout
+— they never composed the final join, and never executed anything.
+
+### The decision that needs a second opinion: which schema owns the temp tables
+
+`getSpanSql` issues an **unqualified** `CREATE TABLE spanlogic<n>`. The cleanup previously
+dropped via `wdkModel.getAppDb().getDefaultSchema()`. Those two agree on Oracle and diverge
+on PostgreSQL:
+
+```java
+Oracle.getDefaultSchema(login)     → normalizeSchema(login)     // the login user's schema
+PostgreSQL.getDefaultSchema(login) → normalizeSchema("public")  // hardcoded
+```
+
+An unqualified `CREATE` follows `search_path`, which on our instances is `"$user"`. So the
+tables were created in the login schema and the drop looked in `public`, raising
+`table "spanlogic<n>" does not exist` **after** the results had been computed. A working
+colocation surfaced to the user as an error, and leaked one table per run — 38 were found
+in `genomicsdb_071n`.
+
+**What this change does:** passes `null` as the schema, so `dropTable` emits a bare table
+name that resolves exactly the way the `CREATE` did, on either platform.
+
+**The alternatives, and why they were not chosen:**
+
+- *Qualify the `CREATE` with `getDefaultSchema()` instead*, sending the tables to `public`.
+  Rejected: since PostgreSQL 15 the `PUBLIC` role no longer holds `CREATE` on `public` by
+  default, so this may simply fail with a permission error on some deployments — and it
+  puts per-request scratch tables in a shared schema. It was also not testable here without
+  writing outside the developer's own schema.
+- *Fix `PostgreSQL.getDefaultSchema` in FgpUtil to return the login schema.* Arguably the
+  real defect — the two platforms' implementations do not mean the same thing, and callers
+  cannot tell. Rejected as out of scope: that method is used across WDK, and `public` may
+  well be the intended answer for its other callers. **If the reviewer prefers this, it
+  should be its own change with its own audit of call sites.**
+
+**What a reviewer should decide:** whether `null` is the right long-term answer or merely
+the safe local one, and whether the FgpUtil asymmetry deserves a follow-up ticket. The
+scratch tables are a per-request implementation detail, so "wherever the login can write"
+is defensible — but it does mean the plugin no longer states, anywhere, which schema it
+writes to. That is the trade being made.
+
+## 7. Risk flagged, not solved
 
 `RecordsBySpanLogic` declares `wsColumn project_id` unconditionally
 (`spanQueries.xml:322`), while `VariantRecordClass`'s primary key excludes `project_id` on
