@@ -248,7 +248,7 @@ corrected picture:
 |---|---|---|---|---|
 | 1 | `rownum` | `getStandardSpanSql` | non-gene inputs | reading the code |
 | 2 | `DECODE` | DynSpan branch | genomic segments | reading the code |
-| 3 | `regexp_substr` yields **text**, and `makeRegion` does arithmetic on it | DynSpan coordinates | genomic segments | code review |
+| 3 | `regexp_substr` yields **text**, and `getStartStop` does arithmetic on it | DynSpan coordinates | genomic segments | code review |
 | 4 | `FROM (table_name) alias` | `composeSql` | **all colocation** | live QA |
 | 5 | `getDefaultSchema()` create/drop mismatch | `execute` cleanup | **all colocation** | live QA |
 

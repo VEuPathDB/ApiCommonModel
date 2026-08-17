@@ -33,7 +33,7 @@ Ignore `bind [127.0.0.1]:NNNN: Address already in use` lines in ssh output — t
 
 ## Two invariants you must not break
 
-1. **Every `SpanSource` must alias its location table `fl`.** `makeRegion` hardcodes `String table = "fl."` (`SpanCompositionPlugin.java:329`) when building the `region[]` expressions that every builder interpolates. An alias other than `fl` produces SQL that references a table that isn't there.
+1. **Every `SpanSource` must alias its location table `fl`.** `getStartStop` hardcodes `String table = "fl."` (`SpanCompositionPlugin.java:351`) when building the `region[]` expressions that every builder interpolates. An alias other than `fl` produces SQL that references a table that isn't there.
 2. **`is_top_level = 1` must stay on the Transcript source.** 2,503 rows in `apidb.FeatureLocation` have `is_top_level = 0`; they are human pseudoautosomal-region genes carrying duplicate chrX/chrY placements. Removing the filter double-counts them.
 
 ## File structure
@@ -163,7 +163,7 @@ In `SpanCompositionPlugin.java`, add `import java.util.Map;` if absent (it is al
    * Where a record type's genomic coordinates come from. One implementation per record
    * class that may be an input to colocation.
    *
-   * Implementations MUST alias their location table "fl" -- makeRegion() hardcodes that
+   * Implementations MUST alias their location table "fl" -- getStartStop() hardcodes that
    * prefix when building the region expressions interpolated into every builder.
    */
   interface SpanSource {
