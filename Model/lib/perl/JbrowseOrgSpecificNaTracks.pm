@@ -863,7 +863,7 @@ sub addMergedShortVariants {
     application_type      => $applicationType,
     organism_abbrev       => $organismAbbrev,
     relative_path_to_file => $relativePathToVcfFile,
-    key                   => "Short variants from all DNA-Seq samples",
+    key                   => "Short Variants (SNPs and Indels) - DNA-Seq Samples within Organism",
     label                 => "${organismAbbrev}_dnaseq_merged_short_variants",
     study_display_name    => "All DNA-Seq samples",
     # Doubles as the legend: shape and colour - set by VariantTrackConfig, not here - are
