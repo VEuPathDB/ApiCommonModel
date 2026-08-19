@@ -44,6 +44,13 @@ sub getJBrowseObject {
     # that invites drawing 100k+ glyphs at genome scale.
     $jbrowseObject->{maxFeatureScreenDensity} = 50;
 
+    # One row, no stacking: the merged call set is dense enough that "normal" spends most
+    # of the track's height on layout rather than on variants. Set here rather than via a
+    # setDisplayMode accessor because the base TrackConfig has none - display_mode is
+    # declared independently in GffTrack and Segments, and this track's mode is fixed, not
+    # a per-caller argument, so a third copy of the accessor would buy nothing.
+    $jbrowseObject->{displayMode} = "compact";
+
     # Left-click opens the Short Variant record - Overview panel plus Predicted Effects -
     # in an iframe dialog. Both values are functions (see functions.conf): the record id
     # has to be computed from the locus because the merged VCF's ID column is ".".
