@@ -111,7 +111,7 @@ All read-only.
 | genome files | `webServices/UniDB/build-NN/<NameForFilenames>/genomeAndProteome/fasta/` | `genome.fasta` + `genome.fasta.fai` |
 
 Verified: all 831 portal organisms have a directory and a `genome.fasta` under
-`UniDB/build-71`. `samtools faidx` is unnecessary — the `.fai` ships alongside and contains
+`UniDB/build-71` (0 missing dirs, 0 missing fastas). `samtools faidx` is unnecessary — the `.fai` ships alongside and contains
 no self-reference, so renaming to `<abbrev>.fa` / `<abbrev>.fa.fai` is safe.
 
 The Apollo API is IP-restricted to Penn hosts. Credentials come from the environment
@@ -173,6 +173,30 @@ Per organism in the approved roster:
 | `seq/<abbrev>.fa`, `seq/<abbrev>.fa.fai` | copied and renamed from webServices |
 | `seq/refSeqs.json` | `jbrowseRefSeqs $GUS_HOME UniDB <abbrev>` |
 | `twoBit/<abbrev>.2bit` | `faToTwoBit` — the only new computation |
+
+### faToTwoBit on cedar
+
+`faToTwoBit` existed only on yew, at `/eupath/workflow-software/bin/faToTwoBit` — a 2016
+build linked against `libssl.so.10`, `libcrypto.so.10`, and `libpng15.so.15`, none of which
+exist on cedar (Rocky 9, glibc 2.34). Copying it across does not work.
+
+Resolved by installing UCSC's current `linux.x86_64` build to `~/bin/faToTwoBit` on cedar
+(2026-08-21), which is already on PATH. Verified byte-for-byte against the old one:
+
+```
+release-68 twoBit/cneoJEC21.2bit  (yew, 2016 binary)    4764116  a8b9cb95a7794c1ed7dcc3568edeaff9
+build-71   cdenJEC21.2bit         (cedar, 2026 binary)  4764116  a8b9cb95a7794c1ed7dcc3568edeaff9
+```
+
+Identical output from two binaries a decade apart, over the renamed organism's genome. This
+also independently confirms fact 13 at the byte level.
+
+**Always regenerate; never copy forward.** Measured 0.17–0.74 s per genome, so the full
+roster costs a couple of minutes. An incremental scheme keyed on genome version was
+considered and rejected: it adds state to save nothing.
+
+The tool must check for `faToTwoBit` on PATH at startup and fail immediately with the
+install instruction, rather than 400 organisms into a run.
 
 ### URL absolutization
 
