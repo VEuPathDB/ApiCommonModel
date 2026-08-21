@@ -277,21 +277,41 @@ the Oracle-cased keys in `addHistoryToOrganism`.
 
 ## 10. Verification
 
-Exact reproduction of release-68 is impossible: `webServices/UniDB/` retains only `build-70`
-and `build-71`, so the b68 inputs are gone. Instead:
+**Release-68 is not a baseline.** Between b68 and b71 the track layer moved from REST to
+flat files, the database moved Oracle → Postgres, and a large number of track definitions
+changed. Output that matched release-68 would be evidence of a *bug*, not of correctness.
+Release-68 is useful for exactly two things: the file-name inventory a working organism dir
+must contain (§6), and the `faToTwoBit` reproducibility check already done.
 
-- **Structural diff** against release-68/prod for the ~450 organisms in both: identical file
-  set per organism dir, identical JSON keys, identical track counts and track ids. This
-  catches dropped includes and missing track categories.
-- **Value diff** for organisms whose genome and datasets are unchanged between 68 and 71;
-  output should be near-identical, and any difference is a finding. URLs will differ by the
-  absolutization base and that difference must be exactly the base.
+The real baseline is **what the portal serves today**. Apollo's config and the site's JBrowse
+config are generated from the same scripts against the same model; the Apollo variant should
+differ only by known, enumerable transformations. So:
+
+- **Equivalence with the live site, per organism.** For a probe organism, generate the Apollo
+  package and diff each file against what the portal's own JBrowse serves for that organism.
+  Every difference must fall into one of four declared classes:
+  1. URL absolutization (`/a/` → `https://veupathdb.org/a/`),
+  2. the reference-sequence track replaced by the local `IndexedFasta` track,
+  3. `include` URLs rewritten to local filenames,
+  4. removals: the `[tracks.refseq]` stanza and `user-datasets-jbrowse` includes.
+
+  A difference outside those four classes is a defect. This is the test that would have
+  caught Paul's silent skips, and it is meaningful *because* the tracks changed.
+- **Track-count floor per organism.** Non-zero track count, and every `include` named in
+  `trackList.json` resolves to a file that exists and parses. Empty-but-valid JSON is the
+  characteristic failure of the flat-file migration and is invisible to a schema check.
+- **URL liveness on a sample.** For a handful of organisms, HEAD every absolutized store URL
+  and require 200. The absolutization assertion proves the string changed; only a request
+  proves it points at something.
 - **Unit tests** for reconciliation over fixture JSON: the two known renames, an annotated
   prune candidate, an overlay add, and the mutual-exclusion rule of §5.
 - **Sandbox before prod**, per the post-release checklist: gene track drags into the
   annotation track, BLAT works against the new `.2bit`. Specifically exercise the
   `cneoJEC21` → `cdenJEC21` repoint on the sandbox and confirm all 14 annotations survive
   before it is ever run against prod.
+
+Probe organisms: `tgonME49` (rich track set, 10 annotations in Apollo), `pfal3D7` (different
+component DB, partitioned queries), and `cdenJEC21` (the rename).
 
 ## 11. Deferred
 
