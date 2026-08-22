@@ -43,6 +43,7 @@ Every row measured on 2026-08-21, not inferred.
 | 12 | Species taxon ID cannot detect a rename | `cneoJEC21` was species 5207; `cdenJEC21` is 40410. `cglaCBS138` (5478 → *Nakaseomyces*) likewise. |
 | 13 | The renamed genome is byte-identical | b68 `cneoJEC21.fa.fai` vs b71 `CdeneoformansJEC21/genome.fasta.fai`: 14 sequences, identical names and lengths. |
 | 14 | `applicationType=apollo` is unimplemented | `Store::makeUrlTemplate` is `die "TODO: make apollo work"`. `getConfigurationObject` dispatches `apollo` to the abstract `getApolloObject`; **39** classes implement `getJBrowseObject`, **1** implements `getApolloObject`. |
+| 15 | 17 live organisms are deliberately hidden, and the update command would un-hide them | `publicMode=false` on 17 organisms; 16 are on the portal and 15 qualify as reference+annotated, so they are curator-hidden, not retired. 3 carry annotations (`iscaPalLabHiFi` 20, `treeQM6a` 11, `etenHoughton2021` 2). Paul's `updateOrganismInfo` curl hardcodes `"publicMode":"true"`, so running the generated commands re-publishes all 17. |
 
 ### Set sizes as of build 71
 
@@ -273,7 +274,12 @@ the Oracle-cased keys in `addHistoryToOrganism`.
 3. Add and prune require an overlay entry; neither is inferred from the criteria alone.
 4. A rename and an add for the same genome cannot both be emitted.
 5. Every generated file passes the no-bare-`/a/` check before the run is declared successful.
-6. Credentials come from the environment. The repo contains no password.
+6. **An update never changes an organism's `publicMode`.** It is echoed back from the value
+   Apollo currently holds. 17 organisms are deliberately hidden by curators (fact 15); a
+   hardcoded `"publicMode":"true"` — which is what the previous script emitted — silently
+   re-publishes all of them, three with annotations. Publishing and unpublishing are curation
+   decisions, and the only bucket permitted to change that state is an approved prune.
+7. Credentials come from the environment. The repo contains no password.
 
 ## 10. Verification
 

@@ -868,6 +868,7 @@ sub reconcile {
         apollo_id        => $apollo->{id},
         annotation_count => $apollo->{annotation_count},
         organism         => $target,
+        public_mode      => $apollo->{public_mode},
       };
       next;
     }
@@ -899,9 +900,12 @@ sub reconcile {
     }
 
     push @{$result{update}}, {
-      abbrev    => $abbrev,
-      apollo_id => $apollo->{id},
-      organism  => $organism,
+      abbrev      => $abbrev,
+      apollo_id   => $apollo->{id},
+      organism    => $organism,
+      # Echoed straight back in the update command.  17 organisms are hidden
+      # by curators; forcing publicMode=true would silently re-publish them.
+      public_mode => $apollo->{public_mode},
     };
   }
 
@@ -1641,14 +1645,14 @@ Create `Model/t/commands.t`:
 ```perl
 use strict;
 use warnings;
-use Test::More tests => 8;
+use Test::More tests => 10;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use ApiCommonModel::Model::ApolloRelease::Commands;
 
 my $C = 'ApiCommonModel::Model::ApolloRelease::Commands';
 
 my $update = $C->updateCommand({
-  abbrev => 'tgonME49', apollo_id => 1484940,
+  abbrev => 'tgonME49', apollo_id => 1484940, public_mode => 1,
 });
 like($update, qr/"id":"1484940"/,                          'update targets the numeric id');
 like($update, qr{/data/apollo_data/tgonME49},              'points at the organism directory');
@@ -1656,7 +1660,7 @@ like($update, qr{/data/apollo_data/twoBit/tgonME49\.2bit}, 'and at its blatdb');
 unlike($update, qr/GFERsVNiX5BQ|password":"[^\$]/,         'no literal password in output');
 
 my $rename = $C->renameCommand({
-  from_abbrev => 'cneoJEC21', to_abbrev => 'cdenJEC21', apollo_id => 2452162,
+  from_abbrev => 'cneoJEC21', to_abbrev => 'cdenJEC21', apollo_id => 2452162, public_mode => 1,
   organism => {name => 'Cryptococcus deneoformans JEC21', latest_annotation_version => 'Jun 16, 2016'},
 });
 like($rename, qr/2452162/,                        'rename targets the EXISTING apollo id');
@@ -1665,6 +1669,12 @@ like($rename, qr/Cryptococcus deneoformans JEC21 \[Jun 16, 2016\]/, 'renamed wit
 
 my $prune = $C->pruneCommand({abbrev => 'cglaCBS138', apollo_id => 5146948});
 like($prune, qr/"publicMode":"false"/, 'prune unpublishes rather than deleting');
+
+# 17 live organisms are curator-hidden; an update must never re-publish them.
+my $hidden = $C->updateCommand({abbrev => 'treeQM6a', apollo_id => 9999, public_mode => 0});
+like($hidden, qr/"publicMode":"false"/, 'a hidden organism stays hidden through an update');
+eval { $C->updateCommand({abbrev => 'x', apollo_id => 1}) };
+like($@, qr/refusing to guess visibility/, 'missing public_mode is an error, not a default');
 ```
 
 - [ ] **Step 2: Run it and watch it fail**
@@ -1715,10 +1725,18 @@ sub _updateOrganismInfo {
   return qq{curl -X POST -H "Content-Type: application/json" --data '{$json}' $API/organism/updateOrganismInfo\n};
 }
 
+# An update must NOT change visibility.  Publishing and unpublishing are
+# curation decisions; 17 live organisms are deliberately hidden, 3 of them with
+# annotations.  The previous script hardcoded "publicMode":"true" here, which
+# re-published every one of them.  Echo back what Apollo currently holds.
 sub updateCommand {
   my ($class, $entry) = @_;
+
+  die "updateCommand: public_mode missing for $entry->{abbrev}; refusing to guess visibility\n"
+    unless defined $entry->{public_mode};
+
   return $class->_updateOrganismInfo($entry->{apollo_id}, $entry->{abbrev},
-                                     {publicMode => 'true'});
+                                     {publicMode => $entry->{public_mode} ? 'true' : 'false'});
 }
 
 # A rename repoints the EXISTING organism, preserving its annotations.  The
@@ -1733,8 +1751,12 @@ sub renameCommand {
                ? "$organism->{name} [$version]"
                : $organism->{name};
 
+  die "renameCommand: public_mode missing for $entry->{from_abbrev}; refusing to guess visibility\n"
+    unless defined $entry->{public_mode};
+
   return $class->_updateOrganismInfo($entry->{apollo_id}, $entry->{to_abbrev},
-                                     {publicMode => 'true', commonName => $name});
+                                     {publicMode => $entry->{public_mode} ? 'true' : 'false',
+                                      commonName => $name});
 }
 
 # Prune unpublishes.  It is reversible, and Apollo's API has no delete in use.
