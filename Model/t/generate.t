@@ -84,7 +84,6 @@ is_deeply($trackList->{include}[0], "/a/jbrowse/tracks/tgonME49/tracks.conf",
           'the caller\'s skeleton is left untouched');
 is(scalar(@{$trackList->{tracks}}), 1, 'and so is its tracks array');
 
-my @warnings = $G->warnings();
 $G->buildTrackList({include => ['/a/service/jbrowse/somethingNew/x']}, 'x', $BASE);
 ok(scalar(grep { /somethingNew/ } $G->warnings()),
    'an unrecognised include is reported, not silently dropped');
@@ -133,14 +132,58 @@ is(scalar(@{$withRefSeq->{tracks}}), 4, 'the input document is not mutated');
 
 # addChipChipTracks appended bare integers (56 of 158 entries for tgonME49).
 # Fixed upstream; this is the last gate before a curator sees the output.
-eval { $G->assertTracksAreObjects({tracks => [{a => 1}, 42, {b => 2}]}, 'chipseq.json') };
+# The bad entries sit at indexes 2 and 4 of 5, so neither index can be
+# satisfied by the bad-count (2) or the total (5).  The earlier fixture -- one
+# bad entry, at index 1 -- produced "1 of 3 entries ... at index(es) 1", which
+# matched qr/\b1\b/ on the count alone: deleting the whole "at index(es)"
+# clause from the message left this test green.
+eval { $G->assertTracksAreObjects(
+         {tracks => [{a => 1}, {b => 2}, 42, {c => 3}, 'nope']}, 'chipseq.json') };
 like($@, qr/chipseq\.json/, 'a bare scalar in a tracks array is a hard failure');
-like($@, qr/\b1\b/, 'and the offending index is named');
+like($@, qr/index\(es\)\s+2,\s*4\b/, 'and every offending index is named');
+like($@, qr/\b2 of 5\b/, 'reported against the total, so the scale is visible');
 ok($G->assertTracksAreObjects({tracks => [{a => 1}]}, 'ok.json'),
    'a well formed tracks array passes');
 is($G->countTracks({tracks => [{a => 1}, {b => 2}]}), 2, 'track count');
 is($G->countTracks({tracks => []}), 0,
    'zero tracks is a count, not an error -- cneoJEC21 legitimately has none');
+
+# ---------------------------------------------------------------------------
+# [tracks.refseq] stanza stripping
+# ---------------------------------------------------------------------------
+
+# A no-op over the whole roster today (0 of 835 tracks.conf files on
+# 2026-08-21), so this fixture IS the only example of the shape.  The comment
+# in stripRefSeqStanza records why it ships anyway.
+my $conf = join "\n",
+  '[general]',
+  'dataset_id=tgonME49',
+  '',
+  '[tracks.refseq]',
+  'storeClass=JBrowse/Store/SeqFeature/IndexedFasta',
+  '#urlTemplate=commented out, and Paul\'s regex stopped here',
+  'faiUrlTemplate=/a/service/jbrowse/store?data=x.fai',
+  '',
+  '[tracks.gcContent]',
+  'key=GC Content',
+  '';
+
+my ($cleaned, $stanzas) = $G->stripRefSeqStanza($conf);
+is($stanzas, 1, 'the refseq stanza is counted');
+unlike($cleaned, qr/refseq/i, 'and every line of it is gone');
+
+# The specific failure of the previous implementation: its character class
+# stopped at the first "#", leaving the rest of the stanza behind.
+unlike($cleaned, qr/faiUrlTemplate/,
+       'including the keys after a comment line inside the stanza');
+like($cleaned, qr/\[tracks\.gcContent\]\nkey=GC Content/,
+     'the following stanza survives intact');
+like($cleaned, qr/^\[general\]\ndataset_id=tgonME49\n/,
+     'and so does everything before it');
+
+my ($untouched, $none) = $G->stripRefSeqStanza($conf =~ s/\[tracks\.refseq\]/[tracks.other]/r);
+is($none, 0, 'a tracks.conf without the stanza reports zero');
+like($untouched, qr/faiUrlTemplate/, 'and is returned unchanged');
 
 # ---------------------------------------------------------------------------
 # writeFile: absolutization plus its post-condition
@@ -187,5 +230,171 @@ is_deeply([sort @{$results->{failed}}], ['explodes'],
 is_deeply([sort @{$results->{succeeded}}], ['good1', 'good2'],
           'the organisms either side of it still complete');
 like($results->{errors}{explodes}, qr/simulated failure/, 'the error text is kept');
+
+# ---------------------------------------------------------------------------
+# assertToolsAvailable
+# ---------------------------------------------------------------------------
+
+# Not called by generateOrganism -- the CLI calls it once before the loop -- so
+# without this it would be shipped unverified.  PATH is manipulated rather than
+# trusting the host, so the result does not depend on whose cedar account runs
+# the suite.
+{
+  my $binDir = tempdir(CLEANUP => 1);
+  local $ENV{PATH} = $binDir;
+
+  my $err = do { local $@; eval { $G->assertToolsAvailable() }; $@ };
+  like($err, qr/faToTwoBit is not on PATH/, 'a missing faToTwoBit fails immediately');
+  like($err, qr{~/bin/faToTwoBit},
+       'and the message carries the install location, not just the complaint');
+  like($err, qr/libssl\.so\.10/,
+       'and warns off the 2016 yew binary, which is the obvious wrong fix');
+
+  open(my $fake, '>', "$binDir/faToTwoBit") or die $!;
+  close $fake;
+  chmod 0755, "$binDir/faToTwoBit";
+  is($G->assertToolsAvailable(), "$binDir/faToTwoBit",
+     'and it returns the resolved path when present');
+}
+
+# ---------------------------------------------------------------------------
+# generateOrganism: the public/internal abbrev split, end to end
+# ---------------------------------------------------------------------------
+
+# The one function that wires the two abbrev namespaces together, and the
+# mistake it guards against is invisible on 794 of 831 organisms.  So the
+# fixture is a renamed one, where public and internal genuinely differ.
+{
+  my $out = tempdir(CLEANUP => 1);
+
+  my @scriptCalls;
+  my @reads;
+  my @copies;
+  my @twoBits;
+
+  my $fai = "chr1\t100\t10\t60\t61\nchr2\t250\t200\t60\t61\n";
+
+  my $summary = $G->generateOrganism(
+    {abbrev => 'cdenJEC21', internal_abbrev => 'cneoJEC21',
+     name_for_filenames => 'CdeneoformansJEC21'},
+    {
+      outDir  => $out,
+      base    => $BASE,
+      project => 'UniDB',
+      build   => 71,
+      wsDir   => '/ws',
+      gusHome => '/gus',
+
+      runScript => sub {
+        my ($gusHome, $script, @args) = @_;
+        push @scriptCalls, {script => $script, args => \@args};
+
+        return encode_json({
+          names   => {type => 'REST', url => '/a/service/jbrowse/names/cdenJEC21'},
+          tracks  => [],
+          refSeqs => '/a/service/jbrowse/store?data=x',
+          include => ['/a/jbrowse/tracks/cdenJEC21/tracks.conf'],
+        }) if $script eq 'jbrowseTracks';
+
+        # organismSpecific carries the store-URL reference track; the others
+        # carry one ordinary track each.
+        return encode_json({tracks => [
+          {label => 'refseqs', useAsRefSeqStore => JSON::true},
+          {label => 'real', urlTemplate => '/a/service/jbrowse/store?data=y'},
+        ]}) if $script eq 'jbrowseOrganismSpecificTracks';
+
+        return encode_json({tracks => [{label => 'real'}]});
+      },
+
+      readFile => sub {
+        my ($path) = @_;
+        push @reads, $path;
+        return $fai if $path =~ /\.fa\.fai$/;
+        return "[tracks.x]\nkey=from $path\n";
+      },
+
+      copyFile => sub { push @copies, [@_]; return 1 },
+      twoBit   => sub { push @twoBits, [@_]; return 1 },
+    },
+  );
+
+  # --- the five track producers take the INTERNAL abbrev ------------------
+  my @producers = grep { $_->{script} ne 'jbrowseTracks' } @scriptCalls;
+  is(scalar(@producers), 5, 'all five track producers ran');
+  is_deeply([map { $_->{args}[0] } @producers],
+            [('cneoJEC21') x 5],
+            'each track producer received the INTERNAL abbrev');
+  is_deeply([sort map { $_->{script} } @producers],
+            ['jbrowseDNASeqTracks', 'jbrowseOrganismSpecificTracks',
+             'jbrowseRNASeqJunctionTracks', 'jbrowseRnaAndChipSeqTracks',
+             'jbrowseRnaAndChipSeqTracks'],
+            'and they are the five the spec names');
+
+  # --- jbrowseTracks takes the PUBLIC abbrev ------------------------------
+  my ($skeleton) = grep { $_->{script} eq 'jbrowseTracks' } @scriptCalls;
+  is($skeleton->{args}[0], 'cdenJEC21',
+     'jbrowseTracks received the PUBLIC abbrev -- its SQL matches public_abbrev');
+  is_deeply($skeleton->{args}, ['cdenJEC21', 'UniDB', 0, 'geneAnnotationTracks'],
+            'with the geneAnnotationTracks skeleton arguments');
+
+  # --- tracks.conf is keyed off the INTERNAL abbrev -----------------------
+  ok(scalar(grep { $_ eq '/gus/lib/jbrowse/auto_generated/cneoJEC21/tracks.conf' } @reads),
+     'tracks.conf read from auto_generated/<INTERNAL>/');
+  is(scalar(grep { m{auto_generated/cdenJEC21} } @reads), 0,
+     'and never from auto_generated/<public>/, which does not exist');
+
+  # --- every OUTPUT path uses the PUBLIC abbrev ---------------------------
+  is_deeply(\@copies,
+            [['/ws/UniDB/build-71/CdeneoformansJEC21/genomeAndProteome/fasta/genome.fasta',
+              "$out/data/cdenJEC21/seq/cdenJEC21.fa"],
+             ['/ws/UniDB/build-71/CdeneoformansJEC21/genomeAndProteome/fasta/genome.fasta.fai',
+              "$out/data/cdenJEC21/seq/cdenJEC21.fa.fai"]],
+            'the genome is sourced by name_for_filenames and lands under the PUBLIC abbrev');
+  is_deeply(\@twoBits,
+            [["$out/data/cdenJEC21/seq/cdenJEC21.fa", "$out/twoBit/cdenJEC21.2bit"]],
+            'and so does the .2bit');
+  ok(-f "$out/data/cdenJEC21/trackList.json", 'the organism dir is the PUBLIC abbrev');
+  ok(!-e "$out/data/cneoJEC21", 'nothing is written under the internal abbrev');
+
+  # --- and the package it produced ----------------------------------------
+  my $written = decode_json(do {
+    open(my $t, '<', "$out/data/cdenJEC21/trackList.json") or die $!;
+    local $/; <$t>;
+  });
+  is($written->{refSeqs}, 'seq/cdenJEC21.fa.fai', 'trackList refSeqs uses the public abbrev');
+  is($written->{tracks}[0]{urlTemplate}, 'seq/cdenJEC21.fa', 'as does its reference track');
+  is_deeply($written->{include},
+            ['tracks.conf', 'rnaseq.json', 'chipseq.json', 'rnaseqJunctions.json',
+             'organismSpecific.json', 'dnaseq.json', 'functions.conf',
+             'apollo_gene_tracks.conf'],
+            'every include names a file this run actually wrote');
+  ok(-f "$out/data/cdenJEC21/$_", "$_ was written") for @{$written->{include}};
+
+  is($summary->{stripped}, 1, 'the store-URL reference track was stripped');
+  is($summary->{sequences}, 2, 'sequence count comes from the copied index');
+  is_deeply($summary->{counts},
+            {'rnaseq.json' => 1, 'chipseq.json' => 1, 'rnaseqJunctions.json' => 1,
+             'organismSpecific.json' => 1, 'dnaseq.json' => 1},
+            'track counts are per file, after stripping');
+  is($summary->{refseq_stanzas_stripped}, 0, 'no [tracks.refseq] stanza in this fixture');
+
+  my $specific = decode_json(do {
+    open(my $t, '<', "$out/data/cdenJEC21/organismSpecific.json") or die $!;
+    local $/; <$t>;
+  });
+  is(scalar(grep { $_->{useAsRefSeqStore} } @{$specific->{tracks}}), 0,
+     'and no useAsRefSeqStore track survives into the file');
+  is($specific->{tracks}[0]{urlTemplate}, 'https://veupathdb.org/a/service/jbrowse/store?data=y',
+     'the surviving track was absolutized on the way out');
+
+  my $refSeqs = decode_json(do {
+    open(my $t, '<', "$out/data/cdenJEC21/seq/refSeqs.json") or die $!;
+    local $/; <$t>;
+  });
+  is_deeply($refSeqs,
+            [{name => 'chr1', start => 0, end => 100, length => 100},
+             {name => 'chr2', start => 0, end => 250, length => 250}],
+            'refSeqs.json derived from the index that was copied, not re-queried');
+}
 
 done_testing();

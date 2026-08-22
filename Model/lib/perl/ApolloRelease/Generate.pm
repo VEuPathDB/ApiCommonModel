@@ -288,6 +288,62 @@ sub countTracks {
 }
 
 # ---------------------------------------------------------------------------
+# PURE: strip the [tracks.refseq] stanza from a tracks.conf
+# ---------------------------------------------------------------------------
+
+# Same reason as stripRefSeqStoreTracks: Apollo reads its own local copy of the
+# genome out of seq/, so a second declaration of the reference sequence store
+# is at best redundant and at worst wins.
+#
+# CENSUS, 2026-08-21 (cedar, build 71, GUS_HOME eupathdb.jbrestel):
+#   835 auto_generated/<abbrev>/tracks.conf files
+#     0 contain "[tracks.refseq]"
+#     0 contain the substring "refseq" at all, case-insensitively
+# So this is a NO-OP today -- over the entire roster, not the four-organism
+# sample the spec baseline used and warned not to generalise from.  It is
+# implemented anyway, deliberately:
+#   - spec section 6 states the requirement, and an unimplemented stated
+#     requirement is indistinguishable to the next reader from a forgotten one.
+#     That is exactly how the script this replaces accumulated its dead
+#     branches;
+#   - the stanza is emitted by the model, not by this tool, so it can come back
+#     in any build without a line here changing;
+#   - it costs one pass over a 35KB file.
+# The count is returned so the caller can report a re-appearance rather than
+# silently absorb it.
+#
+# Line based rather than Paul's `s/\[tracks.refseq\][^#\[]*//`, whose character
+# class stops at the first "#" -- and tracks.conf is full of commented-out keys,
+# so that regex leaves the tail of the stanza behind whenever one contains a
+# comment.
+sub stripRefSeqStanza {
+  my ($class, $text) = @_;
+
+  return ($text, 0) unless defined $text;
+
+  my @kept;
+  my $removed  = 0;
+  my $inStanza = 0;
+
+  # -1 limit so a trailing newline survives the rejoin.
+  foreach my $line (split /\n/, $text, -1) {
+    if ($line =~ /^\s*\[tracks\.refseq\]\s*$/) {
+      $inStanza = 1;
+      $removed++;
+      next;
+    }
+
+    # A stanza runs to the next section header, or to end of file.  Blank
+    # lines and comments inside it belong to it.
+    $inStanza = 0 if $inStanza && $line =~ /^\s*\[/;
+
+    push @kept, $line unless $inStanza;
+  }
+
+  return (join("\n", @kept), $removed);
+}
+
+# ---------------------------------------------------------------------------
 # IO: write one file, absolutized, with the post-condition enforced
 # ---------------------------------------------------------------------------
 
@@ -370,6 +426,12 @@ sub _defaultTwoBit {
 }
 
 # Checked once, at startup, not 400 organisms into a run.
+#
+# DELIBERATELY NOT CALLED FROM THIS MODULE.  generateOrganism is invoked once
+# per organism, so a check here would either run 831 times or be the 400th
+# organism's problem; and a caller substituting the `twoBit` seam has no use
+# for faToTwoBit at all.  The CLI (task 12) calls this once before the loop.
+# It is tested here so that "uncalled" cannot quietly become "unverified".
 sub assertToolsAvailable {
   my ($class) = @_;
 
@@ -487,9 +549,19 @@ sub generateOrganism {
   }
 
   # --- tracks.conf, keyed off the INTERNAL abbrev -------------------------
-  $class->writeFile("$organismDir/tracks.conf",
-                    $readFile->("$gusHome/lib/jbrowse/auto_generated/$internal/tracks.conf"),
-                    $base);
+  my ($tracksConf, $stanzas) = $class->stripRefSeqStanza(
+    $readFile->("$gusHome/lib/jbrowse/auto_generated/$internal/tracks.conf"));
+
+  # Zero for all 835 organisms as of 2026-08-21 (see stripRefSeqStanza).  Say
+  # so if that changes, because it means the model started emitting a reference
+  # store again and someone should decide whether Apollo still wants it gone.
+  push @WARNINGS, "$abbrev: tracks.conf carried $stanzas [tracks.refseq] stanza(s), "
+    . "which were stripped; this has been a no-op for the whole roster since 2026-08-21"
+    if $stanzas;
+
+  $summary{refseq_stanzas_stripped} = $stanzas;
+
+  $class->writeFile("$organismDir/tracks.conf", $tracksConf, $base);
   push @generated, 'tracks.conf';
 
   # --- static config ------------------------------------------------------
