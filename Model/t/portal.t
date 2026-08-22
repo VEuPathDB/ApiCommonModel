@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 19;
+use Test::More tests => 22;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use ApiCommonModel::Model::ApolloRelease::Portal;
 
@@ -35,6 +35,25 @@ my $b = $orgs->{tbruLister427_2018};
 is($b->{is_reference}, 0, 'non-reference strain is 0');
 
 ok(defined $t->{latest_annotation_version}, 'latest annotation version derived');
+
+# apidb.organism carries TWO identifiers and the jbrowse scripts disagree about
+# which they take: jbrowseTracks selects `where public_abbrev = ?`, while the
+# five track producers key `auto_generated/<abbrev>/` off the INTERNAL one.
+# cdenJEC21 is the only organism in the fixture where they differ -- it is the
+# renamed Cryptococcus -- so it is the only case that can catch a caller
+# feeding the wrong identifier.  Feeding the public abbrev to a track producer
+# gives exit 2 and a missing datasetAndPresenterProps.conf, and feeding the
+# internal abbrev to jbrowseTracks silently matches nothing.
+#
+# `abbrev` stays PUBLIC deliberately: the hash key and every downstream
+# consumer -- the Apollo roster, the overlay file, reconciliation -- already
+# key on the public abbrev, which is also what the portal shows.  The internal
+# one rides alongside so a caller can resolve public -> internal once.
+my $renamed = $orgs->{cdenJEC21};
+ok($renamed, 'the renamed organism is keyed by its PUBLIC abbrev');
+is($renamed->{abbrev}, 'cdenJEC21', 'abbrev remains the public abbrev, unchanged');
+is($renamed->{internal_abbrev}, 'cneoJEC21',
+   'internal_abbrev carries apidb.organism.abbrev, which differs here');
 is($P->qualifies($b), 0, 'non-reference organism does not qualify');
 
 # "0.0" is truthy as a Perl string but zero numerically.  Pin the coercion so a

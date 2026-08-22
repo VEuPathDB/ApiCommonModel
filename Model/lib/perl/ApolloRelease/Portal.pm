@@ -9,8 +9,16 @@ use Scalar::Util qw(looks_like_number);
 
 # Reads the organism list produced by Model/bin/jbrowseOrganismList and
 # normalises it.  Keys arrive lowercase from DBD::Pg; booleans arrive as the
-# strings "1"/"0".  Everything downstream sees plain 0/1 and a single
-# `abbrev` key.
+# strings "1"/"0".  Everything downstream sees plain 0/1 and an `abbrev` key.
+#
+# TWO abbrevs come through, and they are not interchangeable.  `abbrev` is
+# apidb.organism.public_abbrev -- the hash key, what the portal shows, and what
+# jbrowseTracks matches on.  `internal_abbrev` is apidb.organism.abbrev, which
+# the five jbrowse track producers use to find auto_generated/<abbrev>/.  They
+# are the same string for all but a handful of renamed organisms (cdenJEC21 /
+# cneoJEC21), which is exactly why passing the wrong one is easy and fails far
+# from the mistake -- exit 2 on a missing datasetAndPresenterProps.conf, or a
+# query that quietly matches nothing.
 
 # Warnings are COLLECTED, never written to stderr.  loadFromCommand treats any
 # stderr byte from its child as proof that child's output is untrustworthy, and
@@ -92,6 +100,7 @@ sub normalise {
 
     $byAbbrev{$abbrev} = {
       abbrev                    => $abbrev,
+      internal_abbrev           => $raw->{internal_abbrev},
       name                      => $raw->{name},
       name_for_filenames        => $raw->{name_for_filenames},
       strain_abbrev             => $raw->{strain_abbrev},
