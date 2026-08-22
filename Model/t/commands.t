@@ -150,6 +150,74 @@ for my $pair (['update', $update], ['rename', $rename], ['prune', $prune], ['add
 
 like($update, qr/"username":"admin\@local\.host"/, 'the admin user is admin@local.host');
 
+# --------------------------------------------- punctuation in an organism name
+
+# Strain and isolate names carry punctuation, and the portal is the source of
+# that string.  An apostrophe reaching the emitted line would terminate the
+# shell's quoting of --data and turn the rest of the JSON into shell words; a
+# double quote or a backslash would break the JSON instead.  Both must refuse
+# to emit rather than produce a line whose meaning depends on the shell.
+#
+# Asserted as facts, not prose: it dies, the message shows the offending value
+# so a reader can see WHICH organism, and it shows the offending character.
+sub dieFor {
+  my ($code) = @_;
+  eval { $code->(); 1 };
+  return $@;
+}
+
+sub renameNamed {
+  my ($name) = @_;
+  return sub {
+    $C->renameCommand({
+      from_abbrev => 'lspGHANA_old', to_abbrev => 'lspGHANA', apollo_id => 3311,
+      public_mode => 1, organism => {name => $name, latest_annotation_version => 'Jan 2024'},
+    });
+  };
+}
+
+my $quotedName = q{Leishmania sp. 'ghana'};
+my $squote = dieFor(renameNamed($quotedName));
+ok($squote, 'a single quote in a rename commonName refuses to emit');
+like($squote, qr/\Q$quotedName\E/, 'and the error shows the offending organism name');
+like($squote, qr/'/,               'and the offending character itself');
+
+my $dquoteName = q{Leishmania sp. "ghana"};
+my $dquote = dieFor(renameNamed($dquoteName));
+ok($dquote, 'a double quote in a rename commonName refuses to emit');
+like($dquote, qr/\Q$dquoteName\E/, 'and the error shows the offending organism name');
+like($dquote, qr/"/,               'and the offending character itself');
+
+my $slashName = q{Leishmania sp. \ghana};
+my $slash = dieFor(renameNamed($slashName));
+ok($slash, 'a backslash in a rename commonName refuses to emit');
+like($slash, qr/\Q$slashName\E/, 'and the error shows the offending organism name');
+like($slash, qr/\\/,             'and the offending character itself');
+
+# The shell-quoting failure and the JSON failure are different problems with
+# different fixes, so a reader must be able to tell which one they hit.
+isnt($squote, $dquote, 'the single-quote and double-quote diagnoses differ');
+
+# The same hazard reaches addCommand by its own path -- the name is
+# shell-quoted there rather than embedded in JSON, so it has its own guard.
+my $addQuoted = dieFor(sub {
+  $C->addCommand({abbrev => 'lspGHANA', approved => 1,
+                  organism => {name => $quotedName, latest_annotation_version => 'Jan 2024'}});
+});
+ok($addQuoted, 'a single quote in an added organism name refuses to emit');
+like($addQuoted, qr/\Q$quotedName\E/, 'and the add error shows the offending organism name');
+like($addQuoted, qr/'/,               'and the offending character itself');
+
+# A clean name with other punctuation must still go through: the guard is about
+# three specific characters, not a general distrust of the portal.
+my $punctuated = $C->addCommand({
+  abbrev => 'psp_G1', approved => 1,
+  organism => {name => 'Plasmodium sp. gorilla clade G1 (strain-2)',
+               latest_annotation_version => 'Jan 2024'},
+});
+like($punctuated, qr/-name 'Plasmodium sp\. gorilla clade G1 \(strain-2\)/,
+     'ordinary punctuation in a name is not rejected');
+
 # ---------------------------------------------------- writing the two files
 
 my $organism = sub {
