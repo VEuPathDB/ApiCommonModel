@@ -28,12 +28,13 @@ is($P->qualifies($b), 0, 'non-reference organism does not qualify');
 my $synthetic = $P->normalise({organisms => [
   {organism_abbrev => 'zeroPointZero', is_reference_strain => '0.0', is_annotated_genome => '1',
    name => 'x', name_for_filenames => 'x', strain_abbrev => 'x', species_ncbi_tax_id => '1',
-   history => [{build_number => '19.9', annotation_version => 'older'},
+   history => [{build_number => '9',    annotation_version => 'older'},
+               {build_number => '19.9', annotation_version => 'middle'},
                {build_number => '71',   annotation_version => 'newest'}]},
 ]});
 is($synthetic->{zeroPointZero}{is_reference}, 0, '"0.0" normalises to false, not true');
 is($synthetic->{zeroPointZero}{latest_annotation_version}, 'newest',
-   'highest build number wins with a decimal build in the set');
+   'highest build number wins numerically: beats lexically-larger "9" and a decimal');
 
 eval { $P->normalise({organisms => [
   {organism_abbrev => 'bogus', is_reference_strain => 'yes', is_annotated_genome => '1', history => []},
