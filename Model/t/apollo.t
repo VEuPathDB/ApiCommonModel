@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 17;
+use Test::More tests => 24;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use ApiCommonModel::Model::ApolloRelease::Apollo;
 
@@ -80,3 +80,40 @@ is_deeply($bad, {}, 'organism with an unparseable directory is skipped, not keye
 # record is malformed.  Assert the id appears, not the sentence around it.
 is(scalar @warnings, 1, 'an unparseable directory produces exactly one warning');
 like($warnings[0], qr/9000003/, 'and the warning names the offending Apollo id');
+
+# A single stray trailing byte is not cosmetic: the abbrev "tgonME49 " matches
+# no portal organism, so reconciliation would report the real genome as an add
+# and the tainted one as a prune -- add-plus-prune for one genome.
+my $spaced = $A->normalise([
+  {id => 3, commonName => 'Y', directory => '/data/apollo_data/tgonME49 '},
+]);
+is_deeply([keys %$spaced], ['tgonME49'], 'trailing whitespace on directory is stripped');
+
+my $both = $A->normalise([
+  {id => 4, commonName => 'Y', directory => "  /data/apollo_data/tgonME49 /\n"},
+]);
+is_deeply([keys %$both], ['tgonME49'], 'mixed trailing whitespace and slashes are stripped');
+
+# Interior junk cannot be trimmed without inventing an identity, so the shape
+# is validated instead.  Skipping is the safe failure: an absent organism can
+# only become an approval-gated add_candidate, never a prune.
+my @junkWarnings;
+my $junk = do {
+  local $SIG{__WARN__} = sub { push @junkWarnings, $_[0] };
+  $A->normalise([{id => 9000004, commonName => 'Z', directory => '/data/apollo_data/tgon ME49'}]);
+};
+is_deeply($junk, {}, 'an abbrev with an interior space is skipped, not admitted');
+is(scalar @junkWarnings, 1, 'the malformed abbrev produces exactly one warning');
+like($junkWarnings[0], qr/9000004/, 'and the warning names the offending Apollo id');
+
+# A 200 carrying an HTML login page must report as itself, not as a bare
+# "malformed JSON string" from inside the JSON module.
+eval { $A->_decodeRoster('<html><body>Please log in</body></html>', 'https://apollo.example') };
+like($@, qr{non-JSON body from https://apollo\.example}, 'a non-JSON body names its source');
+
+eval { $A->_decodeRoster('{"error":"nope"}', 'https://apollo.example') };
+like($@, qr/not a list of organisms/, 'a JSON object that is not a roster is rejected');
+
+# A still-set $@ at exit becomes the process exit status; clear it so a passing
+# run exits 0.
+$@ = '';

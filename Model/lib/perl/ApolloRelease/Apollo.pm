@@ -31,7 +31,7 @@ sub loadFromApi {
   die "Apollo API request failed: " . $response->status_line . "\n"
     unless $response->is_success;
 
-  my $decoded = decode_json($response->content);
+  my $decoded = $class->_decodeRoster($response->content, $url);
 
   # An empty roster would make every organism look new, and the generated
   # commands would try to re-add the entire set.  Fail instead.
@@ -51,7 +51,28 @@ sub loadFromFile {
   my $json = <$fh>;
   close $fh;
 
-  return $class->normalise(decode_json($json));
+  return $class->normalise($class->_decodeRoster($json, $path));
+}
+
+# A 200 carrying an HTML login page or a truncated body would otherwise die
+# with a bare "malformed JSON string" from inside the JSON module, naming
+# neither the source nor the likely cause.  This project has already been
+# bitten by exactly that shape: an unauthenticated request served a login page
+# with a 200 status.
+sub _decodeRoster {
+  my ($class, $body, $source) = @_;
+
+  my $decoded = eval { decode_json($body) };
+
+  die "Apollo returned a non-JSON body from $source.\n"
+    . "This is usually an HTML login or error page served with a 200 status:\n"
+    . "check APOLLO_API_USER/PASS and network access to the API.\n"
+    unless $decoded;
+
+  die "Apollo response from $source was not a list of organisms.\n"
+    unless ref $decoded eq 'ARRAY';
+
+  return $decoded;
 }
 
 # Public because it is the seam: it takes an already-decoded document, so the
@@ -64,12 +85,34 @@ sub normalise {
 
   foreach my $raw (@$decoded) {
     my $directory = $raw->{directory} || '';
-    $directory =~ s{/+$}{};
+
+    # Trim surrounding whitespace as well as trailing slashes, in one pass so
+    # that a mixture ("/data/apollo_data/tgonME49 /") is fully removed.  A
+    # single stray trailing byte is not cosmetic here: it yields the abbrev
+    # "tgonME49 ", which matches no portal organism, so reconciliation reports
+    # the real genome as an add and the space-tainted one as a prune -- the
+    # add-plus-prune-for-one-genome case this project exists to prevent.
+    # "Machine-written by our own update commands" makes it unlikely, not
+    # impossible; an upstream concatenation bug is exactly how it would appear.
+    $directory =~ s{^\s+}{};
+    $directory =~ s{[\s/]+$}{};
 
     my ($abbrev) = $directory =~ m{([^/]+)$};
 
-    unless ($abbrev) {
+    unless (defined $abbrev && length $abbrev) {
       warn "Apollo organism id $raw->{id} has an unparseable directory '$raw->{directory}'; skipping\n";
+      next;
+    }
+
+    # Interior junk cannot be trimmed away without inventing an identity, so
+    # validate the shape instead.  An abbrev containing a space or a newline
+    # would sail through the trim above and produce the same add-plus-prune
+    # pair.  Skipping is the safe failure: an organism absent from this hash
+    # can only become an approval-gated add_candidate downstream, never a
+    # prune, because prune requires presence in Apollo.
+    unless ($abbrev =~ m{\A[A-Za-z0-9_.-]+\z}) {
+      warn "Apollo organism id $raw->{id} has a malformed abbrev '$abbrev' "
+        . "from directory '$raw->{directory}'; skipping\n";
       next;
     }
 
