@@ -46,6 +46,8 @@ Every row measured on 2026-08-21, not inferred.
 | 15 | 17 live organisms are deliberately hidden, and the update command would un-hide them | `publicMode=false` on 17 organisms; 16 are on the portal and 15 qualify as reference+annotated, so they are curator-hidden, not retired. 3 carry annotations (`iscaPalLabHiFi` 20, `treeQM6a` 11, `etenHoughton2021` 2). Paul's `updateOrganismInfo` curl hardcodes `"publicMode":"true"`, so running the generated commands re-publishes all 17. |
 | 16 | `jbrowseRefSeqs` is dead for every organism | Exit 255, 211 bytes on stderr: `Can't locate object method "getCacheFile"`. Commit `e0e9a61bb` commented out the `getCacheFile`/`setCacheFile` accessors in `JBrowseUtil.pm` but left `printFromCache()` and `setCacheFileName()` calling them. Organism-independent; dies before any DB work. Served through `responseFromCommand`, so it corrupts the response body, not just a log. |
 | 17 | The two script families disagree about which organism abbrev they take | `apidb.organism` holds `abbrev = cneoJEC21`, `public_abbrev = cdenJEC21`. `jbrowseTracks` consumes the **public** abbrev and returns the internal one; the five track producers consume the **internal** abbrev and key `auto_generated/<abbrev>/` off it. Feeding the wrong one gives exit 2, or a wrong-organism answer. |
+| 18 | The internal/public split affects 37 organisms, and one pair differs only by case | Measured over all 831: `internal_abbrev ne organism_abbrev` for **37**, never undef. Includes cross-genus renames (`cglaCBS138`→`nglaCBS138`, `pory70-15`→`mory70-15`, `cgatVGIIR265`→`cdeuR265`) and `scerS288C`→`scerS288c`, which differs **only by case**. Two case-insensitive collisions exist across the whole namespace (`scers288c`, `bnonp57`), so every abbrev comparison must be case-sensitive. There are **no** exact collisions: no abbrev is one organism's public and another's internal, and no internal abbrev repeats. |
+| 19 | Both live renames are detectable from the database alone | Of Apollo's 459 directories, 457 match a public abbrev, **2 match an internal abbrev whose public differs** (`cglaCBS138`, `cneoJEC21`), and 0 match neither. So a rename is "Apollo's directory names an internal abbrev whose organism now publishes under a different name" — exact, cheap, and authoritative. |
 
 ### Set sizes as of build 71
 
@@ -144,13 +146,29 @@ non-qualifying rather than letting it persist unnoticed.
 
 ### Rename detection
 
-For each Apollo organism whose abbrev is absent from the portal, compare the `.fa.fai`
-shipped in the previous release against the `.fai` of each portal organism sharing its
-`strain_abbrev`. An identical set of sequence names and lengths means the same assembly
-under a new name.
+Two mechanisms, in order. The first is authoritative and handles every case seen so far;
+the second is the fallback for cases the database cannot explain.
 
-Species taxon ID is deliberately **not** used (fact 12). Strain abbrev narrows the
-candidates; sequence identity decides.
+**1. Internal abbrev (primary).** `apidb.organism` carries both `abbrev` (internal, stable)
+and `public_abbrev` (what the portal shows). A taxonomic reclassification changes the public
+one and leaves the internal one alone. Apollo's `directory` holds the public abbrev as of the
+release that wrote it — so an orphan whose directory names an **internal** abbrev belongs to
+the organism now publishing under a different name. Exact, no file I/O, and it resolved both
+live cases (fact 19).
+
+Comparisons are **case-sensitive, always**. `scerS288C` and `scerS288c` are different
+organisms (fact 18); a `lc()` anywhere in this path merges them.
+
+**2. Assembly identity (fallback).** For an orphan the database cannot explain — an organism
+whose internal abbrev also changed, e.g. after a reload — compare the `.fa.fai` shipped in the
+previous release against the `.fai` of each portal organism sharing its `strain_abbrev`.
+Identical sequence names and lengths mean the same assembly under a new name.
+
+Species taxon ID is deliberately **not** used by either mechanism (fact 12).
+
+Strain abbrev narrows the candidates; sequence identity decides. An ambiguous match yields no
+rename: guessing repoints curated annotations onto the wrong genome, which is worse than
+leaving a prune candidate for a human.
 
 A rename emits **one** update against the existing Apollo `id`, setting `directory`,
 `blatdb`, and `commonName`. Emitting an add for the new abbrev in the same run is a hard
