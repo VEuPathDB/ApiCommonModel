@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 12;
+use Test::More tests => 13;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use ApiCommonModel::Model::ApolloRelease::Portal;
 
@@ -40,3 +40,27 @@ eval { $P->normalise({organisms => [
   {organism_abbrev => 'bogus', is_reference_strain => 'yes', is_annotated_genome => '1', history => []},
 ]}) };
 like($@, qr/expected a numeric flag/, 'a non-numeric flag is a hard error, not a guess');
+
+# A non-numeric build_number is skipped deliberately, with our own warning --
+# not left to Perl's numeric comparison, whose "isn't numeric" warning would
+# go to stderr, which loadFromCommand treats as fatal.
+#
+# Both organisms are needed to pin the skip.  messyBuilds shows a bad row does
+# not corrupt the ordering of the good rows around it -- but that alone would
+# pass even with the guard deleted, because "not-a-number" + 0 is 0 and any
+# real build number beats it.  onlyBad is the discriminating case: with the
+# guard the row is skipped and there is no latest version; without it the row
+# becomes $best by default and 'bogus' is returned as the annotation version.
+my $messy = $P->normalise({organisms => [
+  {organism_abbrev => 'messyBuilds', is_reference_strain => '1', is_annotated_genome => '1',
+   name => 'x', name_for_filenames => 'x', strain_abbrev => 'x', species_ncbi_tax_id => '1',
+   history => [{build_number => 'not-a-number', annotation_version => 'bogus'},
+               {build_number => '9',            annotation_version => 'older'},
+               {build_number => '71',           annotation_version => 'newest'}]},
+  {organism_abbrev => 'onlyBad', is_reference_strain => '1', is_annotated_genome => '1',
+   name => 'x', name_for_filenames => 'x', strain_abbrev => 'x', species_ncbi_tax_id => '1',
+   history => [{build_number => 'not-a-number', annotation_version => 'bogus'}]},
+]});
+is(join('|', map { $messy->{$_}{latest_annotation_version} // 'undef' } qw(messyBuilds onlyBad)),
+   'newest|undef',
+   'a non-numeric build_number is skipped: it neither wins nor disturbs the good rows');
