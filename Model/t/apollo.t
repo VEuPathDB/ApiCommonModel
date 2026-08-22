@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 15;
+use Test::More tests => 17;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use ApiCommonModel::Model::ApolloRelease::Apollo;
 
@@ -17,7 +17,9 @@ is($t->{annotation_count}, 10, 'annotation count carried');
 is($t->{abbrev}, 'tgonME49', 'abbrev parsed from directory');
 
 my $c = $live->{cneoJEC21};
-is($c->{annotation_count}, 14, 'the organism we must not lose is parsed');
+# The annotation count is the load-bearing fact for this organism: it is the
+# number that makes deleting it expensive.
+is($c->{annotation_count}, 14, 'cneoJEC21 carries its annotation count');
 
 # commonName is curator-editable, so it is cross-checked, never matched on.
 is($A->commonNameDisagrees($live->{pfal3D7}, 'Plasmodium falciparum 3D7'), 1,
@@ -70,6 +72,11 @@ like($@, qr/two organisms with directory .*dupe.*\n?.*ids 10 and 11/s,
 my @warnings;
 my $bad = do {
   local $SIG{__WARN__} = sub { push @warnings, $_[0] };
-  $A->normalise([{id => 99, commonName => 'Z', directory => ''}]);
+  $A->normalise([{id => 9000003, commonName => 'Z', directory => ''}]);
 };
 is_deeply($bad, {}, 'organism with an unparseable directory is skipped, not keyed as ""');
+
+# The operator has to be able to act on this, which means knowing WHICH Apollo
+# record is malformed.  Assert the id appears, not the sentence around it.
+is(scalar @warnings, 1, 'an unparseable directory produces exactly one warning');
+like($warnings[0], qr/9000003/, 'and the warning names the offending Apollo id');
