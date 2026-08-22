@@ -2221,10 +2221,13 @@ sub generateOrganism {
   copyConf("$ENV{GUS_HOME}/lib/jbrowse/functions.conf",
            "$orgDir/functions.conf", $base, 0);
 
-  my $refSeqs = runCapture("$ENV{GUS_HOME}/bin/jbrowseRefSeqs",
-                           $ENV{GUS_HOME}, $project, $abbrev);
+  # Derived from the .fai we just copied.  jbrowseRefSeqs is orphaned -- both
+  # service endpoints that called it are commented out -- and the package has
+  # never referenced refSeqs.json anyway; trackList points at the .fai.
+  my $refSeqs = ApiCommonModel::Model::ApolloRelease::Generate->refSeqsFromFai(
+                  "$seqDir/$abbrev.fa.fai");
   ApiCommonModel::Model::ApolloRelease::Generate->writeFile(
-    "$seqDir/refSeqs.json", $refSeqs, $base);
+    "$seqDir/refSeqs.json", JSON::encode_json($refSeqs), $base);
 
   my $trackListJson = runCapture("$ENV{GUS_HOME}/bin/jbrowseTracks",
                                  $abbrev, $project, 0, 'geneAnnotationTracks');

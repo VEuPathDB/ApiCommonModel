@@ -192,8 +192,33 @@ Per organism in the approved roster:
 | `organismSpecific.json` | `jbrowseOrganismSpecificTracks <abbrev> UniDB 1 <build> <wsDir> jbrowse` |
 | `dnaseq.json` | `jbrowseDNASeqTracks <abbrev> UniDB <build> <wsDir> jbrowse` |
 | `seq/<abbrev>.fa`, `seq/<abbrev>.fa.fai` | copied and renamed from webServices |
-| `seq/refSeqs.json` | `jbrowseRefSeqs $GUS_HOME UniDB <abbrev>` |
+| `seq/refSeqs.json` | derived from the copied `.fai` — one `{name, start: 0, end: length, length}` per sequence. **Not** `jbrowseRefSeqs`; see below. |
 | `twoBit/<abbrev>.2bit` | `faToTwoBit` — the only new computation |
+
+### refSeqs.json is derived, not queried
+
+`jbrowseRefSeqs` is **orphaned**. Both service endpoints that called it are commented out in
+`JBrowseService.java` with the note *"THIS SHOULD BE REPLACED BY INDEXED FASTA IN
+WEBSERVICES"*, and nothing else in any repo references it. That is why fact 16 went unnoticed
+for six months: the script was already dead when it broke.
+
+The package does not need it either. Release-68's own `trackList.json` already pointed
+`refSeqs` at `seq/<abbrev>.fa.fai` and used an `IndexedFasta` store with a `faiUrlTemplate`;
+the `refSeqs.json` sitting in `seq/` is referenced by nothing — not by `refSeqs`, not in the
+`include` list.
+
+So the tool derives it from the `.fai` it already copies, rather than resurrecting a dead
+DB-backed script:
+
+```
+IV      1005040  ...   ->   {"name": "IV", "start": 0, "end": 1005040, "length": 1005040}
+```
+
+Kept rather than dropped because Apollo's pre-release checklist lists it and nothing here can
+prove Apollo ignores it; deriving it costs one pass over a file we already read, removes a
+per-organism database round-trip, and preserves the b68 output shape. One difference worth
+recording: entry order follows the fasta index rather than the old query's
+chromosome-then-length ordering. Nothing observed reads this file, let alone its order.
 
 ### faToTwoBit on cedar
 
