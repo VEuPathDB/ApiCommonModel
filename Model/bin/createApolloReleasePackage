@@ -1,0 +1,263 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+# --help must be answerable on a machine where nothing is configured, so the
+# library path is only added when GUS_HOME is actually set.  An unconditional
+# "$ENV{GUS_HOME}/lib/perl" would emit an uninitialized warning at COMPILE time
+# -- before any option has been looked at -- and the first thing a new user
+# would see is Perl noise instead of the usage text.
+use lib (defined $ENV{GUS_HOME} && length $ENV{GUS_HOME}
+           ? "$ENV{GUS_HOME}/lib/perl" : ());
+
+use File::Path qw(make_path);
+
+# ---------------------------------------------------------------------------
+# createApolloReleasePackage
+#
+# Wiring only.  Every rule with a wrong answer worth catching lives in
+# ApolloRelease::Cli or in the module that owns it, because a Perl script cannot
+# be `use`d by a test without running its main().  The tool this replaces put
+# its thresholds, its argument handling and its rename detection in a script in
+# a home directory, and so nothing ever exercised them: it produced an empty
+# release for build 71 and exited 0.
+#
+# Order below is deliberate and is the whole safety story:
+#   1. parse options            -- no environment, no database
+#   2. preflight                -- everything checkable before real work
+#   3. read the three inputs    -- portal, Apollo, overlay.  All read-only.
+#   4. sanity                   -- refuse absurd input rather than ship an
+#                                  empty release
+#   5. resolve renames          -- database first, assembly identity second
+#   6. reconcile + report       -- --report stops here, having changed nothing
+#   7. gate                     -- no generation while a human decision is open
+#   8. generate                 -- per-organism, failures isolated
+# ---------------------------------------------------------------------------
+
+my $CLI = 'ApiCommonModel::Model::ApolloRelease::Cli';
+
+# Parsed before anything is loaded from GUS_HOME: --help and a missing required
+# option must not require credentials, a GUS_HOME or a database.
+my $opt = eval { _requireCli(); $CLI->parseOptions(@ARGV) };
+_fail($@) unless $opt;
+
+if ($opt->{phase} eq 'help') {
+  print $CLI->usage();
+  exit 0;
+}
+
+# Everything from preflight onwards reports as one clean line rather than a Perl
+# die with a file and line number: these messages are read by a release
+# engineer, not by whoever wrote the module.
+my $status = eval { main($opt) };
+_fail($@) unless defined $status;
+exit $status;
+
+sub main {
+  my ($opt) = @_;
+
+  # --- 2. preflight --------------------------------------------------------
+  #
+  # Run in BOTH phases.  --report is the rehearsal for --generate: a report that
+  # succeeds and is then followed by a --generate dying at startup on a missing
+  # tool or a mistyped config key wastes the very round trip to the curation
+  # team that the two-phase split exists to protect.
+  $CLI->assertEnvironment(\%ENV, !$opt->{apollo_roster});
+  $CLI->assertPreviousRelease($opt->{previous_release});
+
+  my $outDir = $CLI->outputDir($opt);
+
+  my %generateOpts = (
+    outDir  => "$outDir",
+    base    => $opt->{base_url},
+    project => $opt->{project},
+    build   => $opt->{build},
+    wsDir   => $opt->{ws_dir},
+    gusHome => $ENV{GUS_HOME},
+  );
+  $CLI->assertGenerateConfig(\%generateOpts);
+
+  _generate()->assertToolsAvailable();
+
+  # --- 3. inputs, all read-only -------------------------------------------
+  my $portal = _portal()->loadFromCommand($opt->{project});
+  $CLI->assertPortalSane($portal);
+
+  my ($live, $apolloSource) = _loadApollo($opt);
+  $CLI->assertApolloSane($live, $apolloSource);
+
+  my $overlayPath = "$ENV{GUS_HOME}/data/ApiCommonModel/Model/apollo/roster-overlay.txt";
+  my $overlay     = _overlay()->parseFile($overlayPath);
+
+  # --- 5. renames ----------------------------------------------------------
+  my $resolved = $CLI->resolveRenames($portal, $live, {
+    previous_release => $opt->{previous_release},
+    ws_dir           => $opt->{ws_dir},
+    project          => $opt->{project},
+    build            => $opt->{build},
+  });
+
+  # --- 6. reconcile --------------------------------------------------------
+  my $result = _reconcile()->reconcile($portal, $live, $overlay, $resolved->{renames});
+  $CLI->assertUpdateBucketSane($result, $opt->{force});
+
+  # Portal.pm and the rename resolution COLLECT their warnings rather than
+  # writing to stderr -- their own callers treat a child's stderr byte as proof
+  # its output is untrustworthy.  Surfacing them is therefore this script's job,
+  # and skipping it turns a handled skip into an invisible one.
+  _printWarnings('portal', [_portal()->warnings()]);
+  _printWarnings('renames', $resolved->{warnings});
+  _printRenameProvenance($resolved);
+
+  print "Apollo roster read from $apolloSource\n";
+  print "roster overlay read from $overlayPath\n\n";
+
+  my $report = _report()->render($result, {build => $opt->{build},
+                                           environment => $opt->{environment}});
+  print $report;
+
+  # Printed AFTER the report and independently of the decision gate.  An
+  # annotated prune that curation has already approved raises no pending
+  # decision, so it is exactly the case that runs unread -- see
+  # Cli::annotatedPruneWarning.
+  my $atStake = $CLI->annotatedPruneWarning($result);
+  print "\nAT STAKE: $atStake" if $atStake;
+
+  # --- --report stops here, having changed nothing -------------------------
+  if ($opt->{phase} eq 'report') {
+    print "\n--report changed nothing.  Re-run with --generate to build the package\n"
+        . "into $outDir once the decisions above are recorded in the roster overlay.\n";
+    return 0;
+  }
+
+  # --- 7. the gate ---------------------------------------------------------
+  $CLI->assertGenerationAllowed($result, $opt->{force});
+
+  # --- 8. generate ---------------------------------------------------------
+  my $roster = $CLI->generationRoster($result, $opt->{organisms});
+
+  if (@{$opt->{organisms}}) {
+    print "\nPARTIAL PACKAGE: --organism narrowed generation to "
+        . scalar(@$roster) . " organism(s).\n"
+        . "The report above covers the whole roster; the command files below cover\n"
+        . "only what was generated.\n";
+  }
+
+  my $commandDir = "$outDir/updateCommands";
+  make_path("$outDir/data", "$outDir/twoBit", $commandDir);
+
+  print "\ngenerating " . scalar(@$roster) . " organism(s) into $outDir\n";
+
+  my $generated = _generate()->generateAll($roster, sub {
+    my ($organism) = @_;
+    return _generate()->generateOrganism($organism, \%generateOpts);
+  });
+
+  _printWarnings('generate', [_generate()->warnings()]);
+
+  # Written from the NARROWED result so the commands describe the package that
+  # was actually built.  Full-roster commands beside a partial package would
+  # repoint an Apollo organism at a directory nobody generated.
+  my $written = _commands()->writeCommandFiles(
+    $CLI->narrowResult($result, $opt->{organisms}), $commandDir,
+    build => $opt->{build});
+
+  _write("$outDir/report.txt", $report);
+  _write("$outDir/report.tsv", _report()->renderTsv($result));
+
+  printf("\n%d succeeded, %d failed\n",
+         scalar @{$generated->{succeeded}}, scalar @{$generated->{failed}});
+  print "  $written->{curl}\n  $written->{groovy}\n";
+  print "  $outDir/report.txt\n  $outDir/report.tsv\n";
+
+  return 0 unless @{$generated->{failed}};
+
+  # Per-organism failures, printed in full: the run is hours long and the
+  # organisms are independent, so a failure is recorded and the loop continues.
+  # Exiting zero here is how a package ships with holes in it.
+  print STDERR "\nFAILED organisms:\n";
+  print STDERR "  $_: $generated->{errors}{$_}\n" for @{$generated->{failed}};
+
+  return 1;
+}
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+
+sub _loadApollo {
+  my ($opt) = @_;
+
+  # The API is IP-restricted to Penn hosts and needs credentials.  A saved
+  # findAllOrganisms response goes through the same normalise() seam, so an
+  # offline rehearsal exercises every rule the live path does except the fetch.
+  return (_apollo()->loadFromFile($opt->{apollo_roster}), $opt->{apollo_roster})
+    if $opt->{apollo_roster};
+
+  return (_apollo()->loadFromApi(),
+          $ENV{APOLLO_API_URL} || 'https://apollo-api.veupathdb.org');
+}
+
+sub _printWarnings {
+  my ($label, $warnings) = @_;
+
+  return unless $warnings && @$warnings;
+
+  print "\n" . scalar(@$warnings) . " $label warning(s):\n";
+  print "  $_\n" for @$warnings;
+  print "\n";
+}
+
+# A rename that was resolved silently is a rename nobody audited, and it is the
+# one action that touches curated annotations.  Say which mechanism decided it:
+# "the database says so" and "the sequences match" carry very different weight.
+sub _printRenameProvenance {
+  my ($resolved) = @_;
+
+  my @from = sort keys %{$resolved->{renames}};
+  return unless @from || @{$resolved->{unresolved}};
+
+  print "\nrename resolution\n";
+  printf("  %-24s -> %-24s (%s)\n",
+         $_, $resolved->{renames}{$_}, $resolved->{mechanism}{$_}) for @from;
+  print "  unresolved orphan(s), left as prune candidates: "
+      . join(', ', @{$resolved->{unresolved}}) . "\n"
+    if @{$resolved->{unresolved}};
+  print "\n";
+}
+
+sub _write {
+  my ($path, $content) = @_;
+  open(my $fh, '>:raw', $path) or die "Cannot write $path: $!\n";
+  print $fh $content;
+  close $fh or die "Cannot close $path: $!\n";
+  return 1;
+}
+
+sub _fail {
+  my ($error) = @_;
+  chomp(my $message = $error || 'failed for no stated reason');
+  print STDERR "createApolloReleasePackage: $message\n";
+  exit 2;
+}
+
+# Loaded lazily and by name so that --help and an option error never touch
+# GUS_HOME.  Each wrapper returns the class name, so a caller reads as a normal
+# method call.
+sub _requireCli { _load('Cli') }
+sub _portal     { _load('Portal') }
+sub _apollo     { _load('Apollo') }
+sub _overlay    { _load('Overlay') }
+sub _reconcile  { _load('Reconcile') }
+sub _report     { _load('Report') }
+sub _generate   { _load('Generate') }
+sub _commands   { _load('Commands') }
+
+sub _load {
+  my ($name) = @_;
+  my $class = "ApiCommonModel::Model::ApolloRelease::$name";
+  eval "require $class; 1" or die $@;
+  return $class;
+}
+
