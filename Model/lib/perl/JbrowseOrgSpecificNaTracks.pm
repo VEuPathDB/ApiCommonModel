@@ -933,11 +933,12 @@ sub addChipChipTracks {
     next unless($dataset =~ /chipChipExper/);
 
     foreach my $sample (@{$cc_data{$dataset}}) { # for each
-      my @peakTracks = &makeChipChipPeak($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset);
-      push @{$result->{tracks}}, @peakTracks;
-
-      my @smoothedTracks = &makeChipChipSmoothed($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset);
-      push @{$result->{tracks}}, @smoothedTracks;
+      # These two push their track onto $result->{tracks} themselves.  Their
+      # last statement is that push, so they return its value -- the new array
+      # length -- and pushing that here appended a bare integer after every
+      # ChIP-chip track (56 of them for tgonME49, 28 for pfal3D7).
+      &makeChipChipPeak($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset);
+      &makeChipChipSmoothed($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset);
     }
   }
 }
