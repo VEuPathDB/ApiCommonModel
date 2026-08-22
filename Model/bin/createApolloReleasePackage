@@ -82,6 +82,18 @@ sub main {
 
   # --- 3. inputs, all read-only -------------------------------------------
   my $portal = _portal()->loadFromCommand($opt->{project});
+
+  # BEFORE assertPortalSane, deliberately.  Portal.pm and the rename resolution
+  # COLLECT their warnings rather than writing to stderr -- their own callers
+  # treat a child's stderr byte as proof its output is untrustworthy -- so
+  # surfacing them is this script's job.  Held until after the sanity gates,
+  # they were discarded on exactly the runs that needed them: a NULL
+  # is_reference column warns once per organism and empties the update bucket,
+  # and the run then died telling the engineer to "check --project" while the
+  # 490 warnings naming the real cause went unprinted.  A gate that dies must
+  # never swallow the evidence for its own message.
+  _printWarnings('portal', [_portal()->warnings()]);
+
   $CLI->assertPortalSane($portal);
 
   my ($live, $apolloSource) = _loadApollo($opt);
@@ -98,17 +110,15 @@ sub main {
     build            => $opt->{build},
   });
 
+  # Also before the gate below, and for the same reason: a declined merge is
+  # why an organism became a prune candidate, so it is the explanation for an
+  # empty update bucket rather than a footnote to it.
+  _printWarnings('renames', $resolved->{warnings});
+  _printRenameProvenance($resolved);
+
   # --- 6. reconcile --------------------------------------------------------
   my $result = _reconcile()->reconcile($portal, $live, $overlay, $resolved->{renames});
   $CLI->assertUpdateBucketSane($result, $opt->{force});
-
-  # Portal.pm and the rename resolution COLLECT their warnings rather than
-  # writing to stderr -- their own callers treat a child's stderr byte as proof
-  # its output is untrustworthy.  Surfacing them is therefore this script's job,
-  # and skipping it turns a handled skip into an invisible one.
-  _printWarnings('portal', [_portal()->warnings()]);
-  _printWarnings('renames', $resolved->{warnings});
-  _printRenameProvenance($resolved);
 
   print "Apollo roster read from $apolloSource\n";
   print "roster overlay read from $overlayPath\n\n";
@@ -195,8 +205,9 @@ sub _loadApollo {
   return (_apollo()->loadFromFile($opt->{apollo_roster}), $opt->{apollo_roster})
     if $opt->{apollo_roster};
 
-  return (_apollo()->loadFromApi(),
-          $ENV{APOLLO_API_URL} || 'https://apollo-api.veupathdb.org');
+  # Labelled from Apollo::apiUrl, never from a second copy of the same default:
+  # the report must name the host that was actually read.
+  return (_apollo()->loadFromApi(), _apollo()->apiUrl());
 }
 
 sub _printWarnings {

@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 24;
+use Test::More tests => 27;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use ApiCommonModel::Model::ApolloRelease::Apollo;
 
@@ -113,6 +113,26 @@ like($@, qr{non-JSON body from https://apollo\.example}, 'a non-JSON body names 
 
 eval { $A->_decodeRoster('{"error":"nope"}', 'https://apollo.example') };
 like($@, qr/not a list of organisms/, 'a JSON object that is not a roster is rejected');
+
+# apiUrl is the ONE place the API base is decided.  The CLI labels the report
+# with it, and that label used to be a second copy of the same expression --
+# so the two could disagree and the report would name a host that was never
+# read.  Pinned here because the disagreement is silent: both strings look
+# right in isolation.
+{
+  local $ENV{APOLLO_API_URL};
+  delete $ENV{APOLLO_API_URL};
+  is($A->apiUrl(), 'https://apollo-api.veupathdb.org',
+     'apiUrl defaults to prod Apollo when the environment says nothing');
+
+  $ENV{APOLLO_API_URL} = 'https://apollo-sandbox.example';
+  is($A->apiUrl(), 'https://apollo-sandbox.example',
+     'and an explicit APOLLO_API_URL wins -- this is how the sandbox is reached');
+
+  $ENV{APOLLO_API_URL} = '';
+  is($A->apiUrl(), 'https://apollo-api.veupathdb.org',
+     'an empty value reads as unset, not as a request for an empty base URL');
+}
 
 # A still-set $@ at exit becomes the process exit status; clear it so a passing
 # run exits 0.

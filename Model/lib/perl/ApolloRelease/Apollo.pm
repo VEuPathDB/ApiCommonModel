@@ -14,10 +14,17 @@ use HTTP::Request::Common qw(POST);
 # commonName: `directory` is machine-written by our own update commands,
 # while commonName is editable in the Apollo GUI.
 
+# The one place the API base is decided.  The CLI also needs it -- it reports
+# which source the roster came from -- and a second copy of this expression
+# there meant the report could attribute the roster to a host it had not read.
+sub apiUrl {
+  return $ENV{APOLLO_API_URL} || 'https://apollo-api.veupathdb.org';
+}
+
 sub loadFromApi {
   my ($class) = @_;
 
-  my $url  = $ENV{APOLLO_API_URL}  || 'https://apollo-api.veupathdb.org';
+  my $url  = $class->apiUrl();
   my $user = $ENV{APOLLO_API_USER} or die "APOLLO_API_USER is not set\n";
   my $pass = $ENV{APOLLO_API_PASS} or die "APOLLO_API_PASS is not set\n";
 
