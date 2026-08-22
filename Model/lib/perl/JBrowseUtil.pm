@@ -31,9 +31,6 @@ sub getDbh {
 #my $datasetAndPresenterPropertiesBaseName = "datasetAndPresenterProps.conf";
 
 # getters and setters for all class attributes
-#sub getCacheFile {$_[0]->{_cache_file}}
-#sub setCacheFile {$_[0]->{_cache_file} = $_[1]}
-
 sub getFileName {$_[0]->{_fileName}}
 sub setFileName {$_[0]->{_fileName} = $_[1]}
 
@@ -98,11 +95,6 @@ my @tester = %{$args};
 
   my $type = lc($args->{type}) eq 'protein' ? 'protein' : 'genome';
   $self->setType($type);
- 
- # this one is a bit odd because it calls a function that calls the setter
- # not sure if you need this
- # $self->setCacheFileName();
-
 
   #my $organismAbbrev ="tgonME49"; # $args->{organismAbbrev};;$self->getOrganismAbbrev();
   my $organismAbbrev = $self->getOrganismAbbrev();
@@ -225,20 +217,6 @@ sub makeProperties {
 
 
 
-
-# this function makes the cacheFileName and sets it as a class attribute
-sub setCacheFileName {
-    my ($self) = @_;
-
-    my $organismAbbrev = $self->getOrganismAbbrev();
-    my $fileName = $self->getFileName();
-
-    my $cacheFile = $self->getType() eq 'protein' 
-        ? $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/aa/$fileName" 
-        : $ENV{GUS_HOME} . "/lib/jbrowse/auto_generated/$organismAbbrev/$fileName";
-
-    $self->setCacheFile($cacheFile);
-}
 
 # didn't touch anything below here
 
@@ -411,20 +389,6 @@ sub intronJunctionsQueryParams {
   }
 
   return $querieParams->{default}->{$level};
-}
-
-sub printFromCache {
-  my ($self) = @_;
-
-  my $cacheFile = $self->getCacheFile();
-
-  if(-e $cacheFile) {
-    open(FILE, $cacheFile) or die "Cannot open file $cacheFile for reading: $!";
-    print <FILE>;
-    close FILE;
-    return 1
-  }
-  return 0;
 }
 
 1;
