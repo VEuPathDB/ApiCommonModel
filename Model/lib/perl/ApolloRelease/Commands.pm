@@ -3,29 +3,24 @@ package ApiCommonModel::Model::ApolloRelease::Commands;
 use strict;
 use warnings;
 
-# Emits the commands a human runs against Apollo once the release package has
-# been synced.  This module NEVER executes anything and never opens a socket:
-# its whole output is text destined for two files.  That is deliberate.  The
-# same inputs that produce a correct release produce, with one field wrong, an
-# irreversible loss of curated annotations -- so the step between "computed"
-# and "applied" is a file a human reads.
+# Emits the commands a human runs against Apollo after the package is synced.
+# NEVER executes anything and never opens a socket: the same inputs that produce
+# a correct release produce, with one field wrong, an irreversible loss of
+# curated annotations -- so the step between computed and applied is a file a
+# human reads.
 #
-# Passwords are emitted as the shell variable $APOLLO_ADMIN_PASSWORD, never
-# interpolated: these files land in a shared directory and get pasted into
-# tickets.
+# Passwords are emitted as $APOLLO_ADMIN_PASSWORD, never interpolated: these
+# files land in a shared directory and get pasted into tickets.
 
 my $API   = 'https://apollo-api.veupathdb.org';
 my $UI    = 'https://apollo.apidb.org';
 my $DATA  = '/data/apollo_data';
 my $ADMIN = 'admin@local.host';
 
-# Every curl command is the same call -- updateOrganismInfo -- differing only
-# in which id it names and what it sets.  Keeping one emitter means a change to
-# quoting, endpoint or credentials cannot apply to three of the four kinds.
-#
-# Field order is fixed rather than hash order so two runs over the same
-# reconciliation produce byte-identical files; a diff between releases is then
-# a diff of decisions, not of Perl's hash seed.
+# Every curl command is the same updateOrganismInfo call, differing only in the
+# id and the fields set, so one emitter means a change to quoting, endpoint or
+# credentials cannot reach only some kinds.  Field order is fixed rather than
+# hash order, so two runs are byte-identical and a diff shows decisions.
 sub _updateOrganismInfo {
   my ($class, $id, $abbrev, $extra) = @_;
 
@@ -45,10 +40,9 @@ sub _updateOrganismInfo {
   my %isFixed = map { $_ => 1 } @fixed;
   my @order = (@fixed, grep { !$isFixed{$_} } sort keys %fields);
 
-  # A single quote in a value would terminate the shell's quoting of --data and
-  # turn the rest of the JSON into shell words.  commonName comes from the
-  # portal, so this is reachable in principle; refuse rather than emit a line
-  # whose meaning depends on the shell.
+  # A single quote would terminate the shell's quoting of --data and turn the
+  # rest of the JSON into shell words.  commonName comes from the portal, so
+  # refuse rather than emit a line whose meaning depends on the shell.
   foreach my $key (@order) {
     die "$key value contains a single quote, which the emitted shell command "
       . "cannot quote safely: $fields{$key}\n"
@@ -64,10 +58,9 @@ sub _updateOrganismInfo {
        . qq{--data '{$json}' $API/organism/updateOrganismInfo\n};
 }
 
-# Apollo names an organism "<full name> [<annotation version>]".  With no
-# usable history row Portal leaves latest_annotation_version undef; emit the
-# bare name rather than an empty "[]", which would become part of the
-# organism's identity in Apollo and never match a later release.
+# Apollo names an organism "<full name> [<annotation version>]".  With no usable
+# history row, emit the bare name rather than an empty "[]", which would become
+# part of the organism's identity and never match a later release.
 sub apolloName {
   my ($class, $organism) = @_;
 
@@ -80,13 +73,11 @@ sub apolloName {
   return (defined $version && length $version) ? "$name [$version]" : $name;
 }
 
-# An update must NOT change visibility.  Publishing and unpublishing are
-# curation decisions: 17 live organisms are deliberately hidden, three of them
-# carrying annotations.  The previous script hardcoded "publicMode":"true"
-# here, which re-published every one of them.  Echo back what Apollo currently
-# holds -- and if we were not told what that is, die.  A default is exactly how
-# that bug returns, because a default looks correct in every test where the
-# field happens to be present.
+# An update must NOT change visibility: publishing is a curation decision, and
+# organisms are deliberately hidden, some carrying annotations.  The script this
+# replaces hardcoded publicMode true and re-published all of them.  Echo back
+# what Apollo holds, and die if not told -- a default is how that bug returns,
+# because it looks correct in every test where the field is present.
 sub updateCommand {
   my ($class, $entry) = @_;
 
@@ -99,14 +90,13 @@ sub updateCommand {
   );
 }
 
-# A rename repoints the EXISTING organism: same id, new directory, new blatdb,
-# new commonName.  cneoJEC21 (id 2452162) holds 14 human-made annotations and
-# has been reclassified as cdenJEC21; repointing that id preserves them.
+# A rename repoints the EXISTING organism: same id, new directory, blatdb and
+# commonName.  Reusing the id is what preserves the annotations hanging off it.
 #
 # The wrong shape -- add the new abbrev, prune the old -- uses the same API and
-# the same inputs, succeeds, and produces an empty organism plus 14 orphaned
-# annotations.  Nothing downstream can tell the two apart, which is why the id
-# used here is the old organism's and the paths are the new abbrev's.
+# inputs, succeeds, and produces an empty organism plus orphaned annotations.
+# Nothing downstream can tell them apart, which is why the id here is the OLD
+# organism's and the paths are the new abbrev's.
 sub renameCommand {
   my ($class, $entry) = @_;
 
@@ -120,10 +110,9 @@ sub renameCommand {
   );
 }
 
-# Prune UNPUBLISHES.  It is reversible by a single field flip, and Apollo's API
-# has no delete in use.  A prune is generated from the absence of an organism
-# on the portal -- a weaker signal than a curator's decision to keep data -- so
-# the action it triggers must be the recoverable one.
+# Prune UNPUBLISHES, reversible by a single field flip.  It is generated from an
+# organism's absence from the portal -- a weaker signal than a curator's decision
+# to keep data -- so the action it triggers must be the recoverable one.
 sub pruneCommand {
   my ($class, $entry) = @_;
 
@@ -133,10 +122,9 @@ sub pruneCommand {
   );
 }
 
-# An add creates an organism that does not exist in Apollo, then grants the
-# remote_users group access to it.  Unlike the curl commands this is NOT
-# idempotent -- a second run adds a second organism with the same name -- which
-# is why adds live in their own file and are never mixed into Apollo_curl.
+# Creates an organism and grants remote_users access.  Unlike the curl commands
+# this is NOT idempotent -- a second run adds a second organism with the same
+# name -- which is why adds live in their own file.
 sub addCommand {
   my ($class, $entry) = @_;
 
@@ -157,18 +145,13 @@ sub addCommand {
   . qq{-adminusername '$ADMIN' -adminpassword \$APOLLO_ADMIN_PASSWORD\n};
 }
 
-# Writes the two files a human runs.  Ordering is part of the contract:
+# Writes the two files a human runs.  Ordering is part of the contract: renames
+# first, since they are the only commands whose target holds curated work and so
+# should have landed if a run is interrupted; updates next, pure repointing;
+# prunes last, so an interrupted run leaves everything published.
 #
-#   renames first  -- they are the only commands whose target holds curated
-#                     work, so if a run is interrupted they are the ones that
-#                     have already landed;
-#   updates next   -- pure repointing, no organism changes identity;
-#   prunes last    -- an interrupted run then leaves everything published,
-#                     which is the recoverable end state.
-#
-# ONLY APPROVED adds and prunes are emitted.  An unapproved candidate is a
-# proposal for a human, reported by Report.pm; turning it into a runnable line
-# would make the roster overlay advisory rather than the gate it is.
+# ONLY APPROVED adds and prunes are emitted.  Turning a proposal into a runnable
+# line would make the roster overlay advisory rather than the gate it is.
 sub writeCommandFiles {
   my ($class, $result, $dir, %opts) = @_;
 
@@ -195,10 +178,8 @@ sub writeCommandFiles {
   print $curl $class->renameCommand($_) for @renames;
   print $curl $class->updateCommand($_) for @updates;
   foreach my $prune (@prunes) {
-    # An approved prune of an annotated organism is still emitted: approval is
-    # the human gate, and unpublishing is reversible.  But it is never silent
-    # -- whoever runs the file is told, on the line above, what is about to
-    # become invisible.
+    # Still emitted -- approval is the human gate and unpublishing is reversible
+    # -- but never silently: the line above says what becomes invisible.
     my $count = $prune->{annotation_count} || 0;
     print $curl "# WARNING: $prune->{abbrev} has $count human annotation(s); "
               . "unpublishing hides them.\n" if $count;
@@ -219,11 +200,10 @@ sub writeCommandFiles {
   return {curl => $curlPath, groovy => $groovyPath};
 }
 
-# The header is comment lines, so the file stays runnable as a shell script.
-# It exists because these files outlive the run that made them: they are copied
-# into tickets and read weeks later, at which point "which build is this, and
-# does it still apply?" has no other answer.  The date is caller-supplied where
-# possible so a regenerated package is byte-comparable with its predecessor.
+# Comment lines, so the file stays runnable as a shell script.  These files
+# outlive the run that made them -- copied into tickets, read weeks later -- and
+# "which build is this?" has no other answer.  The date is caller-supplied where
+# possible so a regenerated package stays byte-comparable.
 sub _header {
   my ($class, $fileName, $opts, @lines) = @_;
 

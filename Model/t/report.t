@@ -71,7 +71,7 @@ like($text, qr/build 71/,   'the report says which build it describes');
 like($text, qr/\bprod\b/,   'and which environment');
 
 # ----------------------------------------------------------------- renames
-# Two rows out of 461 that must not be missed.
+# The rows that must not be missed.
 
 like($text, qr/cneoJEC21.*cdenJEC21/,      'a rename names both abbrevs');
 like($text, qr/cneoJEC21.*cdenJEC21.*14/,  'and the annotation count it is preserving');
@@ -115,11 +115,9 @@ my ($annException) = $text =~ /^(.*unannotatedRef.*)$/m;
 like($refException, qr/not reference/i,  'an exception shows the criterion it fails');
 unlike($refException, qr/not annotated/i, 'and not the one it passes');
 like($annException, qr/not annotated/i,  'the other criterion is reported when it is the failing one');
-# Anchored to the section header line rather than scanning the whole report
-# with /s: the previous form would have passed on "no action" appearing
-# anywhere below, in any later section.  Two facts are pinned -- a header line
-# beginning at column 0 with "exceptions" (the indented rows never do), and
-# "no action" on that same line -- with no claim on the prose between them.
+# Anchored to the header line rather than scanning the whole report with /s,
+# which would pass on "no action" appearing in any later section.  Two facts:
+# a line starting at column 0 with "exceptions", and "no action" on it.
 like($text, qr/^exceptions\b[^\n]*\bno action\b/mi,
      'the exceptions header itself says no action is taken');
 
@@ -139,8 +137,7 @@ is($pending->{annotated_prune}, 1, 'and how many prunes would hide annotations')
 
 like($text, qr/DECISIONS REQUIRED:\s*2\b/, 'the report states the pending decision count plainly');
 
-# An empty decision set must SAY so.  Silence is indistinguishable from a
-# report that forgot to render the section.
+# Silence is indistinguishable from a report that forgot the section.
 my $settled = { %{mixedResult()}, add_candidate => [], prune_candidate => [] };
 my $settledText = $R->render($settled, {build => 71, environment => 'prod'});
 like($settledText, qr/DECISIONS REQUIRED:\s*none/i,
@@ -159,13 +156,10 @@ is($R->pendingDecisions($approvedRisky)->{total}, 0, 'an approved prune is not a
 like($R->render($approvedRisky, {}), qr/zzzRisky.*ANNOTATIONS WILL BE HIDDEN/,
      'but it is still flagged: approval does not make the annotations less hidden');
 
-# The two halves of that principle, asserted TOGETHER, because they pull in
-# opposite directions and the bug was assuming one gate governed both.
-# Approval gates the ACTION (is a decision outstanding?) and NOT the
-# CONSEQUENCE (do annotations stop being visible?).  Every earlier fixture had
-# its annotated prune unapproved, so both readings gave the same number and
-# neither was actually pinned -- pendingDecisions counted 1 while the report
-# flagged 2, and nothing was red.
+# Both halves asserted TOGETHER, because they pull in opposite directions and
+# the bug was assuming one gate governed both: approval gates the ACTION, not
+# the CONSEQUENCE.  Every earlier fixture had its annotated prune unapproved, so
+# both readings gave the same number and neither was pinned.
 my $mixedRisk = { %{mixedResult()},
   add_candidate   => [],
   prune_candidate => [
@@ -193,8 +187,8 @@ like($riskText,   qr/approvedRisky.*ANNOTATIONS WILL BE HIDDEN/,   'the approved
 like($riskText,   qr/unapprovedRisky.*ANNOTATIONS WILL BE HIDDEN/, 'the unapproved one is flagged');
 unlike($riskText, qr/approvedHarmless.*ANNOTATIONS WILL BE HIDDEN/, 'and the empty one is not');
 
-# The banner warning must survive a report with NO decisions pending -- that is
-# precisely the run that looks ready to execute unread.
+# The banner must survive a report with NO decisions pending: that is the run
+# that looks ready to execute unread.
 my $allApprovedRisk = { %{mixedResult()},
   add_candidate   => [],
   prune_candidate => [{abbrev => 'approvedRisky', apollo_id => 1,
@@ -205,9 +199,9 @@ like($allApprovedText, qr/DECISIONS REQUIRED:\s*none/i, 'nothing is pending');
 like($allApprovedText, qr/^\s*1 prune candidate\(s\).*hide human annotations/m,
      'yet the banner still says annotations will be hidden');
 
-# ------------------------------------------------ the 457-row update bucket
-# Routine updates are real output -- "which 457" matters when the count moves --
-# but they must never sit between a reader and the rows that need a decision.
+# ----------------------------------------------------- the update bucket
+# Routine updates are real output -- "which ones" matters when the count moves --
+# but must never sit between a reader and the rows needing a decision.
 
 my $pruneAt  = index($text, 'zzzRisky');
 my $renameAt = index($text, 'cneoJEC21');
@@ -228,8 +222,8 @@ is($R->render(mixedResult(), {build => 71, environment => 'prod'}),
    $R->render(mixedResult(), {build => 71, environment => 'prod'}),
    'the same input renders byte-identical output');
 
-# Bucket contents arriving in a different order must not change the output;
-# a diff between two releases has to be a diff of decisions.
+# Input order must not change the output: a diff between two releases has to be
+# a diff of decisions.
 my $shuffled = mixedResult();
 $shuffled->{prune_candidate} = [reverse @{$shuffled->{prune_candidate}}];
 $shuffled->{rename}          = [reverse @{$shuffled->{rename}}];
@@ -263,8 +257,8 @@ like($tsvRename, qr/\b14\b/,        'and the annotation count');
 
 is($R->renderTsv(mixedResult()), $tsv, 'the TSV is byte-stable for the same input');
 
-# A tab or newline in a portal-supplied name would silently shift every later
-# column, or split one record into two, in whatever diffs this file.
+# A tab or newline in a portal-supplied name would shift every later column, or
+# split one record into two.
 my $nasty = { %{mixedResult()},
   prune_candidate => [{abbrev => 'nasty', apollo_id => 1, annotation_count => 0, approved => 0,
                        common_name => "Tab\there and\nnewline"}] };

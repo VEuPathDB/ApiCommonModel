@@ -8,42 +8,29 @@ use Getopt::Long qw(GetOptionsFromArray);
 use ApiCommonModel::Model::ApolloRelease::Rename;
 use ApiCommonModel::Model::ApolloRelease::Report;
 
-# Everything in createApolloReleasePackage that can be decided without a
-# database, a subprocess or a filesystem lives here rather than in the script.
+# Everything in createApolloReleasePackage decidable without a database, a
+# subprocess or a filesystem.  A Perl script cannot be `use`d by a test without
+# running its main(), so logic left in Model/bin/ is never exercised until a
+# release engineer runs it against prod -- which is how the tool this replaces
+# came to report success on an empty release.  The script is thin wiring; every
+# rule with a wrong answer worth catching is a class method here.
 #
-# A Perl script cannot be `use`d by a test without running its main(), so logic
-# left in Model/bin/ is logic that is never exercised until a release engineer
-# runs it against prod.  That is precisely how the tool this replaces came to
-# report success on an empty release: its argument handling, its thresholds and
-# its rename detection had no seam anyone could test.  So the script is a thin
-# wiring layer over this module, and every rule with a wrong answer worth
-# catching is a class method here.
-#
-# In particular the RENAME RESOLUTION lives here and not in Rename.pm.  Rename.pm
-# is finished and reviewed, and is about one thing: does this .fai describe the
-# same assembly as that one.  Resolving a rename is a two-mechanism policy --
-# consult apidb.organism first, fall back to assembly identity -- and the first
-# mechanism needs no file I/O at all.  Putting it in Rename.pm would give that
-# module a second, unrelated reason to change.
+# RENAME RESOLUTION lives here, not in Rename.pm, which answers one question:
+# does this .fai describe the same assembly as that one.  Resolving a rename is
+# a two-mechanism policy whose first mechanism needs no file I/O, and putting it
+# there would give that module a second reason to change.
 
-# ---------------------------------------------------------------------------
-# Sanity floor for the portal organism count
-# ---------------------------------------------------------------------------
+# Sanity floor for the portal organism count.
 #
-# The portal returned 831 organisms on build 71, and an organism set only ever
-# grows: an organism is retired by losing its reference/annotated flags, not by
-# leaving the list.  So any large drop means the query, the model or the project
-# name is wrong, not that VEuPathDB shrank.
+# An organism set only ever grows -- retirement is losing the reference/annotated
+# flags, not leaving the list -- so a large drop means the query, the model or
+# the project name is wrong.
 #
-# 500 is the floor, chosen against the one number that makes an undercount
-# dangerous rather than merely odd: live prod Apollo holds 459 organisms, and
-# every Apollo organism absent from the portal becomes a prune candidate.  Below
-# ~459 the tool would be proposing to unpublish curated genomes on the strength
-# of a broken query -- so the floor sits just above it.  It is far enough below
-# 831 (a 40% loss) that ordinary curation churn, or a component database being
-# reloaded, can never trip it.  A run that legitimately has fewer organisms than
-# this does not exist today; when it does, this constant is the one place to
-# argue about it.
+# The floor sits just above the size of the live Apollo roster, because every
+# Apollo organism absent from the portal becomes a prune candidate: below that
+# the tool would propose unpublishing curated genomes on the strength of a broken
+# query.  It is far enough below the real portal count that curation churn or a
+# component database reload cannot trip it.
 use constant PORTAL_FLOOR => 500;
 
 my $RENAME = 'ApiCommonModel::Model::ApolloRelease::Rename';
@@ -51,9 +38,7 @@ my $REPORT = 'ApiCommonModel::Model::ApolloRelease::Report';
 
 my @ENVIRONMENTS = qw(qa prod);
 
-# ---------------------------------------------------------------------------
-# Options
-# ---------------------------------------------------------------------------
+# --- Options ---
 
 sub usage {
   return <<'USAGE';
@@ -99,9 +84,9 @@ Environment: GUS_HOME, and APOLLO_API_USER / APOLLO_API_PASS unless
 USAGE
 }
 
-# Dies with a plain message (no Perl line noise) on any bad combination.  Reads
-# nothing but @argv and %ENV{HOME}: --help and a missing required option must be
-# answerable with no credentials, no GUS_HOME and no database.
+# Dies with a plain message on any bad combination.  Reads nothing but @argv and
+# $ENV{HOME}: --help and a missing option must be answerable with no
+# credentials, no GUS_HOME and no database.
 sub parseOptions {
   my ($class, @argv) = @_;
 
@@ -118,8 +103,8 @@ sub parseOptions {
 
   my $parser = Getopt::Long::Parser->new(config => ['no_auto_abbrev', 'no_ignore_case']);
 
-  # GetOptionsFromArray warns to stderr and returns false.  Turn that into the
-  # same kind of death as every other bad option, so a caller sees one message.
+  # GetOptionsFromArray warns to stderr and returns false; turn that into the
+  # same death as every other bad option so a caller sees one message.
   my $problem;
   local $SIG{__WARN__} = sub { $problem ||= $_[0] };
 
@@ -142,8 +127,8 @@ sub parseOptions {
 
   die "unexpected argument(s): @argv\n" if @argv;
 
-  # --help short-circuits every other rule.  It is the one invocation that must
-  # work on a machine where nothing is configured.
+  # --help short-circuits every other rule: the one invocation that must work on
+  # a machine where nothing is configured.
   if ($help) {
     $opt{phase} = 'help';
     return \%opt;
@@ -164,8 +149,8 @@ sub parseOptions {
   die "--environment must be one of: @ENVIRONMENTS (got '$opt{environment}')\n"
     unless grep { $_ eq $opt{environment} } @ENVIRONMENTS;
 
-  # --organism narrows generation only.  Accepting it on --report would produce
-  # a report that looks filtered and is not, which is worse than refusing it.
+  # Accepting --organism on --report would produce a report that looks filtered
+  # and is not, which is worse than refusing it.
   die "--organism narrows generation only and has no effect with --report;\n"
     . "the reconciliation always runs over every organism.\n"
     if @{$opt{organisms}} && $opt{phase} eq 'report';
@@ -183,13 +168,10 @@ sub outputDir {
   return "$opt->{out_dir}/release-$opt->{build}/$opt->{environment}";
 }
 
-# ---------------------------------------------------------------------------
-# Preflight -- everything checkable before any real work
-# ---------------------------------------------------------------------------
+# --- Preflight -- everything checkable before any real work ---
 
-# $env is passed in rather than read from %ENV so this is testable, and so the
-# script has one place that decides which variables a run needs.  The Apollo
-# credentials are genuinely not needed when the roster comes from a file.
+# $env is passed in rather than read from %ENV so this is testable, and so one
+# place decides which variables a run needs.
 sub assertEnvironment {
   my ($class, $env, $needApolloCredentials) = @_;
 
@@ -218,10 +200,9 @@ sub assertPreviousRelease {
   return 1;
 }
 
-# The keys Generate::generateOrganism reads out of its %$opts.  A quality review
-# flagged both failure modes this exists to stop: `wsdir` for `wsDir` fails deep
-# into a run when the first genome cannot be found, and a missing `gusHome`
-# never fails at all -- it degrades to running "/bin/<script>".
+# The keys Generate::generateOrganism reads out of its %$opts.  Both failure
+# modes are silent-ish: `wsdir` for `wsDir` fails deep into a run, and a missing
+# `gusHome` never fails at all -- it degrades to running "/bin/<script>".
 my @GENERATE_KEYS = qw(outDir base project build wsDir gusHome);
 
 sub assertGenerateConfig {
@@ -236,9 +217,7 @@ sub assertGenerateConfig {
   return 1;
 }
 
-# ---------------------------------------------------------------------------
-# Sanity checks -- refuse to proceed on absurd input
-# ---------------------------------------------------------------------------
+# --- Sanity checks -- refuse to proceed on absurd input ---
 
 sub assertPortalSane {
   my ($class, $portal) = @_;
@@ -255,10 +234,9 @@ sub assertPortalSane {
   return 1;
 }
 
-# Apollo.pm dies on an empty roster from the API, with a message about
-# credentials and Penn hosts.  loadFromFile has no such check -- an empty JSON
-# array parses fine -- so the guard is applied here to BOTH sources, and names
-# whichever one was used.
+# Apollo.pm dies on an empty roster from the API, but loadFromFile has no such
+# check -- an empty JSON array parses fine -- so guard both sources here and name
+# whichever was used.
 sub assertApolloSane {
   my ($class, $live, $source) = @_;
 
@@ -271,9 +249,9 @@ sub assertApolloSane {
   return 1;
 }
 
-# Zero updates means every organism in Apollo vanished from the portal.  That is
-# not a quiet zero: it is the shape a wrong --project or a half-loaded model
-# takes, and the run that follows proposes 459 prunes.
+# Zero updates means every Apollo organism vanished from the portal.  That is
+# the shape a wrong --project or a half-loaded model takes, and the run that
+# follows proposes pruning the entire roster.
 sub assertUpdateBucketSane {
   my ($class, $result, $force) = @_;
 
@@ -288,23 +266,16 @@ sub assertUpdateBucketSane {
     . "release.  Re-run with --force if you genuinely mean it.\n";
 }
 
-# ---------------------------------------------------------------------------
-# The --generate gate
-# ---------------------------------------------------------------------------
+# --- The --generate gate ---
 
-# Commands::writeCommandFiles emits only APPROVED adds and prunes -- silently,
-# and correctly: an unapproved candidate is a proposal.  But generating while
-# decisions are pending therefore produces a package that is quietly missing
-# them, and nothing in the output says so.  Refuse instead.
+# writeCommandFiles emits only APPROVED adds and prunes, correctly -- an
+# unapproved candidate is a proposal.  So generating while decisions are pending
+# produces a package quietly missing them.  Refuse instead.
 #
-# GATE ON `total` ONLY.  pendingDecisions returns four numbers and only three of
-# them count pending decisions: `annotated_prune` counts every prune holding
-# annotations, approved or not, so it is NOT a subset of `prune` and can exceed
-# `total`.  It answers "what is at stake if this runs", not "is a human still
-# deciding" -- blocking on it would refuse a release the curation team has
-# already approved, and reading it as a subset would under-report the risk.  It
-# is surfaced by annotatedPruneWarning below, which is deliberately independent
-# of this gate.
+# GATE ON `total` ONLY.  `annotated_prune` counts every prune holding
+# annotations, approved or not, so it is not a subset of `prune` and can exceed
+# `total`: it answers "what is at stake", not "is a human still deciding".
+# Blocking on it would refuse a release curation already approved.
 sub assertGenerationAllowed {
   my ($class, $result, $force) = @_;
 
@@ -334,11 +305,10 @@ sub assertGenerationAllowed {
   die $message;
 }
 
-# The consequence, reported separately from the gate above and NOT suppressed
-# by --force or by a clean decision count.  A run with zero pending decisions is
-# precisely the run most likely to be executed without reading -- the curation
-# team already approved everything -- and it can still be about to hide human
-# annotations.  Returns undef when there is nothing at stake.
+# Reported separately from the gate above and NOT suppressed by --force or by a
+# clean decision count: a run with zero pending decisions is the one most likely
+# to be executed unread, and it can still hide human annotations.  Returns undef
+# when nothing is at stake.
 sub annotatedPruneWarning {
   my ($class, $result) = @_;
 
@@ -355,13 +325,11 @@ sub annotatedPruneWarning {
        . "when their work stops being visible.\n";
 }
 
-# ---------------------------------------------------------------------------
-# The generation roster
-# ---------------------------------------------------------------------------
+# --- The generation roster ---
 
-# update + rename + APPROVED add_candidate, deduplicated and sorted, as portal
-# organism records.  A rename is named by its NEW abbrev: that is the directory
-# the package writes and the one Apollo will be repointed at.
+# update + rename + APPROVED add_candidate, deduplicated and sorted.  A rename
+# is named by its NEW abbrev -- the directory the package writes and the one
+# Apollo is repointed at.
 sub generationRoster {
   my ($class, $result, $only) = @_;
 
@@ -377,8 +345,8 @@ sub generationRoster {
 
   return [map { $byAbbrev{$_} } sort keys %byAbbrev] unless $only && @$only;
 
-  # An --organism naming something outside the roster would otherwise generate
-  # a smaller package, or an empty one, and report success.  Say which.
+  # An --organism outside the roster would otherwise generate a smaller package,
+  # or an empty one, and report success.  Say which.
   my @unknown = grep { !$byAbbrev{$_} } @$only;
   die "--organism named " . scalar(@unknown) . " abbrev(s) that are not in the\n"
     . "generation roster (update + rename + approved add): " . join(', ', @unknown) . "\n"
@@ -390,21 +358,14 @@ sub generationRoster {
   return [map { $byAbbrev{$_} } grep { $want{$_} } sort keys %byAbbrev];
 }
 
-# The one refusal --force cannot override.  --force means "I accept that
-# unapproved candidates are omitted" and "I accept an empty update bucket".
-# Neither is a licence to write a package with nothing in it.
+# The one refusal --force cannot override.  --force accepts omitted candidates
+# and an empty update bucket; neither licenses a package with nothing in it.
+# Unforced this cannot fire, since a non-empty update bucket guarantees a
+# non-empty roster -- so reaching it means someone overrode that gate and got
+# the outcome it warned about.
 #
-# Without --force this cannot fire: assertUpdateBucketSane guarantees a
-# non-empty update bucket, and a non-empty update bucket guarantees a non-empty
-# roster.  So the only way to reach it is a human who overrode that gate and got
-# precisely the outcome it was warning about -- generating anyway wrote empty
-# command files and exited 0, which is the silent empty release this whole tool
-# exists to replace.
-#
-# Takes no $force argument, unlike assertUpdateBucketSane and
-# assertGenerationAllowed either side of it.  That asymmetry is the fix and not
-# an oversight: a $force parameter here would re-open the hole this closes, so
-# the signature is where "this is not a judgement call" is recorded.
+# Takes no $force argument, unlike the gates either side of it.  The asymmetry is
+# deliberate: a $force parameter here reopens the hole this closes.
 sub assertRosterNonEmpty {
   my ($class, $roster) = @_;
 
@@ -417,10 +378,9 @@ sub assertRosterNonEmpty {
     . "silent empty release this tool exists to replace.\n";
 }
 
-# When --organism narrows generation, the command files must describe the
-# package that was actually built.  Emitting the full roster's commands
-# alongside a partial package is how an Apollo organism gets repointed at a
-# directory nobody generated.
+# The command files must describe the package actually built: full-roster
+# commands beside a partial package is how an Apollo organism gets repointed at
+# a directory nobody generated.
 sub narrowResult {
   my ($class, $result, $only) = @_;
 
@@ -437,9 +397,7 @@ sub narrowResult {
   return \%narrowed;
 }
 
-# ---------------------------------------------------------------------------
-# Rename resolution: the database first, assembly identity as a fallback
-# ---------------------------------------------------------------------------
+# --- Rename resolution: the database first, assembly identity as a fallback ---
 
 # $opts:
 #   previous_release  - the previous release's <env> dir (enables the fallback)
@@ -458,10 +416,9 @@ sub resolveRenames {
   my %mechanism;
   my @warnings;
 
-  # Case-sensitive throughout.  scerS288C and scerS288c are different
-  # organisms, and two case-insensitive collisions exist in the namespace, so a
-  # lc() anywhere in this path silently merges two genomes.  Perl hash lookup
-  # and `eq` are exact; nothing here folds case, and nothing here should.
+  # Case-sensitive throughout: abbrevs differing only in case are different
+  # organisms, and collisions exist in the namespace, so a lc() anywhere in this
+  # path silently merges two genomes.  Nothing here folds case.
   my @orphans = grep { !exists $portal->{$_} } sort keys %$live;
 
   return {renames => {}, mechanism => {}, unresolved => [], warnings => []}
@@ -469,33 +426,23 @@ sub resolveRenames {
 
   # --- 1. the database, which is authoritative ------------------------------
   #
-  # apidb.organism carries abbrev (internal, stable) and public_abbrev.  A
-  # reclassification changes the public one and leaves the internal one alone,
-  # and Apollo's `directory` holds the public abbrev as of the release that
-  # wrote it.  So an orphan naming an internal abbrev whose organism now
-  # publishes under a different name IS that organism.  Measured on build 71:
-  # 457 of 459 Apollo directories match a public abbrev, 2 match an internal
-  # abbrev whose public differs, 0 match neither.
+  # A reclassification changes public_abbrev and leaves the internal abbrev
+  # alone, while Apollo's `directory` holds the public abbrev as of the release
+  # that wrote it.  So an orphan naming an internal abbrev whose organism now
+  # publishes under a different name IS that organism.
   #
-  # NO FILTER on self-referential entries (internal eq public), deliberately.
-  # One used to sit here, and it could not affect any outcome: for it to change
-  # a lookup, an orphan's abbrev would have to equal an organism's internal
-  # abbrev where that organism's PUBLIC abbrev is the same string -- and then
-  # the orphan matches a public abbrev, so it is not an orphan and this hash is
-  # never consulted for it.  Its only residual effect was to suppress the
-  # duplicate warning below in a state where one organism's public abbrev
-  # equals another's internal abbrev, which is a genuine data anomaly that
-  # deserves to be said out loud rather than filtered away.  A guard nothing
-  # can reach is how the script this replaces accumulated its dead branches, so
-  # it is gone rather than pinned by a test that could only assert an
-  # equivalence.  The ~794 identity entries it used to exclude are inert.
+  # NO FILTER on self-referential entries (internal eq public), deliberately: an
+  # orphan can never look one up, since such an entry's key is itself a public
+  # abbrev.  Filtering them would only suppress the duplicate warning below in
+  # the one state that warrants it -- one organism's public abbrev equalling
+  # another's internal.  The identity entries are inert.
   my %publicByInternal;
   foreach my $organism (values %$portal) {
     my $internal = $organism->{internal_abbrev};
     next unless defined $internal && length $internal;
 
-    # No internal abbrev repeats today (measured over all 831).  If one ever
-    # does, both readings are equally defensible, so take neither.
+    # No internal abbrev repeats today.  If one ever does, both readings are
+    # equally defensible, so take neither.
     if (exists $publicByInternal{$internal}) {
       push @warnings,
         "internal abbrev '$internal' belongs to more than one portal organism "
@@ -519,10 +466,9 @@ sub resolveRenames {
       next;
     }
 
-    # Repointing onto an abbrev Apollo already holds is a merge, not a rename:
-    # two Apollo organisms would share one directory, and Reconcile refuses the
-    # whole run over it.  Decline the rename instead -- the orphan stays a
-    # prune candidate a human judges, which is the recoverable outcome.
+    # Repointing onto an abbrev Apollo already holds is a merge: two organisms
+    # would share one directory, which Apollo.pm refuses to load next release.
+    # Decline, leaving the orphan a prune candidate a human judges.
     if ($live->{$to}) {
       push @warnings,
         "$orphan: the database says it is now '$to', but '$to' is already in Apollo. "
@@ -565,13 +511,10 @@ sub resolveRenames {
          . "/$organism->{name_for_filenames}/genomeAndProteome/fasta/genome.fasta.fai";
   };
 
-  # No strain filter is passed.  An orphan is BY DEFINITION absent from the
-  # portal, so the only strain evidence available is Apollo's commonName -- and
-  # commonName is editable in the Apollo GUI, which is exactly why Apollo.pm
-  # refuses to match on it anywhere else.  Rename.pm handles an undef strain by
-  # comparing against every portal organism and saying so; that costs one pass
-  # over ~831 index files, on the rare orphan the database could not explain,
-  # and the sequence comparison is what decides either way.
+  # No strain filter: an orphan is by definition absent from the portal, so the
+  # only strain evidence is Apollo's commonName, which is GUI-editable and
+  # therefore never matched on.  Rename.pm compares against every portal
+  # organism instead, and the sequence comparison is what decides.
   my $detected = $renameClass->detect(\@unresolved, $portal,
                                       $previousFai, $currentFai, {});
 
@@ -589,9 +532,8 @@ sub resolveRenames {
       next;
     }
 
-    # Two orphans whose assemblies both match one portal organism.  Reconcile
-    # dies on that ("two organisms renamed to X"); catch it here, where the
-    # cause can be named and the release can still report.
+    # Two orphans matching one portal organism: Reconcile dies on that, so catch
+    # it here where the cause can be named and the release can still report.
     if (exists $renameTarget{$to}) {
       push @warnings,
         "$from: its assembly matches '$to', but '$to' is already the rename target of "

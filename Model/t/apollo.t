@@ -17,8 +17,7 @@ is($t->{annotation_count}, 10, 'annotation count carried');
 is($t->{abbrev}, 'tgonME49', 'abbrev parsed from directory');
 
 my $c = $live->{cneoJEC21};
-# The annotation count is the load-bearing fact for this organism: it is the
-# number that makes deleting it expensive.
+# The annotation count is what makes deleting an organism expensive.
 is($c->{annotation_count}, 14, 'cneoJEC21 carries its annotation count');
 
 # commonName is curator-editable, so it is cross-checked, never matched on.
@@ -27,10 +26,9 @@ is($A->commonNameDisagrees($live->{pfal3D7}, 'Plasmodium falciparum 3D7'), 1,
 is($A->commonNameDisagrees($live->{tgonME49}, 'Toxoplasma gondii ME49'), 0,
    'matching common name is not flagged');
 
-# Not every Apollo organism carries an annotation-version bracket.  The strip
-# is anchored, so a bracket-free name must compare whole rather than being
-# treated as a mismatch (which would raise a cross-check warning on every
-# such organism, every release).
+# Not every organism carries an annotation-version bracket, and the strip is
+# anchored -- so a bracket-free name must compare whole rather than raise a
+# cross-check warning on every such organism, every release.
 is($A->commonNameDisagrees({common_name => 'Plasmodium falciparum 3D7'},
                            'Plasmodium falciparum 3D7'), 0,
    'bracket-free common name still matches');
@@ -40,9 +38,8 @@ is($A->commonNameDisagrees({common_name => 'Plasmodium falciparum 3D7'},
 is($live->{tgonME49}{public_mode}, 1, 'publicMode true becomes 1');
 is($live->{cglaCBS138}{public_mode}, 0, 'publicMode false becomes 0');
 
-# annotationCount is the value that decides whether an organism can be safely
-# removed.  A missing key must read as 0, not undef -- undef would warn under
-# numeric comparison and could compare as "no annotations" by accident anyway.
+# A missing annotationCount must read as 0, not undef: undef warns under numeric
+# comparison and compares as "no annotations" by accident anyway.
 my $noCount = $A->normalise([
   {id => 1, commonName => 'X', directory => '/data/apollo_data/xxxx'},
 ]);
@@ -54,9 +51,8 @@ my $slashed = $A->normalise([
 ]);
 is_deeply([keys %$slashed], ['tgonME49'], 'trailing slash on directory is stripped');
 
-# Two Apollo organisms sharing a directory is corruption: silently keeping the
-# last one would hide an organism from the diff and could generate a delete
-# against the wrong record.  Fail loudly instead.
+# Corruption: silently keeping the last one hides an organism from the diff and
+# could generate a delete against the wrong record.
 eval {
   $A->normalise([
     {id => 10, commonName => 'A', directory => '/data/apollo_data/dupe', annotationCount => 0},
@@ -66,9 +62,8 @@ eval {
 like($@, qr/two organisms with directory .*dupe.*\n?.*ids 10 and 11/s,
      'duplicate directory is a fatal error naming both ids');
 
-# A directory that yields no final path segment must be skipped, not keyed
-# under the empty string -- which would collide across every such record and
-# put a nameless entry into the roster the release commands iterate.
+# Skipped, not keyed under the empty string, which would collide across every
+# such record and put a nameless entry into the roster.
 my @warnings;
 my $bad = do {
   local $SIG{__WARN__} = sub { push @warnings, $_[0] };
@@ -76,14 +71,14 @@ my $bad = do {
 };
 is_deeply($bad, {}, 'organism with an unparseable directory is skipped, not keyed as ""');
 
-# The operator has to be able to act on this, which means knowing WHICH Apollo
-# record is malformed.  Assert the id appears, not the sentence around it.
+# The operator needs to know WHICH record is malformed, so assert the id
+# appears, not the sentence around it.
 is(scalar @warnings, 1, 'an unparseable directory produces exactly one warning');
 like($warnings[0], qr/9000003/, 'and the warning names the offending Apollo id');
 
-# A single stray trailing byte is not cosmetic: the abbrev "tgonME49 " matches
-# no portal organism, so reconciliation would report the real genome as an add
-# and the tainted one as a prune -- add-plus-prune for one genome.
+# A single stray trailing byte is not cosmetic: the tainted abbrev matches no
+# portal organism, so reconciliation reports the real genome as an add and the
+# tainted one as a prune -- add-plus-prune for one genome.
 my $spaced = $A->normalise([
   {id => 3, commonName => 'Y', directory => '/data/apollo_data/tgonME49 '},
 ]);
@@ -94,9 +89,9 @@ my $both = $A->normalise([
 ]);
 is_deeply([keys %$both], ['tgonME49'], 'mixed trailing whitespace and slashes are stripped');
 
-# Interior junk cannot be trimmed without inventing an identity, so the shape
-# is validated instead.  Skipping is the safe failure: an absent organism can
-# only become an approval-gated add_candidate, never a prune.
+# Interior junk cannot be trimmed without inventing an identity.  Skipping is
+# the safe failure: an absent organism can only become a gated add, never a
+# prune.
 my @junkWarnings;
 my $junk = do {
   local $SIG{__WARN__} = sub { push @junkWarnings, $_[0] };
@@ -115,10 +110,8 @@ eval { $A->_decodeRoster('{"error":"nope"}', 'https://apollo.example') };
 like($@, qr/not a list of organisms/, 'a JSON object that is not a roster is rejected');
 
 # apiUrl is the ONE place the API base is decided.  The CLI labels the report
-# with it, and that label used to be a second copy of the same expression --
-# so the two could disagree and the report would name a host that was never
-# read.  Pinned here because the disagreement is silent: both strings look
-# right in isolation.
+# from it, and that label was once a second copy of the same expression, so the
+# two could disagree silently -- both strings look right in isolation.
 {
   local $ENV{APOLLO_API_URL};
   delete $ENV{APOLLO_API_URL};

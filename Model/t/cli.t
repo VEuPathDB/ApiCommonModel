@@ -7,9 +7,7 @@ use ApiCommonModel::Model::ApolloRelease::Cli;
 
 my $C = 'ApiCommonModel::Model::ApolloRelease::Cli';
 
-# ---------------------------------------------------------------------------
-# option parsing and the two phases
-# ---------------------------------------------------------------------------
+# --- option parsing and the two phases ---
 
 {
   my $opts = $C->parseOptions('--report', '--build', '71');
@@ -89,9 +87,7 @@ my $C = 'ApiCommonModel::Model::ApolloRelease::Cli';
   ok($opts->{force}, '--force carried');
 }
 
-# ---------------------------------------------------------------------------
-# preflight
-# ---------------------------------------------------------------------------
+# --- preflight ---
 
 {
   eval { $C->assertEnvironment({GUS_HOME => '/x', APOLLO_API_PASS => 'p'}, 1) };
@@ -138,10 +134,7 @@ my $C = 'ApiCommonModel::Model::ApolloRelease::Cli';
   like($@, qr/gusHome/, 'an empty value is as bad as a missing one');
 }
 
-# ---------------------------------------------------------------------------
-# sanity checks -- the tool this replaces produced an empty release and
-# reported success
-# ---------------------------------------------------------------------------
+# --- sanity checks -- the tool this replaces produced an empty release and reported success ---
 
 sub _portalOf {
   my ($n) = @_;
@@ -177,9 +170,7 @@ sub _portalOf {
   ok($C->assertUpdateBucketSane({update => [{abbrev => 'a'}]}, 0), 'a non-empty bucket passes');
 }
 
-# ---------------------------------------------------------------------------
-# the --generate gate: writeCommandFiles silently drops unapproved candidates
-# ---------------------------------------------------------------------------
+# --- the --generate gate: writeCommandFiles silently drops unapproved candidates ---
 
 {
   my $pending = {
@@ -203,10 +194,9 @@ sub _portalOf {
 }
 
 {
-  # annotated_prune is NOT a subset of the pending counts: approval gates the
-  # ACTION, not the CONSEQUENCE.  An APPROVED annotated prune raises no pending
-  # decision -- so it must not block, and must still be shouted, because that is
-  # the run most likely to be executed without reading.
+  # Approval gates the ACTION, not the CONSEQUENCE: an approved annotated prune
+  # raises no pending decision, so it must not block and must still be shouted
+  # -- that is the run most likely to be executed unread.
   my $approvedButCostly = {
     update          => [{abbrev => 'a'}],
     add_candidate   => [],
@@ -230,9 +220,7 @@ sub _portalOf {
      'an UNAPPROVED annotated prune is reported by the same path');
 }
 
-# ---------------------------------------------------------------------------
-# the generation roster
-# ---------------------------------------------------------------------------
+# --- the generation roster ---
 
 my $RESULT = {
   update          => [{abbrev => 'tgonME49', organism => {abbrev => 'tgonME49'}},
@@ -269,13 +257,10 @@ my $RESULT = {
 }
 
 {
-  # --force overrides the empty-update-bucket check, and used to carry that
-  # permission all the way through: generationRoster returned nothing, the run
-  # wrote empty command files and exited 0.  That is the silent empty release
-  # the tool replaced, reachable from the override its own error message
-  # recommends.  The refusal is NOT force-able, which is why the method takes
-  # no force argument -- pinned here so a later "consistency" fix that adds one
-  # turns this red.
+  # --force used to carry its permission all the way through: an empty roster
+  # wrote empty command files and exited 0, the silent empty release this tool
+  # replaced.  The refusal is NOT force-able, so the signature is pinned too --
+  # a later "consistency" fix adding a force argument turns this red.
   eval { $C->assertRosterNonEmpty([]) };
   like($@, qr/empty package/, 'an empty generation roster is refused, not generated');
   like($@, qr/--force/,       'and names the override that reached it');
@@ -296,12 +281,10 @@ my $RESULT = {
 }
 
 {
-  # The POSITIVE half of add/prune narrowing.  The case above only shows that
-  # UNselected candidates disappear, which a filter hardcoded to return nothing
-  # satisfies just as well -- and that filter silently drops a curator-approved
-  # addition from the command files while the package still builds and reports
-  # success.  So select an add candidate and a prune candidate by name and
-  # require that both survive, with the unselected add gone from the same list.
+  # The POSITIVE half: the case above is satisfied just as well by a filter
+  # hardcoded to return nothing, which would silently drop a curator-approved
+  # addition while the package still builds and reports success.  So require
+  # that a named add and prune both SURVIVE, with the unselected add gone.
   my $narrowed = $C->narrowResult($RESULT, ['hcapNAm1', 'gone']);
 
   is_deeply([map { $_->{abbrev} } @{$narrowed->{add_candidate}}], ['hcapNAm1'],
@@ -316,9 +299,7 @@ my $RESULT = {
             'renames too');
 }
 
-# ---------------------------------------------------------------------------
-# rename resolution: the database first, assembly identity as a fallback
-# ---------------------------------------------------------------------------
+# --- rename resolution: the database first, assembly identity as a fallback ---
 
 sub _p {
   my ($abbrev, $internal, %extra) = @_;
@@ -327,7 +308,7 @@ sub _p {
 }
 
 {
-  # The two live cases, measured on build 71.
+  # The two cases seen in the live data.
   my $portal = {
     cdenJEC21  => _p('cdenJEC21',  'cneoJEC21'),
     nglaCBS138 => _p('nglaCBS138', 'cglaCBS138'),
@@ -344,9 +325,8 @@ sub _p {
 }
 
 {
-  # scerS288C and scerS288c are DIFFERENT organisms.  A lc() anywhere in this
-  # path merges them, and two case-insensitive collisions exist in the
-  # namespace, so this is the case that must be pinned.
+  # Abbrevs differing only in case are DIFFERENT organisms, and such collisions
+  # exist in the namespace, so a lc() anywhere in this path merges two genomes.
   my $portal = {scerS288c => _p('scerS288c', 'scerS288C')};
   my $live   = {scerS288C => {}};
 
@@ -361,11 +341,9 @@ sub _p {
   my $portal = {bnonp57 => _p('bnonp57', 'bnonp57')};
   my $live   = {bnonP57 => {}};
 
-  # ONE assertion over both halves on purpose.  Split in two, the renames check
-  # passes under an lc() mutation for the WRONG reason: folding case makes
-  # bnonP57 match the portal, so it is not an orphan and renames is empty
-  # either way.  Only the pair discriminates -- a correct run leaves an
-  # unresolved orphan, a case-folding run absorbs it silently into `update`.
+  # ONE assertion over both halves on purpose: split, the renames check passes
+  # under an lc() mutation for the WRONG reason, since folding case stops it
+  # being an orphan at all.  Only the pair discriminates.
   my $r = $C->resolveRenames($portal, $live, {});
   is_deeply({renames => $r->{renames}, unresolved => $r->{unresolved}},
             {renames => {},            unresolved => ['bnonP57']},
@@ -373,11 +351,9 @@ sub _p {
 }
 
 {
-  # An organism whose internal abbrev equals its public abbrev cannot explain
-  # an orphan.  This holds STRUCTURALLY -- such an entry's key is a public
-  # abbrev, so no orphan can ever look it up -- rather than by a filter; see
-  # the note in resolveRenames.  Asserted over the whole outcome for that
-  # reason, not over a branch.
+  # An organism whose internal abbrev equals its public one cannot explain an
+  # orphan.  This holds STRUCTURALLY, not by a filter -- such an entry's key is
+  # itself a public abbrev -- so assert the whole outcome, not a branch.
   my $portal = {aaa => _p('aaa', 'aaa')};
   my $live   = {bbb => {}};
   my $r = $C->resolveRenames($portal, $live, {});
@@ -387,9 +363,8 @@ sub _p {
 }
 
 {
-  # Two portal organisms sharing one internal abbrev.  This does NOT occur in
-  # the live data (measured over all 831), which is exactly why a test is the
-  # only thing keeping the guard honest: nothing else will ever exercise it.
+  # Two portal organisms sharing one internal abbrev does NOT occur in the live
+  # data, which is why a test is the only thing keeping the guard honest.
   my $portal = {aa => _p('aa', 'shared'), bb => _p('bb', 'shared')};
   my $live   = {shared => {}};
 
@@ -416,9 +391,8 @@ sub _p {
 }
 
 {
-  # No previous release means the fallback cannot run.  Silence there would
-  # read as "the database says it is not a rename", which is a different and
-  # much stronger claim.
+  # Silence when the fallback cannot run would read as "the database says it is
+  # not a rename", a different and much stronger claim.
   my $portal = {aaa => _p('aaa', 'aaa')};
   my $live   = {orphan1 => {}};
 
@@ -476,9 +450,8 @@ sub _p {
 }
 
 {
-  # The database path and the fallback must agree about what a rename target
-  # is: one target, one source.  Two orphans landing on one portal organism
-  # would make Reconcile die; catch it here where it can be explained.
+  # One target, one source, on both paths: two orphans landing on one portal
+  # organism would make Reconcile die, so catch it where it can be explained.
   my $dir = tempdir(CLEANUP => 1);
   my $prev = "$dir/prev"; mkdir $prev;
   my $cur  = "$dir/cur";  mkdir $cur;
@@ -501,18 +474,14 @@ sub _p {
 }
 
 {
-  # The merge refusal on the ASSEMBLY route.  The database route has its own
-  # case above, and the two must reach the same answer: a rename onto an abbrev
-  # Apollo already holds leaves two Apollo organisms pointing at one directory,
-  # which Apollo.pm then refuses to load on the NEXT release -- so the damage
-  # surfaces a release late, on a run that did nothing wrong.  Declining leaves
-  # the orphan a prune candidate a human judges, which is recoverable.
+  # The merge refusal on the ASSEMBLY route, which must reach the same answer as
+  # the database route above: two Apollo organisms sharing one directory is what
+  # Apollo.pm refuses to load on the NEXT release, so the damage surfaces a
+  # release late on a run that did nothing wrong.
   #
-  # The database route cannot stand in for this one: it declines before the
-  # fallback is ever reached, so nothing there exercises this branch.  Reaching
-  # it needs an orphan with NO internal-abbrev link (hence the self-referential
-  # portal entries) whose assembly nevertheless matches a portal organism that
-  # is already live.
+  # The database route cannot stand in -- it declines before the fallback runs.
+  # Reaching this branch needs an orphan with no internal-abbrev link (hence the
+  # self-referential portal entries) whose assembly matches a live organism.
   my $dir = tempdir(CLEANUP => 1);
   my $prev = "$dir/prev"; mkdir $prev;
   my $cur  = "$dir/cur";  mkdir $cur;
@@ -528,9 +497,8 @@ sub _p {
     currentFai       => sub { "$cur/$_[0]{abbrev}.fai" },
   });
 
-  # Asserted as one outcome: the rename must not happen AND the orphan must
-  # remain unresolved.  Performing it would both add the rename and consume the
-  # orphan, so either half alone leaves the other free to be wrong.
+  # One outcome, because performing the rename would both add it and consume the
+  # orphan -- either half alone leaves the other free to be wrong.
   is_deeply({renames => $r->{renames}, mechanism => $r->{mechanism},
              unresolved => $r->{unresolved}},
             {renames => {}, mechanism => {}, unresolved => ['orphan1']},
@@ -542,9 +510,7 @@ sub _p {
        'and says why it was refused rather than swallowing it');
 }
 
-# ---------------------------------------------------------------------------
-# the installed script answers --help with nothing set
-# ---------------------------------------------------------------------------
+# --- the installed script answers --help with nothing set ---
 
 {
   my $script = "$ENV{GUS_HOME}/bin/createApolloReleasePackage";

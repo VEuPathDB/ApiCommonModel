@@ -34,13 +34,8 @@ is($A->rewrite('a path like /data/a/thing', $BASE),
 eval { $A->assertNoRelative('{"url":"/a/service/x"}', 'trackList.json') };
 like($@, qr/trackList\.json/, 'the assertion names the offending file');
 
-# ---------------------------------------------------------------------------
-# Every character MEASURED to precede "/a/" in the real generated config and in
-# Model/lib/perl.  Measured frequencies:
-#   generated config:  = 91,  ' 14,  " 13
-#   Model/lib/perl:    " 27,  ' 7,   = 1,  l 1
-# The lookbehind was validated against this set rather than assumed.
-# ---------------------------------------------------------------------------
+# Every character measured to precede "/a/" in the real generated config and in
+# Model/lib/perl.  The lookbehind was validated against this set, not assumed.
 
 is($A->rewrite('"url":"?data=/a/service/jbrowse/tracks/tgonME49"', $BASE),
    '"url":"?data=https://veupathdb.org/a/service/jbrowse/tracks/tgonME49"',
@@ -54,14 +49,14 @@ is($A->rewrite('baseUrl => "/a/service/jbrowse"', $BASE),
    'baseUrl => "https://veupathdb.org/a/service/jbrowse"',
    'preceded by a double quote');
 
-# The one `l` measured in Model/lib/perl is "$projectUrl/a/service/..." -- a
-# string that already carries an absolute base.  Rewriting it would produce
-# "$projectUrlhttps://...".  This is the case the lookbehind exists to reject.
+# A word character before "/a/" means it already carries an absolute base;
+# rewriting would produce "$projectUrlhttps://...".  The case the lookbehind
+# exists to reject.
 is($A->rewrite('my $u = "$projectUrl/a/service/jbrowse/store?data=x";', $BASE),
    'my $u = "$projectUrl/a/service/jbrowse/store?data=x";',
    'an interpolated absolute base already precedes it -- left alone');
 
-# Not measured in the config, but in the character class, so pin the intent.
+# Not seen in the config, but in the character class, so pin the intent.
 is($A->rewrite("/a/service/x", $BASE),
    'https://veupathdb.org/a/service/x',
    'at the very start of the string -- a positive lookbehind would miss this');
@@ -74,13 +69,8 @@ is($A->rewrite('(/a/images/x.png)', $BASE),
    '(https://veupathdb.org/a/images/x.png)',
    'preceded by an open paren');
 
-# ---------------------------------------------------------------------------
-# Step 6 questions
-# ---------------------------------------------------------------------------
-
 # rewrite() trims a trailing slash from $base.  @_ is aliased in Perl, so the
-# worry is real -- but `my (...) = @_` copies, so the caller's variable is not
-# touched.  Cheap to pin; expensive to discover later.
+# worry is real -- but `my (...) = @_` copies, so the caller's is untouched.
 my $caller_base = 'https://veupathdb.org/';
 $A->rewrite('"/a/x"', $caller_base);
 is($caller_base, 'https://veupathdb.org/',
@@ -95,18 +85,16 @@ my $once  = $A->rewrite('"baseUrl":"/a/service/jbrowse","img":"/a/images/x.png"'
 my $twice = $A->rewrite($once, $BASE);
 is($twice, $once, 'rewrite is idempotent -- a second pass does not double-prefix');
 
-# A URL absolute to a DIFFERENT host is left alone.  This is right, not an
-# oversight: the real config contains "https://apollo.veupathdb.org/annotator/..."
-# and "https://www.ncbi.nlm.nih.gov/...", which are deliberate off-site links.
-# assertNoRelative is about RELATIVE URLs, so it must not flag them either.
+# A URL absolute to a DIFFERENT host is left alone: the real config carries
+# deliberate off-site links, and assertNoRelative is about RELATIVE URLs.
 is($A->rewrite('"u":"https://other.org/a/x"', $BASE), '"u":"https://other.org/a/x"',
    'a URL absolute to a different host is left alone');
 ok($A->assertNoRelative('"u":"https://other.org/a/x"', 'tracks.conf'),
    'assertNoRelative does not flag a foreign absolute host');
 
-# Protocol-relative "//a/" already occupies the host position; prefixing it
-# would yield "//https://...".  Zero occur in the real config -- the behaviour
-# is pinned by test so it stays a decision rather than an accident.
+# Protocol-relative "//a/" already occupies the host position, so prefixing it
+# would yield "//https://...".  None occur in the real config, so this is pinned
+# to keep it a decision rather than an accident.
 is($A->rewrite('"u":"//a/service/x"', $BASE), '"u":"//a/service/x"',
    'a protocol-relative //a/ is left alone');
 
@@ -129,15 +117,10 @@ is($A->rewrite(undef, $BASE), undef, 'undef text rewrites to undef');
 eval { $A->rewrite('"/a/x"', '') };
 like($@, qr/non-empty base/, 'an empty base is refused rather than silently no-op');
 
-# ---------------------------------------------------------------------------
-# The idempotency guarantee holds only for a base that cannot itself end in a
-# delimiter the lookbehind treats as a site root.  rewrite() enforces that
-# rather than assuming it, so the comment in the module is true by
-# construction.  The counterexample that motivated the check:
-#     rewrite('"/a/x"', "https://foo.org'") -> "https://foo.org'/a/x"
-#   and a second pass then double-prefixes, because the base's own trailing
-#   quote satisfies the lookbehind.
-# ---------------------------------------------------------------------------
+# Idempotency holds only for a base that cannot itself end in a character the
+# lookbehind treats as a site root -- otherwise the base's own trailing byte
+# satisfies the lookbehind and a second pass double-prefixes.  rewrite()
+# enforces that rather than assuming it.
 for my $bad ("https://foo.org'", 'https://foo.org"', 'https://foo.org(',
              'https://foo.org=', 'https://foo.org ') {
   eval { $A->rewrite('"/a/x"', $bad) };
@@ -153,8 +136,8 @@ for my $bad ('veupathdb.org', '/veupathdb', 'ftp://veupathdb.org') {
        "a base that is not an absolute http(s) URL is refused: '$bad'");
 }
 
-# ...and for every character class the validated base MAY end in, a second pass
-# is a no-op.  This is the guarantee itself, exercised rather than reasoned.
+# ...and for every character a validated base MAY end in, a second pass is a
+# no-op: the guarantee itself, exercised rather than reasoned.
 for my $good ('https://veupathdb.org',        # letter
               'http://veupathdb.org',         # the other permitted scheme
               'https://veupathdb.org:8080',   # digit
@@ -170,9 +153,8 @@ for my $good ('https://veupathdb.org',        # letter
      "and one pass satisfies the post-condition for '$good'");
 }
 
-# A PARTIALLY rewritten string -- some URLs already absolute, some still
-# relative -- is the realistic shape of a half-failed rewrite, and the count is
-# what diagnoses it.  The existing count test uses ten identical relatives,
+# A PARTIALLY rewritten string is the realistic shape of a half-failed rewrite,
+# and the count diagnoses it.  The other count test uses identical relatives,
 # which cannot show that the absolute ones are excluded from the total.
 my $partial = join(' ',
   qq{"a":"$BASE/a/service/1"},

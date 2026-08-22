@@ -6,8 +6,8 @@ use ApiCommonModel::Model::ApolloRelease::Portal;
 
 my $P = 'ApiCommonModel::Model::ApolloRelease::Portal';
 
-# A synthetic organism carries filler that no test is about.  Defaulting it
-# here leaves each case showing only the fields it actually exercises.
+# Filler no test is about, defaulted here so each case shows only the fields it
+# actually exercises.
 sub _org {
   my (%overrides) = @_;
   return { name                => 'x',
@@ -36,19 +36,16 @@ is($b->{is_reference}, 0, 'non-reference strain is 0');
 
 ok(defined $t->{latest_annotation_version}, 'latest annotation version derived');
 
-# apidb.organism carries TWO identifiers and the jbrowse scripts disagree about
-# which they take: jbrowseTracks selects `where public_abbrev = ?`, while the
-# five track producers key `auto_generated/<abbrev>/` off the INTERNAL one.
-# cdenJEC21 is the only organism in the fixture where they differ -- it is the
-# renamed Cryptococcus -- so it is the only case that can catch a caller
-# feeding the wrong identifier.  Feeding the public abbrev to a track producer
-# gives exit 2 and a missing datasetAndPresenterProps.conf, and feeding the
-# internal abbrev to jbrowseTracks silently matches nothing.
+# TWO identifiers, and the jbrowse scripts disagree about which they take:
+# jbrowseTracks selects on public_abbrev, while the track producers key
+# auto_generated/<abbrev>/ off the INTERNAL one.  Only a renamed organism has
+# them differ, so only that case can catch a caller feeding the wrong one --
+# and the two failures are exit 2 on a missing conf, or silently matching
+# nothing.
 #
-# `abbrev` stays PUBLIC deliberately: the hash key and every downstream
-# consumer -- the Apollo roster, the overlay file, reconciliation -- already
-# key on the public abbrev, which is also what the portal shows.  The internal
-# one rides alongside so a caller can resolve public -> internal once.
+# `abbrev` stays PUBLIC deliberately: the hash key and every downstream consumer
+# already key on it, and the internal one rides alongside so a caller can
+# resolve public -> internal once.
 my $renamed = $orgs->{cdenJEC21};
 ok($renamed, 'the renamed organism is keyed by its PUBLIC abbrev');
 is($renamed->{abbrev}, 'cdenJEC21', 'abbrev remains the public abbrev, unchanged');
@@ -56,8 +53,8 @@ is($renamed->{internal_abbrev}, 'cneoJEC21',
    'internal_abbrev carries apidb.organism.abbrev, which differs here');
 is($P->qualifies($b), 0, 'non-reference organism does not qualify');
 
-# "0.0" is truthy as a Perl string but zero numerically.  Pin the coercion so a
-# future upstream change to the flag's format cannot silently invert it.
+# "0.0" is truthy as a Perl string but zero numerically, so pin the coercion
+# before an upstream format change inverts the flag.
 my $synthetic = $P->normalise({organisms => [
   _org(organism_abbrev => 'zeroPointZero', is_reference_strain => '0.0',
        history => [{build_number => '9',    annotation_version => 'older'},
@@ -73,15 +70,11 @@ eval { $P->normalise({organisms => [
 ]}) };
 like($@, qr/expected a numeric flag/, 'a non-numeric flag is a hard error, not a guess');
 
-# A non-numeric build_number is skipped deliberately rather than left to Perl's
-# numeric comparison.
-#
-# Both organisms are needed to pin the skip.  messyBuilds shows a bad row does
-# not corrupt the ordering of the good rows around it -- but that alone would
-# pass even with the guard deleted, because "not-a-number" + 0 is 0 and any
-# real build number beats it.  onlyBad is the discriminating case: with the
-# guard the row is skipped and there is no latest version; without it the row
-# becomes $best by default and 'bogus' is returned as the annotation version.
+# A non-numeric build_number is skipped deliberately.  Both organisms are needed:
+# messyBuilds shows a bad row does not disturb the good rows, but passes even
+# with the guard deleted, since "not-a-number" + 0 is 0 and any real build beats
+# it.  onlyBad discriminates -- without the guard that row becomes $best by
+# default and its junk is returned as the annotation version.
 my $messy = $P->normalise({organisms => [
   _org(organism_abbrev => 'messyBuilds',
        history => [{build_number => 'not-a-number', annotation_version => 'bogus'},
@@ -94,10 +87,9 @@ is(join('|', map { $messy->{$_}{latest_annotation_version} // 'undef' } qw(messy
    'newest|undef',
    'a non-numeric build_number is skipped: it neither wins nor disturbs the good rows');
 
-# A skip stays REPORTABLE, it just does not go to stderr -- this module's own
-# loadFromCommand treats a child's stderr byte as fatal, so warning that way
-# would make a handled skip look like a release-breaking error to a caller
-# applying the same rule to us.
+# A skip stays REPORTABLE, just not on stderr: loadFromCommand treats a child's
+# stderr byte as fatal, so a caller applying that rule here would read a handled
+# skip as a broken release.
 $P->normalise({organisms => [
   _org(organism_abbrev => 'messyBuilds',
        history => [{build_number => 'not-a-number', annotation_version => 'bogus'}]),

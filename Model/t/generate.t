@@ -9,9 +9,7 @@ use ApiCommonModel::Model::ApolloRelease::Generate;
 my $G = 'ApiCommonModel::Model::ApolloRelease::Generate';
 my $BASE = 'https://veupathdb.org';
 
-# ---------------------------------------------------------------------------
-# localNameForInclude
-# ---------------------------------------------------------------------------
+# --- localNameForInclude ---
 
 is($G->localNameForInclude('/a/jbrowse/tracks/tgonME49/tracks.conf'), 'tracks.conf',
    'per-organism tracks.conf');
@@ -20,9 +18,9 @@ is($G->localNameForInclude('/a/jbrowse/functions.conf'), 'functions.conf',
 is($G->localNameForInclude('/a/jbrowse/apollo_gene_tracks.conf'), 'apollo_gene_tracks.conf',
    'apollo_gene_tracks.conf');
 
-# rnaseqJunctions must not be swallowed by the plain rnaseq rule.  Both endpoints
-# are generated for the same organism, so a rule-order slip silently writes one
-# file's contents under the other's name and nothing downstream notices.
+# rnaseqJunctions must not be swallowed by the plain rnaseq rule: both are
+# generated for the same organism, so a rule-order slip writes one file's
+# contents under the other's name and nothing downstream notices.
 is($G->localNameForInclude('/a/service/jbrowse/rnaseqJunctions/tgonME49'),
    'rnaseqJunctions.json', 'rnaseqJunctions wins over rnaseq');
 is($G->localNameForInclude('/a/service/jbrowse/rnaseq/tgonME49'), 'rnaseq.json', 'rnaseq');
@@ -33,9 +31,7 @@ is($G->localNameForInclude('/a/service/jbrowse/organismSpecific/tgonME49'),
 is($G->localNameForInclude('/a/service/jbrowse/somethingNew/tgonME49'), undef,
    'an unrecognised include maps to undef rather than being guessed at');
 
-# ---------------------------------------------------------------------------
-# buildTrackList
-# ---------------------------------------------------------------------------
+# --- buildTrackList ---
 
 my $trackList = {
   refSeqs => "/a/service/jbrowse/store?data=TgondiiME49/genomeAndProteome/fasta/genome.fasta.fai",
@@ -67,9 +63,8 @@ is($built->{tracks}[0]{urlTemplate}, 'seq/tgonME49.fa', 'pointing at the local f
 is($built->{tracks}[0]{faiUrlTemplate}, 'seq/tgonME49.fa.fai', 'and at the local index');
 like($built->{names}{url}, qr{^https://veupathdb\.org/a/}, 'names url absolutized');
 
-# The caller owns the file set it actually produced, so it appends those names;
-# buildTrackList must not invent them and must not duplicate one already mapped
-# in from the skeleton.
+# The caller owns the file set it produced, so buildTrackList must neither
+# invent names nor duplicate one already mapped in from the skeleton.
 my $withExtras = $G->buildTrackList($trackList, 'tgonME49', $BASE,
                                     ['functions.conf', 'apollo_gene_tracks.conf',
                                      'rnaseq.json', 'organismSpecific.json']);
@@ -88,9 +83,7 @@ $G->buildTrackList({include => ['/a/service/jbrowse/somethingNew/x']}, 'x', $BAS
 ok(scalar(grep { /somethingNew/ } $G->warnings()),
    'an unrecognised include is reported, not silently dropped');
 
-# ---------------------------------------------------------------------------
-# refSeqs.json derived from the .fai
-# ---------------------------------------------------------------------------
+# --- refSeqs.json derived from the .fai ---
 
 my $fai = "TGME49_chrIa\t1876705\t14\t60\t61\nTGME49_chrIb\t2199384\t1907792\t60\t60\n";
 is_deeply($G->refSeqsFromFai($fai),
@@ -107,13 +100,10 @@ is_deeply($G->refSeqsFromFai(""), [], 'an empty index yields an empty list');
 eval { $G->refSeqsFromFai("TGME49_chrIa\n") };
 like($@, qr/malformed/i, 'a truncated index line is refused rather than read as length 0');
 
-# ---------------------------------------------------------------------------
-# useAsRefSeqStore stripping
-# ---------------------------------------------------------------------------
+# --- useAsRefSeqStore stripping ---
 
-# Filter on the FIELD, not the label: the label is cosmetic and one organism
-# renaming it would silently leave the store-URL reference track in place,
-# fighting Apollo's own local copy.
+# Filter on the FIELD, not the label: the label is cosmetic, so renaming it
+# would leave the store-URL track in place fighting Apollo's local copy.
 my $withRefSeq = {tracks => [
   {label => 'refseqs',  useAsRefSeqStore => JSON::true,  storeClass => 'X'},
   {label => 'refseqs',  storeClass => 'Y'},
@@ -126,17 +116,13 @@ is_deeply([map { $_->{label} } @{$stripped->{tracks}}], ['refseqs', 'genes'],
           'and nothing else is');
 is(scalar(@{$withRefSeq->{tracks}}), 4, 'the input document is not mutated');
 
-# ---------------------------------------------------------------------------
-# every track must be a JSON object
-# ---------------------------------------------------------------------------
+# --- every track must be a JSON object ---
 
-# addChipChipTracks appended bare integers (56 of 158 entries for tgonME49).
-# Fixed upstream; this is the last gate before a curator sees the output.
-# The bad entries sit at indexes 2 and 4 of 5, so neither index can be
-# satisfied by the bad-count (2) or the total (5).  The earlier fixture -- one
-# bad entry, at index 1 -- produced "1 of 3 entries ... at index(es) 1", which
-# matched qr/\b1\b/ on the count alone: deleting the whole "at index(es)"
-# clause from the message left this test green.
+# A track builder upstream appended bare integers; this is the last gate before
+# a curator sees the output.  The bad entries sit at indexes 2 and 4 of 5 so
+# that neither index can be satisfied by the bad-count or the total -- with one
+# bad entry at index 1, deleting the whole "at index(es)" clause from the
+# message still left this green.
 eval { $G->assertTracksAreObjects(
          {tracks => [{a => 1}, {b => 2}, 42, {c => 3}, 'nope']}, 'chipseq.json') };
 like($@, qr/chipseq\.json/, 'a bare scalar in a tracks array is a hard failure');
@@ -148,13 +134,10 @@ is($G->countTracks({tracks => [{a => 1}, {b => 2}]}), 2, 'track count');
 is($G->countTracks({tracks => []}), 0,
    'zero tracks is a count, not an error -- cneoJEC21 legitimately has none');
 
-# ---------------------------------------------------------------------------
-# [tracks.refseq] stanza stripping
-# ---------------------------------------------------------------------------
+# --- [tracks.refseq] stanza stripping ---
 
-# A no-op over the whole roster today (0 of 835 tracks.conf files on
-# 2026-08-21), so this fixture IS the only example of the shape.  The comment
-# in stripRefSeqStanza records why it ships anyway.
+# A no-op across the current roster, so this fixture is the only example of the
+# shape; stripRefSeqStanza records why it ships anyway.
 my $conf = join "\n",
   '[general]',
   'dataset_id=tgonME49',
@@ -185,9 +168,7 @@ my ($untouched, $none) = $G->stripRefSeqStanza($conf =~ s/\[tracks\.refseq\]/[tr
 is($none, 0, 'a tracks.conf without the stanza reports zero');
 like($untouched, qr/faiUrlTemplate/, 'and is returned unchanged');
 
-# ---------------------------------------------------------------------------
-# writeFile: absolutization plus its post-condition
-# ---------------------------------------------------------------------------
+# --- writeFile: absolutization plus its post-condition ---
 
 my $dir = tempdir(CLEANUP => 1);
 
@@ -198,10 +179,9 @@ close $fh;
 is($written, '{"u":"https://veupathdb.org/a/service/x","f":"seq/tgonME49.fa.fai"}',
    'site-relative URLs absolutized; a bare relative seq/ path is left alone');
 
-# The encoder must return OCTETS.  Real track configs carry non-ASCII (tgonME49
-# does), and encoding to characters writes the right bytes but emits a "Wide
-# character" warning on the way -- which this module elsewhere treats as proof
-# that a config producer's output cannot be trusted.
+# The encoder must return OCTETS: real track configs carry non-ASCII, and
+# encoding to characters writes the right bytes but emits a "Wide character"
+# warning -- which this module elsewhere treats as untrustworthy output.
 my $wide = $G->encodeJson({k => "\x{2013}"});
 ok(!utf8::is_utf8($wide), 'encodeJson returns octets, not characters');
 
@@ -213,9 +193,7 @@ my @caught;
 is_deeply(\@caught, [], 'writing non-ASCII content produces no warnings');
 is(-s "$dir/wide.json", length($wide), 'and the bytes on disk are the bytes encoded');
 
-# ---------------------------------------------------------------------------
-# per-organism failure isolation
-# ---------------------------------------------------------------------------
+# --- per-organism failure isolation ---
 
 my $results = $G->generateAll(
   [{abbrev => 'good1'}, {abbrev => 'explodes'}, {abbrev => 'good2'}],
@@ -231,14 +209,11 @@ is_deeply([sort @{$results->{succeeded}}], ['good1', 'good2'],
           'the organisms either side of it still complete');
 like($results->{errors}{explodes}, qr/simulated failure/, 'the error text is kept');
 
-# ---------------------------------------------------------------------------
-# assertToolsAvailable
-# ---------------------------------------------------------------------------
+# --- assertToolsAvailable ---
 
 # Not called by generateOrganism -- the CLI calls it once before the loop -- so
-# without this it would be shipped unverified.  PATH is manipulated rather than
-# trusting the host, so the result does not depend on whose cedar account runs
-# the suite.
+# without this it ships unverified.  PATH is manipulated rather than trusted, so
+# the result does not depend on whose account runs the suite.
 {
   my $binDir = tempdir(CLEANUP => 1);
   local $ENV{PATH} = $binDir;
@@ -257,13 +232,11 @@ like($results->{errors}{explodes}, qr/simulated failure/, 'the error text is kep
      'and it returns the resolved path when present');
 }
 
-# ---------------------------------------------------------------------------
-# generateOrganism: the public/internal abbrev split, end to end
-# ---------------------------------------------------------------------------
+# --- generateOrganism: the public/internal abbrev split, end to end ---
 
-# The one function that wires the two abbrev namespaces together, and the
-# mistake it guards against is invisible on 794 of 831 organisms.  So the
-# fixture is a renamed one, where public and internal genuinely differ.
+# The one function wiring the two abbrev namespaces together, and the mistake it
+# guards against is invisible on all but a handful of organisms -- so the fixture
+# is a renamed one, where public and internal genuinely differ.
 {
   my $out = tempdir(CLEANUP => 1);
 

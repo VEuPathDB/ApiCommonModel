@@ -53,11 +53,9 @@ my $none = $R->detect(['cneoJEC21'], $portal,
 is_deeply($none, {}, 'unresolvable organism yields no rename');
 
 my @warnings = $R->warnings();
-# Naming the organism is not "saying so": a warning that printed the abbrev and
-# nothing else would pass a /cneoJEC21/ match while telling the operator nothing
-# actionable.  Require the REASON too -- that no previous-release index was
-# found -- since that is what distinguishes an aged-out release directory from
-# a genuine "this organism is gone".
+# Naming the organism is not "saying so" -- an abbrev alone matches while telling
+# the operator nothing.  Require the REASON too, since that is what separates an
+# aged-out release directory from a genuine "this organism is gone".
 like($warnings[0], qr/cneoJEC21/,
      'the warning names the organism it could not resolve');
 like($warnings[0], qr/no index from the previous release/,
@@ -92,20 +90,18 @@ my $tie = $R->detect(['cneoJEC21'], $ambiguous,
                      sub { return "$dir/same.fai" },
                      {cneoJEC21 => 'JEC21'});
 is_deeply($tie, {}, 'two equally good matches produce NO rename rather than a guess');
-# Two separate assertions on purpose.  Alternated into one `ok`, a future
-# generic "ambiguous match; refusing to guess" that named neither candidate
-# would keep the test green -- and naming both is the entire point, since the
-# operator has to go and look at both genomes to break the tie.
+# Two separate assertions on purpose: alternated into one `ok`, a generic
+# "ambiguous match" naming neither candidate stays green -- and naming both is
+# the point, since the operator must look at both genomes to break the tie.
 my @tieWarnings = $R->warnings();
 ok((grep { /refus/i } @tieWarnings), 'the refusal to guess is stated');
 ok((grep { /cdenJEC21/ && /cdupJEC21/ } @tieWarnings),
    'and BOTH candidate abbrevs are named, so the operator knows what to compare');
 
 # --- an orphan whose strain abbrev could not be parsed -----------------------
-# The strain filter bounds how many files get opened; sequence identity is what
-# decides.  So an unparseable strain must widen the search, not abandon it --
-# otherwise an Apollo commonName the parser does not understand silently costs
-# a rename and orphans its annotations.
+# The strain filter bounds how many files get opened; sequence identity decides.
+# So an unparseable strain must widen the search, not abandon it -- otherwise a
+# commonName the parser cannot read silently costs a rename.
 
 my $noStrain = $R->detect(['cneoJEC21'], $portal,
                           sub { return "$dir/old.fai" },
@@ -116,8 +112,8 @@ is_deeply($noStrain, {cneoJEC21 => 'cdenJEC21'},
 ok((grep { /no strain abbrev/ } $R->warnings()),
    'the widened search is reported, since it is the slow path');
 
-# A strain that matches nothing on the portal must not quietly become a
-# full scan -- it is a real filter, and an empty candidate set is an answer.
+# A strain matching nothing must not quietly become a full scan: it is a real
+# filter, and an empty candidate set is an answer.
 my $wrongStrain = $R->detect(['cneoJEC21'], $portal,
                              sub { return "$dir/old.fai" },
                              sub { return "$dir/same.fai" },
@@ -134,10 +130,9 @@ is_deeply($missingCurrent, {cneoJEC21 => 'cdenJEC21'},
           'a candidate with no current index is skipped, not fatal');
 
 # --- an index that exists (or is named) but cannot be opened -----------------
-# sameAssembly collapses this to 0, which is the same answer as "a different
-# assembly".  The collapse is fail-safe, but it must never be SILENT: an
-# operator told "the assembly differs" approves a prune, where "I could not
-# read the file" sends them to fix the build.
+# sameAssembly collapses this to 0, the same answer as "a different assembly".
+# Fail-safe, but never SILENT: "the assembly differs" gets a prune approved,
+# where "I could not read the file" sends them to fix the build.
 
 my $noSuchDir = "$dir/no-such-dir/genome.fasta.fai";
 is($R->readFai($noSuchDir), undef, 'an index under a missing directory returns undef');
@@ -156,9 +151,9 @@ SKIP: {
 }
 
 # --- "could not check" must not be reported as "assembly differs" ------------
-# Every candidate skipped for a missing current index used to fall through to
-# "no portal organism shares its assembly", which is false and points the
-# operator at exactly the wrong conclusion.
+# Candidates skipped for a missing current index used to fall through to "no
+# portal organism shares its assembly", which is false and points the operator
+# at the wrong conclusion.
 
 my $unreadableAll = $R->detect(['cneoJEC21'], $portal,
                                sub { return "$dir/old.fai" },

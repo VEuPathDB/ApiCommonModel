@@ -7,16 +7,14 @@ use JSON;
 use LWP::UserAgent;
 use HTTP::Request::Common qw(POST);
 
-# Reads the live prod Apollo organism roster.  This is the SEED for the
-# release roster -- it is the only record of what curators actually decided.
-#
-# Organisms are keyed by the abbrev parsed out of `directory`, never by
-# commonName: `directory` is machine-written by our own update commands,
-# while commonName is editable in the Apollo GUI.
+# Reads the live Apollo organism roster: the SEED for the release, and the only
+# record of what curators actually decided.  Organisms are keyed by the abbrev
+# parsed out of `directory`, never commonName -- `directory` is machine-written
+# by our own update commands, commonName is editable in the Apollo GUI.
 
-# The one place the API base is decided.  The CLI also needs it -- it reports
-# which source the roster came from -- and a second copy of this expression
-# there meant the report could attribute the roster to a host it had not read.
+# The one place the API base is decided.  The CLI reports which source the
+# roster came from, and a second copy of this default there let the report
+# attribute the roster to a host it never read.
 sub apiUrl {
   return $ENV{APOLLO_API_URL} || 'https://apollo-api.veupathdb.org';
 }
@@ -40,8 +38,8 @@ sub loadFromApi {
 
   my $decoded = $class->_decodeRoster($response->content, $url);
 
-  # An empty roster would make every organism look new, and the generated
-  # commands would try to re-add the entire set.  Fail instead.
+  # An empty roster makes every organism look new, so the commands would try to
+  # re-add the entire set.
   die "Apollo returned no organisms from $url.\n"
     . "Check APOLLO_API_USER/PASS, and check that you are running this on a\n"
     . "Penn host -- the API is IP-restricted.\n"
@@ -61,11 +59,10 @@ sub loadFromFile {
   return $class->normalise($class->_decodeRoster($json, $path));
 }
 
-# A 200 carrying an HTML login page or a truncated body would otherwise die
-# with a bare "malformed JSON string" from inside the JSON module, naming
-# neither the source nor the likely cause.  This project has already been
-# bitten by exactly that shape: an unauthenticated request served a login page
-# with a 200 status.
+# A 200 carrying an HTML login page or a truncated body would otherwise die with
+# a bare "malformed JSON string" from inside the JSON module, naming neither the
+# source nor the cause.  An unauthenticated request served a login page with a
+# 200 has already happened here.
 sub _decodeRoster {
   my ($class, $body, $source) = @_;
 
@@ -82,9 +79,8 @@ sub _decodeRoster {
   return $decoded;
 }
 
-# Public because it is the seam: it takes an already-decoded document, so the
-# normalisation rules can be exercised without a fixture file, an HTTP call or
-# API credentials.  Both loaders are thin wrappers around it.
+# The seam: takes an already-decoded document, so the normalisation rules run
+# with no fixture, HTTP call or credentials.  Both loaders wrap it.
 sub normalise {
   my ($class, $decoded) = @_;
 
@@ -93,14 +89,11 @@ sub normalise {
   foreach my $raw (@$decoded) {
     my $directory = $raw->{directory} || '';
 
-    # Trim surrounding whitespace as well as trailing slashes, in one pass so
-    # that a mixture ("/data/apollo_data/tgonME49 /") is fully removed.  A
-    # single stray trailing byte is not cosmetic here: it yields the abbrev
-    # "tgonME49 ", which matches no portal organism, so reconciliation reports
-    # the real genome as an add and the space-tainted one as a prune -- the
-    # add-plus-prune-for-one-genome case this project exists to prevent.
-    # "Machine-written by our own update commands" makes it unlikely, not
-    # impossible; an upstream concatenation bug is exactly how it would appear.
+    # Whitespace and trailing slashes in one pass, so a mixture of both is
+    # fully removed.  A single stray trailing byte is not cosmetic: the tainted
+    # abbrev matches no portal organism, so reconciliation reports the real
+    # genome as an add and the tainted one as a prune -- the add-plus-prune case
+    # this project exists to prevent.
     $directory =~ s{^\s+}{};
     $directory =~ s{[\s/]+$}{};
 
@@ -111,23 +104,19 @@ sub normalise {
       next;
     }
 
-    # Interior junk cannot be trimmed away without inventing an identity, so
-    # validate the shape instead.  An abbrev containing a space or a newline
-    # would sail through the trim above and produce the same add-plus-prune
-    # pair.  Skipping is the safe failure: an organism absent from this hash
-    # can only become an approval-gated add_candidate downstream, never a
-    # prune, because prune requires presence in Apollo.
+    # Interior junk cannot be trimmed without inventing an identity, so validate
+    # the shape instead.  Skipping is the safe failure: an organism absent from
+    # this hash can only become an approval-gated add downstream, never a prune,
+    # since prune requires presence in Apollo.
     unless ($abbrev =~ m{\A[A-Za-z0-9_.-]+\z}) {
       warn "Apollo organism id $raw->{id} has a malformed abbrev '$abbrev' "
         . "from directory '$raw->{directory}'; skipping\n";
       next;
     }
 
-    # Two Apollo organisms sharing a directory is corruption, not a shape we
-    # can normalise.  Overwriting silently would drop one of them from the
-    # roster, and the diff against the portal would then generate commands
-    # for whichever one happened to be last -- including deleting curated
-    # annotations that belong to the other.  Refuse to guess.
+    # Corruption, not a shape we can normalise: overwriting drops one from the
+    # roster, and the portal diff then generates commands for whichever came
+    # last -- including discarding annotations belonging to the other.
     if (exists $byAbbrev{$abbrev}) {
       die "Apollo has two organisms with directory '$raw->{directory}' "
         . "(ids $byAbbrev{$abbrev}{id} and $raw->{id}).\n"

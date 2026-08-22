@@ -8,15 +8,13 @@ use warnings;
 #   add    <abbrev>   # who approved it, when, why
 #   remove <abbrev>   # who approved it, when, why
 #
-# The reason is mandatory.  This file exists to record provenance; a line
-# without it is indistinguishable from the hardcoded __DATA__ block this
-# replaces, which froze two builds ago and drifted silently.
+# The reason is mandatory: this file exists to record provenance, and a line
+# without one is indistinguishable from the frozen hardcoded block it replaces.
 #
 # parseString returns { add => {abbrev => reason}, remove => {abbrev => reason} }.
-# The values are plain reason STRINGS and must stay that way: Reconcile.pm
-# passes them straight into curator-facing report output, so wrapping them in
-# a richer structure would print ARRAY(0x...) into a report and fail silently.
-# Line numbers are therefore tracked in a private hash used only for errors.
+# The values must stay plain STRINGS -- Reconcile.pm passes them into
+# curator-facing report output, so a richer structure would print ARRAY(0x...)
+# into a report and fail silently.  Line numbers live in a private hash.
 
 sub parseFile {
   my ($class, $path) = @_;
@@ -35,9 +33,8 @@ sub parseString {
 
   my %overlay = (add => {}, remove => {});
 
-  # Where each accepted entry came from, so a duplicate or a contradiction can
-  # name BOTH lines.  Deliberately not part of the returned structure -- see
-  # the note at the top of the file.
+  # So a duplicate or contradiction can name BOTH lines.  Deliberately not part
+  # of the returned structure -- see the note at the top of the file.
   my %lineOf;
 
   my $lineNumber = 0;
@@ -63,9 +60,8 @@ sub parseString {
       . "line $lineNumber lists it as '$directive' -- an organism cannot be both\n"
       if exists $overlay{$other}{$abbrev};
 
-    # A repeat of the same directive would silently discard the first line's
-    # reason.  This file's whole purpose is provenance, so losing one is a
-    # defect, not a merge: refuse it and make the author reconcile the two.
+    # A repeated directive would discard the first line's reason.  Provenance is
+    # the point, so that is a defect rather than a merge.
     die "roster overlay: $abbrev already appears as '$directive' on line $lineOf{$directive}{$abbrev}; "
       . "merge the reason from line $lineNumber into that line\n"
       if exists $overlay{$directive}{$abbrev};
@@ -77,16 +73,15 @@ sub parseString {
   return \%overlay;
 }
 
-# Always dies.  Names the actual defect where it is identifiable, because
-# "needs a reason" is actively misleading on a line that has one and is
-# missing the organism instead.
+# Always dies, naming the actual defect: "needs a reason" is misleading on a
+# line that has one and is missing the organism instead.
 sub _explainParseFailure {
   my ($class, $lineNumber, $line) = @_;
 
   my $prefix = "roster overlay line $lineNumber:";
 
-  # No '#' at all: whatever else is wrong, the missing reason is the headline,
-  # since the reason is the one thing this format exists to require.
+  # No '#' at all: the missing reason is the headline, since that is the one
+  # thing this format exists to require.
   unless ($line =~ /#/) {
     my ($lone) = $line =~ /^\s*(\S+)\s*$/;
     die "$prefix missing organism and reason: '$line'\n" if $lone;
@@ -100,8 +95,8 @@ sub _explainParseFailure {
   die "$prefix missing organism: '$line'\n"
     if @tokens == 1;
 
-  # Two tokens plus a '#' is the shape the main regex accepts, so reaching
-  # here means the reason itself was empty or all whitespace.
+  # Two tokens plus a '#' is what the main regex accepts, so the reason itself
+  # was empty or all whitespace.
   die "$prefix every entry needs a non-empty '# reason': '$line'\n"
     if @tokens == 2;
 

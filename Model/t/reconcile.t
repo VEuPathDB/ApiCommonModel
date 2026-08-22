@@ -53,18 +53,15 @@ my $r3 = $R->reconcile($portal, $live, $overlayWithPrune, {});
 my ($cgla) = grep { $_->{abbrev} eq 'cglaCBS138' } @{$r3->{prune_candidate}};
 is($cgla->{approved}, 1, 'an overlay remove approves the prune');
 
-# ---------------------------------------------------------------------------
-# publicMode passthrough.  17 live organisms are deliberately hidden; an update
-# or a rename that forces publicMode=true silently re-publishes them.
-# ---------------------------------------------------------------------------
+# --- publicMode passthrough: organisms are deliberately hidden, and an update
+# or rename forcing publicMode=true silently re-publishes them ---
 
 my ($tgon) = grep { $_->{abbrev} eq 'tgonME49' } @{$r->{update}};
 is($tgon->{public_mode}, 1, 'update carries the live publicMode through');
 
-# treeQM6a is the case that actually matters: hidden by curators
-# (publicMode false), on the portal, reference+annotated, 11 annotations.  It
-# is a plain update, so a hardcoded publicMode=true would re-publish it --
-# exactly the 17-organism bug this module exists to prevent.
+# The case that matters: hidden by curators, on the portal, reference+annotated,
+# carrying annotations.  A plain update, so a hardcoded publicMode=true would
+# re-publish it -- the bug this passthrough exists to prevent.
 my ($tree) = grep { $_->{abbrev} eq 'treeQM6a' } @{$r->{update}};
 ok($tree, 'a hidden organism still qualifies for a routine update');
 is($tree->{public_mode}, 0, 'update on a HIDDEN organism carries publicMode 0, not 1');
@@ -73,33 +70,30 @@ my ($ren) = @{$r2->{rename}};
 is($ren->{public_mode}, 1, 'rename carries the live publicMode through');
 is($ren->{annotation_count}, 14, 'rename carries the curation work it is protecting');
 
-# Same rule on the rename path.  No live pair exercises it, so the rename map
-# is synthetic -- but the passthrough it checks is not: a hidden organism that
-# gets reclassified must not be published by the act of being renamed.
+# Same rule on the rename path.  No live pair exercises it, so the map is
+# synthetic -- but a hidden organism that gets reclassified must not be
+# published by the act of being renamed.
 my $r5 = $R->reconcile($portal, $live, $overlay, { treeQM6a => 'tbruTREU927' });
 my ($hiddenRename) = @{$r5->{rename}};
 is($hiddenRename->{from_abbrev}, 'treeQM6a', 'the hidden organism is the one renamed');
 is($hiddenRename->{public_mode}, 0, 'rename of a HIDDEN organism carries publicMode 0, not 1');
 
-# An exception generates no command, so this is report-only -- but "stays in
-# Apollo unchanged" is only readable if the report can show WHAT it stays as.
-# Visibility belongs next to is_reference/is_annotated for that judgement.
+# Report-only, since an exception generates no command -- but "stays unchanged"
+# is only readable if the report can show WHAT it stays as.
 my ($exc) = grep { $_->{abbrev} eq 'tbruLister427_2018' } @{$r->{exception}};
 is($exc->{public_mode}, 1, 'exception carries the live publicMode through');
 
-# ...and it is the LIVE value, not a constant that happens to match.  No hidden
-# organism is a real exception in the fixture, so hide one synthetically.
+# ...and the LIVE value, not a constant that happens to match.  No hidden
+# organism is a real exception here, so hide one synthetically.
 my %hiddenLive = %$live;
 $hiddenLive{tbruLister427_2018} = { %{$live->{tbruLister427_2018}}, public_mode => 0 };
 my $rHiddenExc = $R->reconcile($portal, \%hiddenLive, $overlay, {});
 my ($hiddenExc) = grep { $_->{abbrev} eq 'tbruLister427_2018' } @{$rHiddenExc->{exception}};
 is($hiddenExc->{public_mode}, 0, 'exception on a HIDDEN organism carries publicMode 0, not 1');
 
-# ---------------------------------------------------------------------------
-# Attacking the invariant directly.  reconcile() cannot construct a violating
-# result (see Reconcile.pm), so the guard is exercised at its own seam: it is a
-# public class method precisely so that it is not dead, untested code.
-# ---------------------------------------------------------------------------
+# --- The invariant, attacked directly.  reconcile() cannot construct a
+# violating result, so the guard is exercised at its own seam -- it is a public
+# class method precisely so it is not dead, untested code ---
 
 eval {
   $R->assertInvariants({
@@ -127,10 +121,8 @@ like($@, qr/INVARIANT VIOLATED: cneoJEC21 is both a rename source and a prune ca
 
 ok($R->assertInvariants($r2), 'a real reconcile result passes the guard');
 
-# ---------------------------------------------------------------------------
-# Incoherent rename input.  A rename map is a human statement of intent; every
-# way of ignoring one silently loses curation work or an organism.
-# ---------------------------------------------------------------------------
+# --- Incoherent rename input.  The map is a human statement of intent, and
+# every way of ignoring one silently loses curation work or an organism ---
 
 eval { $R->reconcile($portal, $live, $overlay, { zzzNotLive => 'hcapNAm1' }) };
 like($@, qr/rename source zzzNotLive is not in Apollo/,
@@ -159,10 +151,8 @@ eval { $R->reconcile($portal, $live, $overlay, { cneoJEC21 => 'tgonME49' }) };
 like($@, qr/rename target tgonME49 is already in Apollo; that is a merge, not a rename/,
      'repointing onto a live organism is refused');
 
-# ---------------------------------------------------------------------------
-# Overlay hygiene.  A no-op overlay line is not an error, but it must be
-# reported: it is a human decision the tool did nothing with.
-# ---------------------------------------------------------------------------
+# --- Overlay hygiene.  A no-op line is not an error, but it is a human decision
+# the tool did nothing with, so it must be reported ---
 
 is(scalar(@{$r->{redundant_overlay}}), 0, 'a fully-effective overlay reports nothing redundant');
 

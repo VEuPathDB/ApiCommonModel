@@ -33,8 +33,8 @@ like($update, qr/"publicMode":"true"/, 'a public organism stays public through a
 
 # --------------------------------------------------- visibility is echoed
 
-# 17 live organisms are curator-hidden, 3 of them carrying annotations.  The
-# previous script hardcoded "publicMode":"true", which re-published all 17.
+# Organisms are curator-hidden, some carrying annotations.  The script this
+# replaces hardcoded "publicMode":"true" and re-published every one.
 my $hidden = $C->updateCommand({abbrev => 'treeQM6a', apollo_id => 9999, public_mode => 0});
 like($hidden,   qr/"publicMode":"false"/,
      'a hidden organism stays hidden through an update');
@@ -52,8 +52,8 @@ like($@, qr/refusing to guess visibility/,
 
 # ---------------------------------------------------------------- rename
 
-# cneoJEC21 (id 2452162) holds 14 human-made annotations and is now cdenJEC21.
-# Repointing the EXISTING id preserves them; add-new + prune-old orphans them.
+# Repointing the EXISTING id preserves the annotations hanging off it;
+# add-new + prune-old orphans them.
 my $rename = $C->renameCommand({
   from_abbrev => 'cneoJEC21', to_abbrev => 'cdenJEC21',
   apollo_id => 2452162, public_mode => 1, annotation_count => 14,
@@ -108,9 +108,8 @@ like($add, qr{-blatdb '/data/apollo_data/twoBit/pberANKA\.2bit'}, 'and its blatd
 
 # ------------------------------------------- an organism with no annotation version
 
-# _latestAnnotationVersion returns undef when an organism has no usable history
-# row.  Apollo's name is then the bare portal name: an empty "[]" would become
-# part of the organism's identity in Apollo and would never match again.
+# With no usable history row the Apollo name is the bare portal name: an empty
+# "[]" would become part of its identity there and never match again.
 my $noVersion = $C->addCommand({
   abbrev => 'xxxNOVER', approved => 1, organism => {name => 'Genus species NOVER'},
 });
@@ -129,7 +128,7 @@ unlike($noVersionRename, qr/\[|\]/, 'and emits no empty brackets either');
 
 # ------------------------------------------------------------- no passwords
 
-# These files land in a shared directory and get pasted into tickets.  Every
+# These files land in a shared directory and get pasted into tickets, so every
 # password-bearing field must hold the literal shell variable, unexpanded.
 sub passwordValues {
   my ($text) = @_;
@@ -152,14 +151,13 @@ like($update, qr/"username":"admin\@local\.host"/, 'the admin user is admin@loca
 
 # --------------------------------------------- punctuation in an organism name
 
-# Strain and isolate names carry punctuation, and the portal is the source of
-# that string.  An apostrophe reaching the emitted line would terminate the
-# shell's quoting of --data and turn the rest of the JSON into shell words; a
-# double quote or a backslash would break the JSON instead.  Both must refuse
-# to emit rather than produce a line whose meaning depends on the shell.
+# Strain names carry punctuation and come from the portal.  An apostrophe would
+# terminate the shell's quoting of --data and turn the rest of the JSON into
+# shell words; a double quote or backslash breaks the JSON instead.  Both must
+# refuse rather than emit a line whose meaning depends on the shell.
 #
-# Asserted as facts, not prose: it dies, the message shows the offending value
-# so a reader can see WHICH organism, and it shows the offending character.
+# Asserted as facts: it dies, and the message names both the offending organism
+# and the offending character.
 sub dieFor {
   my ($code) = @_;
   eval { $code->(); 1 };
@@ -194,8 +192,8 @@ ok($slash, 'a backslash in a rename commonName refuses to emit');
 like($slash, qr/\Q$slashName\E/, 'and the error shows the offending organism name');
 like($slash, qr/\\/,             'and the offending character itself');
 
-# The shell-quoting failure and the JSON failure are different problems with
-# different fixes, so a reader must be able to tell which one they hit.
+# Different problems with different fixes, so a reader must be able to tell
+# which one they hit.
 isnt($squote, $dquote, 'the single-quote and double-quote diagnoses differ');
 
 # The same hazard reaches addCommand by its own path -- the name is
@@ -208,8 +206,8 @@ ok($addQuoted, 'a single quote in an added organism name refuses to emit');
 like($addQuoted, qr/\Q$quotedName\E/, 'and the add error shows the offending organism name');
 like($addQuoted, qr/'/,               'and the offending character itself');
 
-# A clean name with other punctuation must still go through: the guard is about
-# three specific characters, not a general distrust of the portal.
+# The guard is about three specific characters, not general distrust of the
+# portal, so other punctuation must still go through.
 my $punctuated = $C->addCommand({
   abbrev => 'psp_G1', approved => 1,
   organism => {name => 'Plasmodium sp. gorilla clade G1 (strain-2)',
@@ -265,8 +263,8 @@ my @commands = grep { !/^\s*#/ && /\S/ } split(/\n/, $curl);
 is(scalar @commands, 4,
    'Apollo_curl holds exactly updates + renames + APPROVED prunes');
 
-# A partial run should leave everything published: the renames (the entries
-# carrying annotations) go first, the unpublishes last.
+# A partial run should leave everything published: renames (the entries carrying
+# annotations) first, unpublishes last.
 like($commands[0], qr/2452162/,  'renames are emitted first');
 like($commands[3], qr/5146948/,  'prunes are emitted last');
 

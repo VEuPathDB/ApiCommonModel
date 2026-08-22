@@ -3,51 +3,34 @@ package ApiCommonModel::Model::ApolloRelease::Report;
 use strict;
 use warnings;
 
-# The artifact a release engineer reads, and then takes to the curation team to
-# approve adds and prunes.  It is the ONLY place a human sees what the tool
-# intends to do before anything is generated or run, so it is rendered from the
-# reconciliation result itself rather than reconstructed later from the command
-# files -- an unapproved add or prune never reaches those files at all
-# (Commands::writeCommandFiles), and it is exactly those that need reading.
+# The only place a human sees what the tool intends before anything is generated
+# or run.  Rendered from the reconciliation result rather than from the command
+# files, because an unapproved add or prune never reaches those files at all --
+# and those are exactly the ones needing to be read.
 #
-# Pure: data in, string out.  No I/O, no GUS_HOME, no database.  The CLI writes
-# the return value to report.txt and to stdout.
+# Pure: data in, string out.  The CLI writes it to report.txt and stdout.
 #
-# LAYOUT IS THE POINT.  A real build reconciles to roughly
-#
-#     update 457 | add_candidate 35 | prune_candidate 2 | rename 2
-#     exception 4 | redundant_overlay ~1
-#
-# so 457 of the 500 rows need no reading at all, while the two renames are the
-# rows whose loss costs curated annotations.  Everything below follows from
-# that asymmetry: decisions first, routine bulk last, and the one irreversible
-# mistake -- unpublishing an organism that holds human annotations -- shouted
-# rather than tabulated.
+# LAYOUT IS THE POINT.  A real build is overwhelmingly routine updates, with a
+# handful of renames that are the rows whose loss costs curated annotations.
+# Everything below follows from that asymmetry: decisions first, routine bulk
+# last, and the one irreversible mistake shouted rather than tabulated.
 
-# The marker a reader scans for, and the string the tests pin.  One constant so
-# a reword cannot silently apply to prunes but not to the summary.
+# One constant so a reword cannot apply to prunes but not to the summary.
 my $ANNOTATED_PRUNE_WARNING = 'ANNOTATIONS WILL BE HIDDEN';
 
 my @BUCKETS = qw(update add_candidate prune_candidate rename exception redundant_overlay);
 
 my $WIDTH = 78;
 
-# What still needs a human.  Separated from render() because the CLI decides
-# exit status and a caller should not have to grep the prose to learn whether
-# the release is blocked.
+# What still needs a human, separated from render() so the CLI can decide exit
+# status without grepping prose.
 #
-# THREE of these four fields count PENDING decisions; the fourth does not, and
-# the difference is load-bearing.  Approval is a gate on an ACTION: an approved
-# candidate is a decision already made, so it is not pending.  It is not a gate
-# on a CONSEQUENCE -- approving a prune does not make the annotations it hides
-# any less hidden.  So `annotated_prune` counts EVERY prune candidate that
-# holds annotations, approved or not, which is exactly the set _prunes() flags
-# with ANNOTATIONS WILL BE HIDDEN in the text.
-#
-# Deriving it from the unapproved subset was the original bug here, and it is
-# the quiet kind: the prose says two organisms lose their annotations while the
-# field a caller reads says one.  Reconciling those two answers is the entire
-# reason this method exists rather than leaving the CLI to grep the report.
+# THREE of these four count PENDING decisions; `annotated_prune` does not.
+# Approval gates the ACTION, not the CONSEQUENCE -- approving a prune does not
+# make the annotations it hides any less hidden -- so that field counts every
+# annotated prune, approved or not, matching what the text flags.  Deriving it
+# from the unapproved subset was the original bug, and a quiet one: the prose
+# and the field a caller reads disagreed.
 sub pendingDecisions {
   my ($class, $result) = @_;
 
@@ -75,9 +58,8 @@ sub render {
   push @out, sprintf("build %s, environment %s\n\n",
                      _or($context->{build}, '?'), _or($context->{environment}, '?'));
 
-  # Every bucket is listed even at zero.  A bucket that vanishes when empty
-  # cannot be distinguished from a bucket the report forgot, and "0 renames" is
-  # a fact a reader needs -- last release had two.
+  # Listed even at zero: a bucket that vanishes when empty is indistinguishable
+  # from one the report forgot, and "0 renames" is a fact a reader needs.
   push @out, "summary\n";
   push @out, sprintf("  %-20s %5d\n", $_, scalar @{$result->{$_} || []}) for @BUCKETS;
   push @out, "\n";
@@ -93,10 +75,9 @@ sub render {
   return join('', @out);
 }
 
-# Always emitted, including when nothing is pending.  This is the line the
-# release engineer reads first and the one they quote in the ticket; rendering
-# it only when there is something to say makes its absence ambiguous between
-# "nothing to approve" and "this report predates the check".
+# Always emitted, including when nothing is pending: this is the line quoted in
+# the ticket, and its absence would be ambiguous between "nothing to approve"
+# and "this report predates the check".
 sub _decisionBanner {
   my ($class, $result) = @_;
 
@@ -109,11 +90,9 @@ sub _decisionBanner {
               $pending->{total}, $pending->{add}, $pending->{prune})
     : "DECISIONS REQUIRED: none -- nothing is waiting on a human.\n";
 
-  # Deliberately OUTSIDE the pending branch, and above the procedural note.  An
-  # annotated prune a curator already approved is still an organism whose
-  # annotations are about to stop being visible; printing this only when a
-  # decision happens to be outstanding would drop it in exactly the case the
-  # release otherwise looks ready to run unread.
+  # OUTSIDE the pending branch: an approved annotated prune still hides
+  # annotations, and that is the case where the release looks ready to run
+  # unread.
   push @out, sprintf("  %d prune candidate(s) here would hide human annotations -- see below.\n",
                      $pending->{annotated_prune})
     if $pending->{annotated_prune};
@@ -127,10 +106,9 @@ sub _decisionBanner {
   return @out;
 }
 
-# Two rows among five hundred, and the only ones where getting it wrong loses
-# work that cannot be regenerated.  Printed before anything else with content,
-# with both abbrevs and the annotation count being preserved on one line, so
-# the pair can be read back to a curator without cross-referencing.
+# The only rows where getting it wrong loses work that cannot be regenerated.
+# Both abbrevs and the preserved annotation count go on one line, so the pair
+# can be read back to a curator without cross-referencing.
 sub _renames {
   my ($class, $result) = @_;
 
@@ -150,11 +128,10 @@ sub _renames {
   return @out;
 }
 
-# The expensive mistake.  A prune unpublishes an organism; if that organism
-# holds human annotations they stop being visible, and nobody notices until a
-# curator goes looking for their own work.  The count is printed for every
-# prune and the warning only for a non-zero one -- a marker on every line is a
-# marker nobody reads.
+# The expensive mistake: unpublishing an organism whose annotations then stop
+# being visible, unnoticed until a curator looks for their own work.  The count
+# prints for every prune, the warning only for a non-zero one -- a marker on
+# every line is a marker nobody reads.
 sub _prunes {
   my ($class, $result) = @_;
 
@@ -194,11 +171,10 @@ sub _adds {
   return @out;
 }
 
-# No action, and said so on the section header, because the natural reading of
-# "in Apollo but not reference+annotated" is that something is broken.  It is
-# not: it is a curation decision made once.  The criterion each one fails is
-# printed so a reader can tell a demoted reference strain from an unannotated
-# one without going back to the portal.
+# "No action" is on the section header because the natural reading of "in Apollo
+# but not reference+annotated" is that something is broken; it is a curation
+# decision made once.  The failed criterion is printed so a demoted reference
+# strain is distinguishable from an unannotated one.
 sub _exceptions {
   my ($class, $result) = @_;
 
@@ -224,16 +200,15 @@ sub _failedCriteria {
   push @failed, 'not reference' unless $entry->{is_reference};
   push @failed, 'not annotated' unless $entry->{is_annotated};
 
-  # Reachable only if a caller hands us an entry that does qualify; say so
-  # rather than printing an empty column that reads as "no reason given".
+  # Reachable only if a caller passes an entry that does qualify; say so rather
+  # than print an empty column reading as "no reason given".
   return 'criteria unknown' unless @failed;
 
   return join(', ', @failed);
 }
 
-# An overlay line that no longer does anything is not an error -- it is a human
-# decision overtaken by events.  Printing it with its note is how the file gets
-# tidied instead of accreting entries nobody dares delete.
+# Not an error -- a human decision overtaken by events.  Printing it with its
+# note is how the file gets tidied instead of accreting undeletable entries.
 sub _redundantOverlay {
   my ($class, $result) = @_;
 
@@ -253,21 +228,13 @@ sub _redundantOverlay {
   return @out;
 }
 
-# LAST, and compressed.  The judgement call in this module: 457 routine updates
-# are printed, but as a wrapped list of abbrevs after every decision, not as
-# 457 lines.
+# LAST, and compressed to a wrapped list of abbrevs rather than one line each.
+# One per line would make this bucket most of the report and push the renames
+# off the first screen; omitting it cannot answer the question actually asked of
+# it, which is "the count moved by three, which three?".
 #
-# Printing them one per line would make the update bucket ninety percent of the
-# report and push the two renames off the first screen -- the exact failure the
-# layout exists to avoid.  Omitting them entirely is worse than it looks: the
-# question actually asked of this section is "the count moved by three since
-# last build, which three?", and a bare count cannot answer it.  Wrapped, they
-# cost about fifty lines at the very end, where a reader who has already found
-# what they came for simply stops.
-#
-# The wrapped form is deliberately NOT the diffing surface -- inserting one
-# abbrev reflows every later line.  renderTsv() is where a release-to-release
-# diff is taken, one record per line.
+# NOT the diffing surface -- inserting one abbrev reflows every later line.
+# renderTsv() is where a release-to-release diff is taken.
 sub _updates {
   my ($class, $result) = @_;
 
@@ -304,16 +271,13 @@ sub _wrap {
   return @lines;
 }
 
-# The machine-readable form, for diffing one release against the next.  TSV
-# rather than JSON because a diff is taken line by line: one record per line
-# means an added organism is one added line, where a pretty-printed JSON object
-# is several and a compact one is the whole file.  Columns are fixed and the
-# rows are sorted, so two runs over the same reconciliation are byte-identical
-# and `diff` shows decisions, not formatting.
+# TSV rather than JSON because the diff is taken line by line: an added organism
+# is one added line, where pretty JSON is several and compact JSON is the whole
+# file.  Fixed columns and sorted rows, so two runs are byte-identical and
+# `diff` shows decisions rather than formatting.
 #
-# One column carries two meanings (a rename's destination, an overlay line's
-# directive) rather than widening every row with columns that are empty for
-# five of the six buckets; the header says so.
+# One column carries two meanings -- a rename's destination, an overlay line's
+# directive -- rather than widening every row with mostly-empty columns.
 my @COLUMNS = qw(bucket abbrev to_abbrev_or_directive apollo_id
                  annotation_count approved name note);
 
@@ -350,9 +314,9 @@ sub _tsvRow {
   return [map { $row{$_} } @COLUMNS];
 }
 
-# A tab or a newline reaching a TSV field would shift every later column, or
-# split one record into two, in whatever reads the file.  Portal common names
-# are free text from a database, so this is reachable without malice.
+# A tab or newline in a field would shift every later column, or split one
+# record into two.  Common names are free text from a database, so this is
+# reachable without malice.
 sub _clean {
   my ($value) = @_;
   $value = '' unless defined $value;

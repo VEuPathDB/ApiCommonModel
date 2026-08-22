@@ -12,22 +12,15 @@ use ApiCommonModel::Model::ApolloRelease::Absolutize;
 
 my $ABS  = 'ApiCommonModel::Model::ApolloRelease::Absolutize';
 
-# canonical() so two runs over the same model produce byte-identical files.
-# The release is diffed against the previous one by hand; hash order noise
-# would bury the handful of real changes in a few hundred thousand lines.
-#
-# utf8() so encode() returns OCTETS, not characters.  decode_json hands back
-# decoded characters, and several organisms carry non-ASCII in a track key or
-# description (tgonME49 does), so encoding without this produces a character
-# string that `print` emits with a "Wide character" warning.  The bytes on disk
-# would have been right; the warning is the problem -- this module's own policy
-# (_defaultRunScript, Portal.pm) is that any stderr byte from a config producer
-# means its output is untrustworthy, and these files are also served through
-# responseFromCommand, which splices stderr into the JSON body.
+# canonical() so two runs produce byte-identical files: the release is diffed
+# against the previous one by hand, and hash order noise would bury the real
+# changes.  utf8() so encode() returns octets -- some organisms carry non-ASCII
+# in a track key, and a character string makes `print` emit a "Wide character"
+# warning.  Any stderr byte from a config producer is treated as proof its
+# output is untrustworthy, so this module must not emit one either.
 my $JSON = JSON->new->canonical->utf8;
 
-# Exposed so a test can assert the encoder really emits octets.  Everything
-# this module writes goes through it.
+# Exposed so a test can assert the encoder emits octets.
 sub encodeJson {
   my ($class, $document) = @_;
   return $JSON->encode($document);
@@ -35,40 +28,29 @@ sub encodeJson {
 
 # Turns one portal organism into the directory Apollo reads.
 #
-# TWO ABBREVS, and mixing them up is the single easiest mistake here.  See
-# Portal.pm: `abbrev` is public_abbrev, `internal_abbrev` is apidb.organism.abbrev,
-# and they differ for 37 of 831 organisms.
-#   - the five track-producing scripts take the INTERNAL abbrev, because they
-#     key auto_generated/<abbrev>/ off it directly (a wrong one is exit 2 on a
-#     missing datasetAndPresenterProps.conf);
-#   - jbrowseTracks takes the PUBLIC abbrev (its SQL is `where public_abbrev = ?`);
-#   - every output path, and Apollo's own data directory, uses the PUBLIC abbrev,
-#     because that is the identity Apollo already holds for the organism.
-# Comparisons are case sensitive throughout: scerS288C and scerS288c are two
-# different organisms.
+# TWO ABBREVS, and confusing them is the easiest mistake here:
+#   - the five track producers take the INTERNAL abbrev; they key
+#     auto_generated/<abbrev>/ off it directly;
+#   - jbrowseTracks takes the PUBLIC abbrev (`where public_abbrev = ?`);
+#   - every output path, and Apollo's data directory, uses the PUBLIC abbrev --
+#     that is the identity Apollo already holds.
+# Case sensitive throughout; abbrevs differing only in case are distinct.
 #
-# Everything that produces text is split into a pure function and a seam, so
-# the rules can be exercised with no database, no GUS_HOME and no filesystem.
-# The seams are coderefs in %opts, in the style Rename.pm uses for its .fai
-# lookups.
+# Text producers are split into a pure function and a coderef seam so the rules
+# run with no database, no GUS_HOME and no filesystem.
 
-# Warnings are COLLECTED, never written to stderr -- same policy as Portal.pm
-# and Rename.pm.  These scripts are also served through responseFromCommand,
-# which merges stderr into the JSON body, so this module treats a child's
-# stderr as proof its output is untrustworthy; it must not then emit stderr of
-# its own for a recoverable skip.
+# Warnings are COLLECTED, never written to stderr: this module treats a child's
+# stderr byte as proof of untrustworthy output, so it must not emit one itself
+# for a recoverable skip.
 my @WARNINGS;
 
 sub warnings { return @WARNINGS }
 
-# ---------------------------------------------------------------------------
-# PURE: include URL -> the local filename Apollo will read it as
-# ---------------------------------------------------------------------------
+# --- PURE: include URL -> the local filename Apollo will read it as ---
 
-# Ordered: the first match wins.  rnaseqJunctions MUST precede rnaseq -- both
-# endpoints are generated for the same organism, so the wrong order writes one
-# file's contents under the other's name, producing a package that parses, and
-# loads, and shows the wrong tracks.
+# First match wins, so rnaseqJunctions MUST precede rnaseq: both are generated
+# for the same organism, and the wrong order writes one file's contents under
+# the other's name -- a package that parses, loads, and shows the wrong tracks.
 my @INCLUDE_NAMES = (
   [qr{apollo_gene_tracks\.conf$} => 'apollo_gene_tracks.conf'],
   [qr{functions\.conf$}          => 'functions.conf'],
@@ -81,13 +63,9 @@ my @INCLUDE_NAMES = (
   [qr{dnaseq}i                   => 'dnaseq.json'],
 );
 
-# Includes that are deliberately NOT carried into the package.
-#   user-datasets-jbrowse: per-user data behind a session cookie.  Apollo has no
-#     session, so the include would 404 on every load.
-#   jbrowse_embed.conf: styling for JBrowse embedded in a VEuPathDB gene page.
-#     Apollo embeds JBrowse itself and supplies its own chrome; release-68 never
-#     carried it, because Paul's script read the DEFAULT jbrowseTracks track set,
-#     which does not name it.
+# Deliberately not carried: user-datasets-jbrowse is per-user data behind a
+# session cookie Apollo does not have, and jbrowse_embed.conf styles JBrowse for
+# a VEuPathDB gene page, where Apollo supplies its own chrome.
 my @DROP_INCLUDES = (qr{user-datasets-jbrowse}, qr{jbrowse_embed\.conf$});
 
 sub localNameForInclude {
@@ -101,28 +79,20 @@ sub localNameForInclude {
   return undef;
 }
 
-# ---------------------------------------------------------------------------
-# PURE: the site's trackList.json -> Apollo's
-# ---------------------------------------------------------------------------
+# --- PURE: the site's trackList.json -> Apollo's ---
 
-# Three deliberate differences from what the site serves, all declared in spec
-# section 10 so that a diff against the live site can be audited:
-#   1. include URLs rewritten to the local filenames (and the drops above)
-#   2. refSeqs pointed at the local .fai
-#   3. tracks replaced with a single local IndexedFasta reference track
+# Three deliberate differences from what the site serves: include URLs rewritten
+# to local filenames, refSeqs pointed at the local .fai, and tracks replaced with
+# a single local IndexedFasta reference track.
 #
-# $extraIncludes is the set of files the CALLER actually wrote and that the
-# skeleton does not name -- functions.conf and apollo_gene_tracks.conf are
-# pushed on by this tool, not by jbrowseTracks, and with the geneAnnotationTracks
-# skeleton so are rnaseq/chipseq/dnaseq.  Deriving the include list from what
-# was really produced is what makes "every include resolves to a file that
-# exists and parses" true by construction rather than by inspection.
+# $extraIncludes is what the CALLER actually wrote and the skeleton does not
+# name.  Deriving the include list from what was really produced is what makes
+# "every include resolves to a file that exists" true by construction.
 sub buildTrackList {
   my ($class, $trackList, $abbrev, $base, $extraIncludes) = @_;
 
-  # Shallow copy, then replace every nested structure we touch.  generateAll
-  # runs this once per organism and a shared nested arrayref would accumulate
-  # the previous organism's includes.
+  # Shallow copy, then replace every nested structure touched: a shared arrayref
+  # would accumulate the previous organism's includes.
   my %built = %$trackList;
 
   my @includes;
@@ -135,9 +105,8 @@ sub buildTrackList {
 
     my $name = $class->localNameForInclude($url);
 
-    # Not fatal, but never silent.  An unmapped include means jbrowseTracks
-    # grew an endpoint this tool does not know how to fetch; the package is
-    # still usable, and a human needs to decide whether Apollo wants it.
+    # Not fatal, never silent: jbrowseTracks grew an endpoint this tool cannot
+    # fetch, and a human decides whether Apollo wants it.
     unless ($name) {
       push @WARNINGS, "$abbrev: unrecognised include '$url'; not carried into the package";
       next URL;
@@ -154,8 +123,7 @@ sub buildTrackList {
 
   $built{include} = \@includes;
 
-  # Apollo owns its own copy of the genome; the site's refSeqs pointed at a
-  # store URL.
+  # Apollo owns its own copy of the genome; the site's pointed at a store URL.
   $built{refSeqs} = "seq/$abbrev.fa.fai";
 
   $built{names} = {%{$trackList->{names} || {}}};
@@ -179,19 +147,11 @@ sub buildTrackList {
   return \%built;
 }
 
-# ---------------------------------------------------------------------------
-# PURE: refSeqs.json derived from the .fai
-# ---------------------------------------------------------------------------
+# --- PURE: refSeqs.json derived from the .fai ---
 
-# NOT from jbrowseRefSeqs, which is orphaned: both service endpoints that
-# called it are commented out, and it has died with a missing getCacheFile for
-# every organism since commit e0e9a61bb.  The .fai we already copy carries the
-# same two facts, so this is one extra pass over a file in hand instead of a
-# per-organism database round trip.
-#
-# Dies rather than warns on a malformed line.  Rename.pm can afford to shrug at
-# a bad index (the organism just stays a prune candidate); here the output IS
-# the index, and half of one is a package that loads with sequences missing.
+# Derived from the .fai already in hand rather than from jbrowseRefSeqs, which
+# is orphaned upstream.  Dies rather than warns on a malformed line: here the
+# output IS the index, and half of one is a package missing sequences.
 sub refSeqsFromFai {
   my ($class, $text) = @_;
 
@@ -207,26 +167,21 @@ sub refSeqsFromFai {
     die "malformed .fai line $lineNumber: '$line'\n"
       unless defined $name && length $name && defined $length && $length =~ /^\d+$/;
 
-    # +0 so these encode as JSON numbers.  JBrowse compares them
-    # arithmetically, and a quoted "1876705" sorts as a string.
+    # +0 so these encode as JSON numbers: JBrowse compares them arithmetically.
     push @refSeqs, {name => $name, start => 0, end => $length + 0, length => $length + 0};
   }
 
   return \@refSeqs;
 }
 
-# ---------------------------------------------------------------------------
-# PURE: strip the store-URL reference track
-# ---------------------------------------------------------------------------
+# --- PURE: strip the store-URL reference track ---
 
-# Every organism's organismSpecific.json carries one IndexedFasta track with
-# useAsRefSeqStore true, pointing at the site's store URL.  Apollo must use the
-# local copy this tool writes into seq/ instead; two tracks both claiming to be
-# the reference sequence store is not a merge JBrowse resolves in our favour.
+# organismSpecific.json carries an IndexedFasta track pointing at the site's
+# store URL; Apollo must use the local copy in seq/ instead, and two tracks both
+# claiming to be the reference store is not a merge JBrowse resolves our way.
 #
-# Filter on the FIELD, never on the label.  The label ("refseqs") is cosmetic:
-# one organism's presenter renaming it would leave the store-URL track in place
-# with nothing failing.
+# Filter on the FIELD, never the label: the label is cosmetic, so renaming it
+# would leave the store-URL track in place with nothing failing.
 sub stripRefSeqStoreTracks {
   my ($class, $document) = @_;
 
@@ -247,14 +202,11 @@ sub stripRefSeqStoreTracks {
   return (\%copy, $removed);
 }
 
-# ---------------------------------------------------------------------------
-# PURE: invariants over a generated tracks array
-# ---------------------------------------------------------------------------
+# --- PURE: invariants over a generated tracks array ---
 
-# A bug fixed on master today had addChipChipTracks pushing bare integers onto
-# the tracks array -- 56 of 158 entries for tgonME49.  The JSON stayed valid,
-# so nothing upstream of a curator's browser noticed.  This module is the last
-# gate before the package ships, and the check costs one pass.
+# Track builders upstream have pushed bare integers onto this array.  The JSON
+# stays valid, so nothing notices before a curator's browser; this is the last
+# gate before the package ships and the check costs one pass.
 sub assertTracksAreObjects {
   my ($class, $document, $label) = @_;
 
@@ -276,46 +228,26 @@ sub assertTracksAreObjects {
     . join(', ', @shown) . (@bad > @shown ? ', ...' : '') . "\n";
 }
 
-# Zero is a COUNT, not a failure.  cneoJEC21 genuinely has 0 ChIP-Seq and 0
-# DNA-Seq tracks: its datasetAndPresenterProps.conf carries the template
-# anchors with no injected entries beneath them, because no such data is
-# loaded.  Failing on it would block a correct release; hiding it would let the
-# flat-file migration's characteristic empty-but-valid output through unseen.
-# So the caller records it and a human judges.
+# Zero is a COUNT, not a failure: an organism with no such data loaded really
+# has no tracks.  Failing would block a correct release, hiding it would let
+# empty-but-valid output through unseen, so the caller records it for a human.
 sub countTracks {
   my ($class, $document) = @_;
   return scalar @{$document->{tracks} || []};
 }
 
-# ---------------------------------------------------------------------------
-# PURE: strip the [tracks.refseq] stanza from a tracks.conf
-# ---------------------------------------------------------------------------
+# --- PURE: strip the [tracks.refseq] stanza from a tracks.conf ---
 
-# Same reason as stripRefSeqStoreTracks: Apollo reads its own local copy of the
-# genome out of seq/, so a second declaration of the reference sequence store
-# is at best redundant and at worst wins.
+# Same reason as stripRefSeqStoreTracks: a second declaration of the reference
+# store is at best redundant and at worst wins.
 #
-# CENSUS, 2026-08-21 (cedar, build 71, GUS_HOME eupathdb.jbrestel):
-#   835 auto_generated/<abbrev>/tracks.conf files
-#     0 contain "[tracks.refseq]"
-#     0 contain the substring "refseq" at all, case-insensitively
-# So this is a NO-OP today -- over the entire roster, not the four-organism
-# sample the spec baseline used and warned not to generalise from.  It is
-# implemented anyway, deliberately:
-#   - spec section 6 states the requirement, and an unimplemented stated
-#     requirement is indistinguishable to the next reader from a forgotten one.
-#     That is exactly how the script this replaces accumulated its dead
-#     branches;
-#   - the stanza is emitted by the model, not by this tool, so it can come back
-#     in any build without a line here changing;
-#   - it costs one pass over a 35KB file.
-# The count is returned so the caller can report a re-appearance rather than
-# silently absorb it.
+# A no-op across the current roster, implemented anyway: the stanza comes from
+# the model, so it can return in any build, and an unimplemented requirement
+# reads to the next reader exactly like a forgotten one.  The count is returned
+# so a re-appearance is reported rather than absorbed.
 #
-# Line based rather than Paul's `s/\[tracks.refseq\][^#\[]*//`, whose character
-# class stops at the first "#" -- and tracks.conf is full of commented-out keys,
-# so that regex leaves the tail of the stanza behind whenever one contains a
-# comment.
+# Line based, not a regex: a character class stopping at "#" leaves the tail of
+# the stanza behind, and tracks.conf is full of commented-out keys.
 sub stripRefSeqStanza {
   my ($class, $text) = @_;
 
@@ -333,8 +265,8 @@ sub stripRefSeqStanza {
       next;
     }
 
-    # A stanza runs to the next section header, or to end of file.  Blank
-    # lines and comments inside it belong to it.
+    # A stanza runs to the next section header or EOF; blanks and comments
+    # inside it belong to it.
     $inStanza = 0 if $inStanza && $line =~ /^\s*\[/;
 
     push @kept, $line unless $inStanza;
@@ -343,22 +275,18 @@ sub stripRefSeqStanza {
   return (join("\n", @kept), $removed);
 }
 
-# ---------------------------------------------------------------------------
-# IO: write one file, absolutized, with the post-condition enforced
-# ---------------------------------------------------------------------------
+# --- IO: write one file, absolutized, with the post-condition enforced ---
 
 sub writeFile {
   my ($class, $path, $content, $base) = @_;
 
   my $rewritten = $ABS->rewrite($content, $base);
 
-  # Not optional.  The previous script did the same rewrite with no check, so a
-  # missed URL became a track that 404s inside Apollo: the config loads, the
-  # track appears, and it is empty.
+  # Not optional: a missed URL is a track that 404s inside Apollo, so the config
+  # loads, the track appears, and it is empty.
   $ABS->assertNoRelative($rewritten, $path);
 
-  # ':raw' deliberately: every producer above hands this octets already (the
-  # JSON encoder is utf8(), the .conf files are slurped as bytes), so any
+  # ':raw' deliberately -- every producer hands this octets already, so an
   # encoding layer here would be a second, wrong one.
   open(my $fh, '>:raw', $path) or die "Cannot write $path: $!\n";
   print $fh $rewritten;
@@ -367,16 +295,12 @@ sub writeFile {
   return 1;
 }
 
-# ---------------------------------------------------------------------------
-# The seams: everything that shells out or touches disk
-# ---------------------------------------------------------------------------
+# --- The seams: everything that shells out or touches disk ---
 
-# Runs one of the jbrowse* producers and returns its stdout.
-#
-# ANY byte on stderr is fatal, matching Portal.pm.  These scripts are also
-# served through responseFromCommand, which merges stderr into the response
-# body, so a stray Perl warning is a correctness bug rather than a log line --
-# and the JSON we are about to parse may be the warning text spliced into it.
+# Runs one of the jbrowse* producers and returns its stdout.  ANY byte on stderr
+# is fatal: these scripts are also served through responseFromCommand, which
+# merges stderr into the response body, so the JSON about to be parsed may be
+# the warning text spliced into it.
 sub _defaultRunScript {
   my ($gusHome, $script, @args) = @_;
 
@@ -425,13 +349,11 @@ sub _defaultTwoBit {
   return 1;
 }
 
-# Checked once, at startup, not 400 organisms into a run.
-#
-# DELIBERATELY NOT CALLED FROM THIS MODULE.  generateOrganism is invoked once
-# per organism, so a check here would either run 831 times or be the 400th
-# organism's problem; and a caller substituting the `twoBit` seam has no use
-# for faToTwoBit at all.  The CLI (task 12) calls this once before the loop.
-# It is tested here so that "uncalled" cannot quietly become "unverified".
+# DELIBERATELY NOT CALLED FROM THIS MODULE: generateOrganism runs once per
+# organism, so a check here would repeat per organism or become the late
+# failure it exists to prevent, and a caller substituting the `twoBit` seam has
+# no use for faToTwoBit.  The CLI calls it once before the loop.  Tested here so
+# "uncalled" cannot quietly become "unverified".
 sub assertToolsAvailable {
   my ($class) = @_;
 
@@ -447,14 +369,11 @@ sub assertToolsAvailable {
   return $found;
 }
 
-# ---------------------------------------------------------------------------
-# One organism, end to end
-# ---------------------------------------------------------------------------
+# --- One organism, end to end ---
 
-# The five track producers, each with the argv jbrowse* expects.  Table driven
-# because the argument ORDER differs per script for no reason anyone remembers,
-# and inlining five near-identical call sites is how one of them ends up with
-# the build number where the wsDir goes.
+# Table driven because the argument ORDER differs per script for no reason
+# anyone remembers, and five near-identical inline call sites is how one ends up
+# with the build number where the wsDir goes.
 my @TRACK_SOURCES = (
   {file => 'rnaseq.json',           script => 'jbrowseRnaAndChipSeqTracks',
    args  => sub { my ($i, $o) = @_; ($i, $o->{project}, $o->{build}, $o->{wsDir}, 'RNASeq', 'jbrowse') }},
@@ -469,15 +388,9 @@ my @TRACK_SOURCES = (
 );
 
 # Static config copied verbatim (after absolutization) into every organism dir.
-#
-# apollo_gene_tracks.conf is NOT generated by anything: it is a checked-in file,
-# ApiCommonModel/Model/lib/jbrowse/apollo_gene_tracks.conf, installed to
-# $GUS_HOME/lib/jbrowse/ and separately to the webapp by ApiCommonWebsite's
-# build.xml.  It defines [tracks.processed_transcripts] -- category "Draggable
-# Annotation" -- which is the track curators drag genes INTO.  It is the reason
-# Apollo exists, so it ships for every organism in the roster.  Paul's "TODO:
-# only include this for annotated genomes" is already satisfied upstream of
-# here: Portal::qualifies admits only reference AND annotated genomes.
+# apollo_gene_tracks.conf is checked in, not generated, and defines the
+# draggable annotation track curators drag genes INTO -- the reason Apollo
+# exists -- so it ships for every organism the roster admits.
 my @STATIC_CONFIGS = (
   {file => 'functions.conf',          from => sub { "$_[0]/lib/jbrowse/functions.conf" }},
   {file => 'apollo_gene_tracks.conf', from => sub { "$_[0]/lib/jbrowse/apollo_gene_tracks.conf" }},
@@ -531,10 +444,8 @@ sub generateOrganism {
       ($document, $removed) = $class->stripRefSeqStoreTracks($document);
       $summary{stripped} = $removed;
 
-      # Exactly one is expected.  Zero means the site stopped emitting it and
-      # this strip has quietly become a no-op; more than one means something
-      # changed shape.  Neither is fatal -- Apollo's own local track is what
-      # the package uses either way -- but both want a human.
+      # Exactly one expected: zero means the strip has become a no-op, more
+      # means something changed shape.  Neither is fatal, both want a human.
       push @WARNINGS, "$abbrev: organismSpecific.json had $removed useAsRefSeqStore "
         . "track(s); expected exactly 1"
         unless $removed == 1;
@@ -552,9 +463,9 @@ sub generateOrganism {
   my ($tracksConf, $stanzas) = $class->stripRefSeqStanza(
     $readFile->("$gusHome/lib/jbrowse/auto_generated/$internal/tracks.conf"));
 
-  # Zero for all 835 organisms as of 2026-08-21 (see stripRefSeqStanza).  Say
-  # so if that changes, because it means the model started emitting a reference
-  # store again and someone should decide whether Apollo still wants it gone.
+  # Currently zero rosterwide (see stripRefSeqStanza).  Say so if that changes:
+  # the model started emitting a reference store again and someone must decide
+  # whether Apollo still wants it gone.
   push @WARNINGS, "$abbrev: tracks.conf carried $stanzas [tracks.refseq] stanza(s), "
     . "which were stripped; this has been a no-op for the whole roster since 2026-08-21"
     if $stanzas;
@@ -572,9 +483,8 @@ sub generateOrganism {
   }
 
   # --- the genome, its index, and refSeqs.json ----------------------------
-  # Copied VERBATIM, not through writeFile: this is sequence data, an
-  # absolutization pass over 67MB of nucleotides would find nothing and cost
-  # real time, and the .fai carries no self-reference so renaming it is safe.
+  # Copied VERBATIM, not through writeFile: absolutizing tens of megabytes of
+  # nucleotides finds nothing, and the .fai carries no self-reference.
   my $fastaSource = "$opts->{wsDir}/$opts->{project}/build-$opts->{build}"
                   . "/$files/genomeAndProteome/fasta/genome.fasta";
 
@@ -588,8 +498,8 @@ sub generateOrganism {
   $summary{sequences} = scalar @$refSeqs;
 
   # --- .2bit for BLAT -----------------------------------------------------
-  # Always regenerated, never copied forward: 0.17-0.74s per genome, and an
-  # incremental scheme keyed on genome version adds state to save nothing.
+  # Always regenerated: it is sub-second per genome, and an incremental scheme
+  # keyed on genome version adds state to save nothing.
   $twoBit->("$seqDir/$abbrev.fa", "$twoBitDir/$abbrev.2bit");
 
   # --- trackList.json, last, naming exactly what was written --------------
@@ -605,14 +515,11 @@ sub generateOrganism {
   return \%summary;
 }
 
-# ---------------------------------------------------------------------------
-# The whole roster, with failures isolated
-# ---------------------------------------------------------------------------
+# --- The whole roster, with failures isolated ---
 
-# Paul's script died on the first missing input, discarding hours of completed
-# work.  The organisms are independent and the run is hours long, so a failure
-# is recorded and the loop continues; the caller exits non-zero on any entry in
-# {failed}.
+# The organisms are independent and the run is hours long, so a failure is
+# recorded and the loop continues rather than discarding completed work.  The
+# caller exits non-zero on any entry in {failed}.
 sub generateAll {
   my ($class, $organisms, $perOrganism) = @_;
 
