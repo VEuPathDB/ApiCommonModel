@@ -44,6 +44,8 @@ Every row measured on 2026-08-21, not inferred.
 | 13 | The renamed genome is byte-identical | b68 `cneoJEC21.fa.fai` vs b71 `CdeneoformansJEC21/genome.fasta.fai`: 14 sequences, identical names and lengths. |
 | 14 | `applicationType=apollo` is unimplemented | `Store::makeUrlTemplate` is `die "TODO: make apollo work"`. `getConfigurationObject` dispatches `apollo` to the abstract `getApolloObject`; **39** classes implement `getJBrowseObject`, **1** implements `getApolloObject`. |
 | 15 | 17 live organisms are deliberately hidden, and the update command would un-hide them | `publicMode=false` on 17 organisms; 16 are on the portal and 15 qualify as reference+annotated, so they are curator-hidden, not retired. 3 carry annotations (`iscaPalLabHiFi` 20, `treeQM6a` 11, `etenHoughton2021` 2). Paul's `updateOrganismInfo` curl hardcodes `"publicMode":"true"`, so running the generated commands re-publishes all 17. |
+| 16 | `jbrowseRefSeqs` is dead for every organism | Exit 255, 211 bytes on stderr: `Can't locate object method "getCacheFile"`. Commit `e0e9a61bb` commented out the `getCacheFile`/`setCacheFile` accessors in `JBrowseUtil.pm` but left `printFromCache()` and `setCacheFileName()` calling them. Organism-independent; dies before any DB work. Served through `responseFromCommand`, so it corrupts the response body, not just a log. |
+| 17 | The two script families disagree about which organism abbrev they take | `apidb.organism` holds `abbrev = cneoJEC21`, `public_abbrev = cdenJEC21`. `jbrowseTracks` consumes the **public** abbrev and returns the internal one; the five track producers consume the **internal** abbrev and key `auto_generated/<abbrev>/` off it. Feeding the wrong one gives exit 2, or a wrong-organism answer. |
 
 ### Set sizes as of build 71
 
@@ -318,6 +320,90 @@ differ only by known, enumerable transformations. So:
 
 Probe organisms: `tgonME49` (rich track set, 10 annotations in Apollo), `pfal3D7` (different
 component DB, partitioned queries), and `cdenJEC21` (the rename).
+
+### Measured baseline of the `jbrowse*` producing scripts (2026-08-21)
+
+Measured on cedar against build **71**, model **UniDB**, webServices
+`/var/www/Common/apiSiteFilesMirror/webServices`,
+`GUS_HOME=/var/www/EuPathDB/eupathdb.jbrestel/gus_home`.
+Every script was run directly; nothing was built (`bld`/`wb` deliberately not run).
+
+### Results
+
+| script | organism | exit | stdout B | stderr B | JSON | tracks |
+|---|---|---|---|---|---|---|
+| jbrowseRnaAndChipSeqTracks RNASeq | tgonME49 | 0 | 935200 | 0 | yes | 474 |
+| jbrowseRnaAndChipSeqTracks ChIPSeq | tgonME49 | 0 | 30852 | 0 | yes | 21 |
+| jbrowseRNASeqJunctionTracks | tgonME49 | 0 | 18338 | 0 | yes | 4 |
+| jbrowseOrganismSpecificTracks | tgonME49 | 0 | 146486 | 0 | yes | 158 |
+| jbrowseDNASeqTracks | tgonME49 | 0 | 310296 | 0 | yes | 192 |
+| jbrowseRefSeqs | tgonME49 | **255** | 0 | **211** | no | — |
+| jbrowseTracks geneAnnotationTracks | tgonME49 | 0 | 352 | 0 | yes | 0 (by design) |
+| jbrowseRnaAndChipSeqTracks RNASeq | pfal3D7 | 0 | 1899853 | 0 | yes | 880 |
+| jbrowseRnaAndChipSeqTracks ChIPSeq | pfal3D7 | 0 | 355151 | 0 | yes | 230 |
+| jbrowseRNASeqJunctionTracks | pfal3D7 | 0 | 18350 | 0 | yes | 4 |
+| jbrowseOrganismSpecificTracks | pfal3D7 | 0 | 132196 | 0 | yes | 103 |
+| jbrowseDNASeqTracks | pfal3D7 | 0 | 2513500 | 0 | yes | 1611 |
+| jbrowseRefSeqs | pfal3D7 | **255** | 0 | **211** | no | — |
+| jbrowseTracks geneAnnotationTracks | pfal3D7 | 0 | 351 | 0 | yes | 0 (by design) |
+| all five track scripts | **cdenJEC21** | **2** | 0 | **271** | no | — |
+| jbrowseTracks geneAnnotationTracks | cdenJEC21 | 0 | 363 | 0 | yes | 0 (by design) |
+| jbrowseRnaAndChipSeqTracks RNASeq | cneoJEC21 | 0 | 417374 | 0 | yes | 198 |
+| jbrowseRnaAndChipSeqTracks ChIPSeq | cneoJEC21 | 0 | 13 | 0 | yes | **0** |
+| jbrowseRNASeqJunctionTracks | cneoJEC21 | 0 | 18366 | 0 | yes | 4 |
+| jbrowseOrganismSpecificTracks | cneoJEC21 | 0 | 168283 | 0 | yes | 15 |
+| jbrowseDNASeqTracks | cneoJEC21 | 0 | 13 | 0 | yes | **0** |
+| jbrowseRefSeqs | cneoJEC21 | **255** | 0 | **211** | no | — |
+
+### Static config
+
+| file | tgonME49 | pfal3D7 | cneoJEC21 | cdenJEC21 |
+|---|---|---|---|---|
+| `auto_generated/<org>/` | present | present | present | **absent** |
+| `tracks.conf` bytes | 34532 | 29469 | 457 | — |
+| `[track…]` stanzas | 34 | 29 | 1 (`gcContent`) | — |
+| `[tracks.refseq]` stanza | 0 | 0 | 0 | — |
+
+`$GUS_HOME/lib/jbrowse/functions.conf` exists, 106221 bytes, non-empty.
+No organism carries a `[tracks.refseq]` stanza, so the "strip refseq" step the tool
+was expected to perform currently has nothing to strip — do not assume it is dead code
+without re-checking a wider organism sample.
+
+### Defects found
+
+1. **`jbrowseRefSeqs` is dead for every organism.** Exit 255, empty stdout, 211 bytes on
+   stderr:
+   `Can't locate object method "getCacheFile" via package "ApiCommonModel::Model::JBrowseUtil" at .../JBrowseUtil.pm line 419`.
+   Commit `e0e9a61bb` ("comment out stuff to do with CACHE") commented out the
+   `getCacheFile`/`setCacheFile` accessors (JBrowseUtil.pm lines 34–35) but left both
+   `printFromCache()` (line 419) and `setCacheFileName()` calling them. The die happens
+   before any DB work, so it is organism-independent. Because these scripts are also
+   served through `responseFromCommand`, which merges stderr into the JSON body, this is
+   a payload-corruption bug, not just a log line.
+
+2. **Organism-abbrev namespace mismatch.** `apidb.organism` for this genome is
+   `abbrev = cneoJEC21`, `public_abbrev = cdenJEC21`. `jbrowseTracks` takes the **public**
+   abbrev (its SQL selects `where public_abbrev = ?`) and returns the internal one; the
+   five track-producing scripts take the **internal** abbrev and key
+   `auto_generated/<abbrev>/` off it directly. Passing `cdenJEC21` to them fails with
+   exit 2 and 271 bytes of stderr:
+   `Cannot open file .../auto_generated/cdenJEC21/datasetAndPresenterProps.conf: No such file or directory at .../JBrowseUtil.pm line 208`.
+   Nothing is missing — the generation step is fine, the two scripts families simply
+   disagree about which abbrev they consume. Any tool must resolve public→internal once
+   and feed each script the abbrev it expects.
+
+3. **Zero-track results verified as genuine, not broken.** `cneoJEC21` returns 0 ChIP-Seq
+   and 0 DNA-Seq tracks. Its `datasetAndPresenterProps.conf` contains the
+   `jbrowseChIPSeqBuildProps` and `jbrowseDnaSeqBuildProps` template anchors with **no
+   injected dataset entries beneath them**, whereas `tgonME49`'s carries real
+   `chipseq::…` rows. The organism has no such data loaded; the queries are working.
+
+4. **`jbrowseTracks` returning `tracks: []` is by design.** It emits the trackList
+   skeleton (`refSeqs`, `names`, `include`); the tracks arrive via the `include` list. Do
+   not treat its zero count as a failure.
+
+Not measured: `https://jbrestel.eupathdb.org/a/service/jbrowse/tracks/tgonME49/trackList.json`
+307-redirects to EuPathDB autologin, so the live-site comparison was skipped.
 
 ## 11. Deferred
 
