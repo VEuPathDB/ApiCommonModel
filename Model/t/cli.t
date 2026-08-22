@@ -276,6 +276,27 @@ my $RESULT = {
   is(scalar @{$narrowed->{prune_candidate}}, 0, 'unselected prunes dropped from the commands');
 }
 
+{
+  # The POSITIVE half of add/prune narrowing.  The case above only shows that
+  # UNselected candidates disappear, which a filter hardcoded to return nothing
+  # satisfies just as well -- and that filter silently drops a curator-approved
+  # addition from the command files while the package still builds and reports
+  # success.  So select an add candidate and a prune candidate by name and
+  # require that both survive, with the unselected add gone from the same list.
+  my $narrowed = $C->narrowResult($RESULT, ['hcapNAm1', 'gone']);
+
+  is_deeply([map { $_->{abbrev} } @{$narrowed->{add_candidate}}], ['hcapNAm1'],
+            'a selected add candidate survives narrowing, and only it');
+  is_deeply([map { $_->{abbrev} } @{$narrowed->{prune_candidate}}], ['gone'],
+            'a selected prune candidate survives narrowing');
+  ok($narrowed->{add_candidate}[0]{approved},
+     'carried whole, approval flag included -- writeCommandFiles reads it');
+  is_deeply([map { $_->{abbrev} }    @{$narrowed->{update}}], [],
+            'and the buckets nobody named are emptied');
+  is_deeply([map { $_->{to_abbrev} } @{$narrowed->{rename}}], [],
+            'renames too');
+}
+
 # ---------------------------------------------------------------------------
 # rename resolution: the database first, assembly identity as a fallback
 # ---------------------------------------------------------------------------
@@ -321,18 +342,47 @@ sub _p {
   my $portal = {bnonp57 => _p('bnonp57', 'bnonp57')};
   my $live   = {bnonP57 => {}};
 
+  # ONE assertion over both halves on purpose.  Split in two, the renames check
+  # passes under an lc() mutation for the WRONG reason: folding case makes
+  # bnonP57 match the portal, so it is not an orphan and renames is empty
+  # either way.  Only the pair discriminates -- a correct run leaves an
+  # unresolved orphan, a case-folding run absorbs it silently into `update`.
   my $r = $C->resolveRenames($portal, $live, {});
-  is_deeply($r->{renames}, {}, 'a case-insensitive near-match is NOT treated as a rename');
-  is_deeply($r->{unresolved}, ['bnonP57'], 'it stays unresolved');
+  is_deeply({renames => $r->{renames}, unresolved => $r->{unresolved}},
+            {renames => {},            unresolved => ['bnonP57']},
+            'a case-insensitive near-match is neither renamed nor absorbed: it stays an orphan');
 }
 
 {
   # An organism whose internal abbrev equals its public abbrev cannot explain
-  # an orphan, even when the strings look related.
+  # an orphan.  This holds STRUCTURALLY -- such an entry's key is a public
+  # abbrev, so no orphan can ever look it up -- rather than by a filter; see
+  # the note in resolveRenames.  Asserted over the whole outcome for that
+  # reason, not over a branch.
   my $portal = {aaa => _p('aaa', 'aaa')};
   my $live   = {bbb => {}};
   my $r = $C->resolveRenames($portal, $live, {});
-  is_deeply($r->{renames}, {}, 'internal == public is never a rename source');
+  is_deeply({renames => $r->{renames}, unresolved => $r->{unresolved}},
+            {renames => {},            unresolved => ['bbb']},
+            'a self-referential portal organism is never a rename source');
+}
+
+{
+  # Two portal organisms sharing one internal abbrev.  This does NOT occur in
+  # the live data (measured over all 831), which is exactly why a test is the
+  # only thing keeping the guard honest: nothing else will ever exercise it.
+  my $portal = {aa => _p('aa', 'shared'), bb => _p('bb', 'shared')};
+  my $live   = {shared => {}};
+
+  my $r = $C->resolveRenames($portal, $live, {});
+
+  is_deeply({renames => $r->{renames}, unresolved => $r->{unresolved}},
+            {renames => {},            unresolved => ['shared']},
+            'a duplicated internal abbrev resolves to NEITHER organism');
+  like(join('', @{$r->{warnings}}), qr/belongs to more than one portal organism/,
+       'and the ambiguity is reported rather than silently decided');
+  like(join('', @{$r->{warnings}}), qr/\baa\b.*\bbb\b|\bbb\b.*\baa\b/,
+       'naming both claimants');
 }
 
 {
@@ -429,6 +479,48 @@ sub _p {
   is(scalar(keys %{$r->{renames}}), 1, 'only one of two claimants is accepted');
   like(join('', @{$r->{warnings}}), qr/already the rename target|two organisms/i,
        'and the loser is reported rather than dropped');
+}
+
+{
+  # The merge refusal on the ASSEMBLY route.  The database route has its own
+  # case above, and the two must reach the same answer: a rename onto an abbrev
+  # Apollo already holds leaves two Apollo organisms pointing at one directory,
+  # which Apollo.pm then refuses to load on the NEXT release -- so the damage
+  # surfaces a release late, on a run that did nothing wrong.  Declining leaves
+  # the orphan a prune candidate a human judges, which is recoverable.
+  #
+  # The database route cannot stand in for this one: it declines before the
+  # fallback is ever reached, so nothing there exercises this branch.  Reaching
+  # it needs an orphan with NO internal-abbrev link (hence the self-referential
+  # portal entries) whose assembly nevertheless matches a portal organism that
+  # is already live.
+  my $dir = tempdir(CLEANUP => 1);
+  my $prev = "$dir/prev"; mkdir $prev;
+  my $cur  = "$dir/cur";  mkdir $cur;
+  _write("$prev/orphan1.fai", "chr1\t100\t0\t60\t61\nchr2\t200\t0\t60\t61\n");
+  _write("$cur/newname.fai",  "chr1\t100\t9\t70\t71\nchr2\t200\t9\t70\t71\n");
+
+  my $portal = {newname => _p('newname', 'newname')};
+  my $live   = {orphan1 => {}, newname => {}};
+
+  my $r = $C->resolveRenames($portal, $live, {
+    previous_release => $prev,
+    previousFai      => sub { "$prev/$_[0].fai" },
+    currentFai       => sub { "$cur/$_[0]{abbrev}.fai" },
+  });
+
+  # Asserted as one outcome: the rename must not happen AND the orphan must
+  # remain unresolved.  Performing it would both add the rename and consume the
+  # orphan, so either half alone leaves the other free to be wrong.
+  is_deeply({renames => $r->{renames}, mechanism => $r->{mechanism},
+             unresolved => $r->{unresolved}},
+            {renames => {}, mechanism => {}, unresolved => ['orphan1']},
+            'an assembly-matched rename onto an abbrev already in Apollo is declined, '
+            . 'and the orphan stays a prune candidate');
+  like(join('', @{$r->{warnings}}), qr/assembly matches 'newname'/,
+       'the warning names the match the assembly comparison actually found');
+  like(join('', @{$r->{warnings}}), qr/already in Apollo/,
+       'and says why it was refused rather than swallowing it');
 }
 
 # ---------------------------------------------------------------------------

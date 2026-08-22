@@ -449,11 +449,23 @@ sub resolveRenames {
   # publishes under a different name IS that organism.  Measured on build 71:
   # 457 of 459 Apollo directories match a public abbrev, 2 match an internal
   # abbrev whose public differs, 0 match neither.
+  #
+  # NO FILTER on self-referential entries (internal eq public), deliberately.
+  # One used to sit here, and it could not affect any outcome: for it to change
+  # a lookup, an orphan's abbrev would have to equal an organism's internal
+  # abbrev where that organism's PUBLIC abbrev is the same string -- and then
+  # the orphan matches a public abbrev, so it is not an orphan and this hash is
+  # never consulted for it.  Its only residual effect was to suppress the
+  # duplicate warning below in a state where one organism's public abbrev
+  # equals another's internal abbrev, which is a genuine data anomaly that
+  # deserves to be said out loud rather than filtered away.  A guard nothing
+  # can reach is how the script this replaces accumulated its dead branches, so
+  # it is gone rather than pinned by a test that could only assert an
+  # equivalence.  The ~794 identity entries it used to exclude are inert.
   my %publicByInternal;
   foreach my $organism (values %$portal) {
     my $internal = $organism->{internal_abbrev};
     next unless defined $internal && length $internal;
-    next if $internal eq $organism->{abbrev};
 
     # No internal abbrev repeats today (measured over all 831).  If one ever
     # does, both readings are equally defensible, so take neither.
