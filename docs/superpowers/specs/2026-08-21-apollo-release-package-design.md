@@ -380,14 +380,14 @@ Every script was run directly; nothing was built (`bld`/`wb` deliberately not ru
 | jbrowseRnaAndChipSeqTracks RNASeq | tgonME49 | 0 | 935200 | 0 | yes | 474 |
 | jbrowseRnaAndChipSeqTracks ChIPSeq | tgonME49 | 0 | 30852 | 0 | yes | 21 |
 | jbrowseRNASeqJunctionTracks | tgonME49 | 0 | 18338 | 0 | yes | 4 |
-| jbrowseOrganismSpecificTracks | tgonME49 | 0 | 146486 | 0 | yes | 158 |
+| jbrowseOrganismSpecificTracks | tgonME49 | 0 | 146486 | 0 | yes | 158 → **101** after the fixes below |
 | jbrowseDNASeqTracks | tgonME49 | 0 | 310296 | 0 | yes | 192 |
 | jbrowseRefSeqs | tgonME49 | **255** | 0 | **211** | no | — |
 | jbrowseTracks geneAnnotationTracks | tgonME49 | 0 | 352 | 0 | yes | 0 (by design) |
 | jbrowseRnaAndChipSeqTracks RNASeq | pfal3D7 | 0 | 1899853 | 0 | yes | 880 |
 | jbrowseRnaAndChipSeqTracks ChIPSeq | pfal3D7 | 0 | 355151 | 0 | yes | 230 |
 | jbrowseRNASeqJunctionTracks | pfal3D7 | 0 | 18350 | 0 | yes | 4 |
-| jbrowseOrganismSpecificTracks | pfal3D7 | 0 | 132196 | 0 | yes | 103 |
+| jbrowseOrganismSpecificTracks | pfal3D7 | 0 | 132196 | 0 | yes | 103 → **74** after the fixes below |
 | jbrowseDNASeqTracks | pfal3D7 | 0 | 2513500 | 0 | yes | 1611 |
 | jbrowseRefSeqs | pfal3D7 | **255** | 0 | **211** | no | — |
 | jbrowseTracks geneAnnotationTracks | pfal3D7 | 0 | 351 | 0 | yes | 0 (by design) |
@@ -449,6 +449,28 @@ without re-checking a wider organism sample.
 
 Not measured: `https://jbrestel.eupathdb.org/a/service/jbrowse/tracks/tgonME49/trackList.json`
 307-redirects to EuPathDB autologin, so the live-site comparison was skipped.
+
+### Provenance, and why this belongs in the repo
+
+`JBrowse/bin/dumpConfigurationsForApollo.pl` is the ancestor of the script this work
+replaces. It was last touched **2021-03-22** ("only dump annotated genomes"). Paul's
+`~/apollo_config/bld-71-createApolloReleasePackage_ALL.pl` is a fork of it that lived in a
+home directory and evolved there through builds 68 and 71 — gaining twoBit generation, the
+Apollo update commands, and the arrow→curl migration — while the in-repo copy rotted.
+
+That is the failure this design corrects, and the reason §8 puts the tool back in
+`ApiCommonModel` rather than in the harness: a fork in a home directory drifts silently and
+then dies with its author. The stale 2021 script should be removed once this tool ships,
+but that is a separate change.
+
+Its history also settles `apollo_gene_tracks.conf`: the in-repo version pushes it into the
+include list unconditionally, and the 2021 commit that restricted the run to annotated
+genomes is the `# TODO: only include this for annotated genomes` being satisfied. The gate
+now lives further upstream, in `Portal::qualifies`, so every organism reaching generation is
+an annotated genome and re-checking here would be dead code. The file itself is static and
+checked in at `Model/lib/jbrowse/apollo_gene_tracks.conf`; nothing generates it. Apollo needs
+it, because it defines the `Draggable Annotation` track curators drag genes into — without it
+the package renders read-only evidence and no annotation target.
 
 ## 11. Deferred
 
