@@ -269,6 +269,25 @@ my $RESULT = {
 }
 
 {
+  # --force overrides the empty-update-bucket check, and used to carry that
+  # permission all the way through: generationRoster returned nothing, the run
+  # wrote empty command files and exited 0.  That is the silent empty release
+  # the tool replaced, reachable from the override its own error message
+  # recommends.  The refusal is NOT force-able, which is why the method takes
+  # no force argument -- pinned here so a later "consistency" fix that adds one
+  # turns this red.
+  eval { $C->assertRosterNonEmpty([]) };
+  like($@, qr/empty package/, 'an empty generation roster is refused, not generated');
+  like($@, qr/--force/,       'and names the override that reached it');
+
+  ok($C->assertRosterNonEmpty([{abbrev => 'a'}]), 'a non-empty roster passes');
+
+  # The signature carries the guarantee: an extra argument cannot switch it off.
+  eval { $C->assertRosterNonEmpty([], 1) };
+  like($@, qr/empty package/, 'and no second argument can override it');
+}
+
+{
   my $narrowed = $C->narrowResult($RESULT, ['tgonME49', 'cdenJEC21']);
   is_deeply([map { $_->{abbrev} }      @{$narrowed->{update}}], ['tgonME49'], 'updates narrowed');
   is_deeply([map { $_->{to_abbrev} }   @{$narrowed->{rename}}], ['cdenJEC21'], 'renames narrowed');

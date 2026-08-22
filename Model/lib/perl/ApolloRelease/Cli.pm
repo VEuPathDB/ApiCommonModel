@@ -390,6 +390,33 @@ sub generationRoster {
   return [map { $byAbbrev{$_} } grep { $want{$_} } sort keys %byAbbrev];
 }
 
+# The one refusal --force cannot override.  --force means "I accept that
+# unapproved candidates are omitted" and "I accept an empty update bucket".
+# Neither is a licence to write a package with nothing in it.
+#
+# Without --force this cannot fire: assertUpdateBucketSane guarantees a
+# non-empty update bucket, and a non-empty update bucket guarantees a non-empty
+# roster.  So the only way to reach it is a human who overrode that gate and got
+# precisely the outcome it was warning about -- generating anyway wrote empty
+# command files and exited 0, which is the silent empty release this whole tool
+# exists to replace.
+#
+# Takes no $force argument, unlike assertUpdateBucketSane and
+# assertGenerationAllowed either side of it.  That asymmetry is the fix and not
+# an oversight: a $force parameter here would re-open the hole this closes, so
+# the signature is where "this is not a judgement call" is recorded.
+sub assertRosterNonEmpty {
+  my ($class, $roster) = @_;
+
+  return 1 if @$roster;
+
+  die "refusing to --generate an empty package: the generation roster\n"
+    . "(update + rename + approved add) has no organisms.\n"
+    . "This is reachable only with --force, which overrode the empty-update-bucket\n"
+    . "check above.  Generating would write empty command files and exit 0 -- the\n"
+    . "silent empty release this tool exists to replace.\n";
+}
+
 # When --organism narrows generation, the command files must describe the
 # package that was actually built.  Emitting the full roster's commands
 # alongside a partial package is how an Apollo organism gets repointed at a
