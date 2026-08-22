@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use JSON;
+use Scalar::Util qw(looks_like_number);
 
 # Reads the organism list produced by Model/bin/jbrowseOrganismList and
 # normalises it.  Keys arrive lowercase from DBD::Pg; booleans arrive as the
@@ -25,7 +26,7 @@ sub loadFromCommand {
     . "See /tmp/apolloRelease.organismList.err\n"
     if $errSize;
 
-  return $class->_normalise(decode_json($json));
+  return $class->normalise(decode_json($json));
 }
 
 sub loadFromFile {
@@ -36,10 +37,13 @@ sub loadFromFile {
   my $json = <$fh>;
   close $fh;
 
-  return $class->_normalise(decode_json($json));
+  return $class->normalise(decode_json($json));
 }
 
-sub _normalise {
+# Public because it is the seam: it takes an already-decoded document, so the
+# normalisation rules can be exercised without a fixture file, a subprocess or
+# a database.  Both loaders are thin wrappers around it.
+sub normalise {
   my ($class, $decoded) = @_;
 
   my %byAbbrev;
@@ -53,8 +57,8 @@ sub _normalise {
       name_for_filenames        => $raw->{name_for_filenames},
       strain_abbrev             => $raw->{strain_abbrev},
       species_taxon             => $raw->{species_ncbi_tax_id},
-      is_reference              => $raw->{is_reference_strain} ? 1 : 0,
-      is_annotated              => $raw->{is_annotated_genome} ? 1 : 0,
+      is_reference              => _boolean($raw->{is_reference_strain}),
+      is_annotated              => _boolean($raw->{is_annotated_genome}),
       history                   => $raw->{history} || [],
       latest_annotation_version => $class->_latestAnnotationVersion($raw->{history}),
     };
@@ -63,9 +67,24 @@ sub _normalise {
   return \%byAbbrev;
 }
 
+# is_reference_strain / is_annotated_genome arrive as the strings "1"/"0".
+# Coerce numerically: the string "0.0" is TRUE under Perl's boolean rules but
+# 0 numerically, and treating it as true would silently invert the flag.
+# These are numeric flags in the database, so a non-numeric value means the
+# upstream query changed shape -- fail rather than guess.
+sub _boolean {
+  my ($value) = @_;
+
+  return 0 unless defined $value;
+  die "expected a numeric flag, got '$value'\n" unless looks_like_number($value);
+
+  return $value + 0 ? 1 : 0;
+}
+
 # The annotation version belonging to the highest build number.  Apollo names
 # an organism "<full name> [<annotation version>]", so this string is part of
-# the organism's identity there.
+# the organism's identity there.  build_number is a string and is not always
+# an integer ("19.9" occurs), so compare numerically by intent.
 sub _latestAnnotationVersion {
   my ($class, $history) = @_;
 
@@ -74,7 +93,14 @@ sub _latestAnnotationVersion {
   my $best;
   foreach my $h (@$history) {
     next unless defined $h->{annotation_version};
-    $best = $h if !$best || $h->{build_number} > $best->{build_number};
+
+    unless (looks_like_number($h->{build_number})) {
+      my $shown = defined $h->{build_number} ? $h->{build_number} : '(undef)';
+      warn "skipping history row with non-numeric build_number '$shown'\n";
+      next;
+    }
+
+    $best = $h if !$best || ($h->{build_number} + 0) > ($best->{build_number} + 0);
   }
 
   return $best ? $best->{annotation_version} : undef;
