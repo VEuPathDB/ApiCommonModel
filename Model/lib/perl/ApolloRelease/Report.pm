@@ -34,21 +34,33 @@ my $WIDTH = 78;
 
 # What still needs a human.  Separated from render() because the CLI decides
 # exit status and a caller should not have to grep the prose to learn whether
-# the release is blocked.  Approval is the gate: an approved candidate is a
-# decision already made, so it is NOT pending -- but an approved prune of an
-# annotated organism is still counted as annotated work at risk, because the
-# thing worth knowing there is what happens, not who agreed to it.
+# the release is blocked.
+#
+# THREE of these four fields count PENDING decisions; the fourth does not, and
+# the difference is load-bearing.  Approval is a gate on an ACTION: an approved
+# candidate is a decision already made, so it is not pending.  It is not a gate
+# on a CONSEQUENCE -- approving a prune does not make the annotations it hides
+# any less hidden.  So `annotated_prune` counts EVERY prune candidate that
+# holds annotations, approved or not, which is exactly the set _prunes() flags
+# with ANNOTATIONS WILL BE HIDDEN in the text.
+#
+# Deriving it from the unapproved subset was the original bug here, and it is
+# the quiet kind: the prose says two organisms lose their annotations while the
+# field a caller reads says one.  Reconciling those two answers is the entire
+# reason this method exists rather than leaving the CLI to grep the report.
 sub pendingDecisions {
   my ($class, $result) = @_;
 
-  my @adds   = grep { !$_->{approved} } @{$result->{add_candidate}   || []};
-  my @prunes = grep { !$_->{approved} } @{$result->{prune_candidate} || []};
+  my @allPrunes = @{$result->{prune_candidate} || []};
+
+  my @adds   = grep { !$_->{approved} } @{$result->{add_candidate} || []};
+  my @prunes = grep { !$_->{approved} } @allPrunes;
 
   return {
     add             => scalar @adds,
     prune           => scalar @prunes,
     total           => scalar(@adds) + scalar(@prunes),
-    annotated_prune => scalar(grep { _count($_->{annotation_count}) } @prunes),
+    annotated_prune => scalar(grep { _count($_->{annotation_count}) } @allPrunes),
   };
 }
 
@@ -90,18 +102,27 @@ sub _decisionBanner {
 
   my $pending = $class->pendingDecisions($result);
 
-  unless ($pending->{total}) {
-    return "DECISIONS REQUIRED: none -- nothing is waiting on a human.\n\n";
-  }
-
   my @out;
-  push @out, sprintf("DECISIONS REQUIRED: %d  (%d add, %d prune)\n",
-                     $pending->{total}, $pending->{add}, $pending->{prune});
-  push @out, sprintf("  %d of the pending prune(s) would hide human annotations -- see below.\n",
+
+  push @out, $pending->{total}
+    ? sprintf("DECISIONS REQUIRED: %d  (%d add, %d prune)\n",
+              $pending->{total}, $pending->{add}, $pending->{prune})
+    : "DECISIONS REQUIRED: none -- nothing is waiting on a human.\n";
+
+  # Deliberately OUTSIDE the pending branch, and above the procedural note.  An
+  # annotated prune a curator already approved is still an organism whose
+  # annotations are about to stop being visible; printing this only when a
+  # decision happens to be outstanding would drop it in exactly the case the
+  # release otherwise looks ready to run unread.
+  push @out, sprintf("  %d prune candidate(s) here would hide human annotations -- see below.\n",
                      $pending->{annotated_prune})
     if $pending->{annotated_prune};
-  push @out, "  Nothing is generated for an unapproved candidate; approve it in the\n";
-  push @out, "  roster overlay and re-run.\n\n";
+
+  push @out, "  Nothing is generated for an unapproved candidate; approve it in the\n",
+             "  roster overlay and re-run.\n"
+    if $pending->{total};
+
+  push @out, "\n";
 
   return @out;
 }

@@ -115,7 +115,13 @@ my ($annException) = $text =~ /^(.*unannotatedRef.*)$/m;
 like($refException, qr/not reference/i,  'an exception shows the criterion it fails');
 unlike($refException, qr/not annotated/i, 'and not the one it passes');
 like($annException, qr/not annotated/i,  'the other criterion is reported when it is the failing one');
-like($text, qr/exceptions.*no action/is, 'exceptions are marked as needing no action');
+# Anchored to the section header line rather than scanning the whole report
+# with /s: the previous form would have passed on "no action" appearing
+# anywhere below, in any later section.  Two facts are pinned -- a header line
+# beginning at column 0 with "exceptions" (the indented rows never do), and
+# "no action" on that same line -- with no claim on the prose between them.
+like($text, qr/^exceptions\b[^\n]*\bno action\b/mi,
+     'the exceptions header itself says no action is taken');
 
 # ------------------------------------------------------- redundant overlay
 
@@ -129,7 +135,7 @@ my $pending = $R->pendingDecisions($result);
 is($pending->{add},             1, 'pendingDecisions counts unapproved adds');
 is($pending->{prune},           1, 'pendingDecisions counts unapproved prunes');
 is($pending->{total},           2, 'and their total');
-is($pending->{annotated_prune}, 1, 'and how many pending prunes would hide annotations');
+is($pending->{annotated_prune}, 1, 'and how many prunes would hide annotations');
 
 like($text, qr/DECISIONS REQUIRED:\s*2\b/, 'the report states the pending decision count plainly');
 
@@ -152,6 +158,52 @@ my $approvedRisky = { %{mixedResult()},
 is($R->pendingDecisions($approvedRisky)->{total}, 0, 'an approved prune is not a pending decision');
 like($R->render($approvedRisky, {}), qr/zzzRisky.*ANNOTATIONS WILL BE HIDDEN/,
      'but it is still flagged: approval does not make the annotations less hidden');
+
+# The two halves of that principle, asserted TOGETHER, because they pull in
+# opposite directions and the bug was assuming one gate governed both.
+# Approval gates the ACTION (is a decision outstanding?) and NOT the
+# CONSEQUENCE (do annotations stop being visible?).  Every earlier fixture had
+# its annotated prune unapproved, so both readings gave the same number and
+# neither was actually pinned -- pendingDecisions counted 1 while the report
+# flagged 2, and nothing was red.
+my $mixedRisk = { %{mixedResult()},
+  add_candidate   => [],
+  prune_candidate => [
+    {abbrev => 'approvedRisky',    apollo_id => 1, common_name => 'Approved And Curated',
+     annotation_count => 20, approved => 1, reason => 'signed off by curation'},
+    {abbrev => 'unapprovedRisky',  apollo_id => 2, common_name => 'Pending And Curated',
+     annotation_count => 5,  approved => 0},
+    {abbrev => 'approvedHarmless', apollo_id => 3, common_name => 'Nothing To Lose',
+     annotation_count => 0,  approved => 1, reason => 'empty, safe'},
+  ] };
+
+my $risk = $R->pendingDecisions($mixedRisk);
+is($risk->{annotated_prune}, 2,
+   'annotated_prune counts EVERY prune holding annotations, approved or not');
+is($risk->{prune}, 1, 'while prune counts only the one still awaiting a decision');
+is($risk->{total}, 1, 'and total follows the pending decision, not the risk');
+
+# ...and the structured count must agree with what the text actually shows.
+# This is the assertion the defect broke: prose said two, the field said one.
+my $riskText = $R->render($mixedRisk, {build => 71, environment => 'prod'});
+my @flagged  = grep { /ANNOTATIONS WILL BE HIDDEN/ } split(/\n/, $riskText);
+is(scalar(@flagged), $risk->{annotated_prune},
+   'the flagged lines in the report and the annotated_prune field agree');
+like($riskText,   qr/approvedRisky.*ANNOTATIONS WILL BE HIDDEN/,   'the approved one is flagged');
+like($riskText,   qr/unapprovedRisky.*ANNOTATIONS WILL BE HIDDEN/, 'the unapproved one is flagged');
+unlike($riskText, qr/approvedHarmless.*ANNOTATIONS WILL BE HIDDEN/, 'and the empty one is not');
+
+# The banner warning must survive a report with NO decisions pending -- that is
+# precisely the run that looks ready to execute unread.
+my $allApprovedRisk = { %{mixedResult()},
+  add_candidate   => [],
+  prune_candidate => [{abbrev => 'approvedRisky', apollo_id => 1,
+                       common_name => 'Approved And Curated',
+                       annotation_count => 20, approved => 1, reason => 'signed off'}] };
+my $allApprovedText = $R->render($allApprovedRisk, {build => 71, environment => 'prod'});
+like($allApprovedText, qr/DECISIONS REQUIRED:\s*none/i, 'nothing is pending');
+like($allApprovedText, qr/^\s*1 prune candidate\(s\).*hide human annotations/m,
+     'yet the banner still says annotations will be hidden');
 
 # ------------------------------------------------ the 457-row update bucket
 # Routine updates are real output -- "which 457" matters when the count moves --
