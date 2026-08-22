@@ -9,7 +9,7 @@ my $A = 'ApiCommonModel::Model::ApolloRelease::Apollo';
 my $live = $A->loadFromFile("Model/t/fixtures/apollo.json");
 
 is(ref($live), 'HASH', 'returns a hash keyed by abbrev');
-is(scalar(keys %$live), 5, 'all five organisms parsed');
+is(scalar(keys %$live), 6, 'all six organisms parsed');
 
 my $t = $live->{tgonME49};
 is($t->{id}, 1484940, 'numeric id carried');

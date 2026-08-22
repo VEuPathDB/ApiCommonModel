@@ -110,7 +110,8 @@ sub reconcile {
     };
   }
 
-  $result{redundant_overlay} = $class->_redundantOverlay($portal, $live, $overlay);
+  $result{redundant_overlay} =
+    $class->_redundantOverlay($portal, $live, $overlay, $renames, \%renameTarget);
 
   $class->assertInvariants(\%result);
 
@@ -156,6 +157,13 @@ sub _validateRenames {
     die "$to is both a rename source and a rename target\n"
       if exists $renames->{$to};
 
+    # Repointing onto an abbrev Apollo already holds is a merge, not a rename:
+    # it would leave two Apollo organisms sharing one directory -- the same
+    # corruption the two-sources check above prevents, reached from the other
+    # side.  Whichever curation set loses the coin toss is orphaned.
+    die "rename target $to is already in Apollo; that is a merge, not a rename\n"
+      if $live->{$to};
+
     $renameTarget{$to} = $from;
   }
 
@@ -165,30 +173,48 @@ sub _validateRenames {
 # An overlay line that changes nothing is not an error -- an organism approved
 # last release is legitimately still listed -- but it is a recorded human
 # decision the tool did nothing with, so it is reported rather than swallowed.
-# Only true no-ops qualify: a `remove` naming an organism that is on the portal
+#
+# The rename map has to be consulted here, not just $live and $portal: a rename
+# consumes BOTH abbrevs of the pair, so it silently disarms an overlay line
+# naming either end.  Neither is visible in any other bucket -- the add loop
+# skips a rename target outright, and a rename source never becomes a prune
+# candidate, so its `approved` flag is never read.
+#
+# Only true no-ops qualify.  A `remove` naming an organism that is on the portal
 # but not in Apollo really does suppress an add, so it is NOT redundant.
 sub _redundantOverlay {
-  my ($class, $portal, $live, $overlay) = @_;
+  my ($class, $portal, $live, $overlay, $renames, $renameTarget) = @_;
 
   my @redundant;
 
   foreach my $abbrev (sort keys %{$overlay->{add}}) {
+    my $note = $live->{$abbrev}          ? 'already in Apollo'
+             : $renameTarget->{$abbrev}  ? "already arriving as a rename from $renameTarget->{$abbrev}"
+             : !$portal->{$abbrev}       ? 'not on the portal'
+             :                             undef;
+    next unless $note;
+
     push @redundant, {
       abbrev    => $abbrev,
       directive => 'add',
       reason    => $overlay->{add}{$abbrev},
-      note      => $live->{$abbrev} ? 'already in Apollo'
-                                    : 'not on the portal',
-    } if $live->{$abbrev} || !$portal->{$abbrev};
+      note      => $note,
+    };
   }
 
   foreach my $abbrev (sort keys %{$overlay->{remove}}) {
-    next if $live->{$abbrev} || $portal->{$abbrev};
+    my $note = $renames->{$abbrev}
+                 ? "being renamed to $renames->{$abbrev}, not pruned"
+             : (!$live->{$abbrev} && !$portal->{$abbrev})
+                 ? 'in neither Apollo nor the portal'
+             :     undef;
+    next unless $note;
+
     push @redundant, {
       abbrev    => $abbrev,
       directive => 'remove',
       reason    => $overlay->{remove}{$abbrev},
-      note      => 'in neither Apollo nor the portal',
+      note      => $note,
     };
   }
 
