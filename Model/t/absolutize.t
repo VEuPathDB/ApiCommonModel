@@ -129,4 +129,69 @@ is($A->rewrite(undef, $BASE), undef, 'undef text rewrites to undef');
 eval { $A->rewrite('"/a/x"', '') };
 like($@, qr/non-empty base/, 'an empty base is refused rather than silently no-op');
 
+# ---------------------------------------------------------------------------
+# The idempotency guarantee holds only for a base that cannot itself end in a
+# delimiter the lookbehind treats as a site root.  rewrite() enforces that
+# rather than assuming it, so the comment in the module is true by
+# construction.  The counterexample that motivated the check:
+#     rewrite('"/a/x"', "https://foo.org'") -> "https://foo.org'/a/x"
+#   and a second pass then double-prefixes, because the base's own trailing
+#   quote satisfies the lookbehind.
+# ---------------------------------------------------------------------------
+for my $bad ("https://foo.org'", 'https://foo.org"', 'https://foo.org(',
+             'https://foo.org=', 'https://foo.org ') {
+  eval { $A->rewrite('"/a/x"', $bad) };
+  like($@, qr/plain absolute http\(s\) base URL/,
+       "a base ending in a delimiter is refused: '$bad'");
+}
+
+# Not a URL at all, and a scheme we do not serve: both would produce nonsense
+# that still looks like a successful rewrite.
+for my $bad ('veupathdb.org', '/veupathdb', 'ftp://veupathdb.org') {
+  eval { $A->rewrite('"/a/x"', $bad) };
+  like($@, qr/plain absolute http\(s\) base URL/,
+       "a base that is not an absolute http(s) URL is refused: '$bad'");
+}
+
+# ...and for every character class the validated base MAY end in, a second pass
+# is a no-op.  This is the guarantee itself, exercised rather than reasoned.
+for my $good ('https://veupathdb.org',        # letter
+              'http://veupathdb.org',         # the other permitted scheme
+              'https://veupathdb.org:8080',   # digit
+              'https://beta-w1.veupathdb.org',# hyphen (interior) / letter
+              'https://veupathdb.org/a_b',    # underscore
+              'https://veupathdb.org/x~',     # tilde
+              'https://veupathdb.org/x.',     # dot
+              'https://veupathdb.org/x-',     # hyphen
+             ) {
+  my $one = $A->rewrite('"baseUrl":"/a/service","img":"/a/images/x.png"', $good);
+  is($A->rewrite($one, $good), $one, "idempotent for a base ending as in '$good'");
+  ok($A->assertNoRelative($one, 'tracks.conf'),
+     "and one pass satisfies the post-condition for '$good'");
+}
+
+# A PARTIALLY rewritten string -- some URLs already absolute, some still
+# relative -- is the realistic shape of a half-failed rewrite, and the count is
+# what diagnoses it.  The existing count test uses ten identical relatives,
+# which cannot show that the absolute ones are excluded from the total.
+my $partial = join(' ',
+  qq{"a":"$BASE/a/service/1"},
+  qq{"b":"/a/service/2"},
+  qq{"c":"$BASE/a/images/3.png"},
+  qq{"d":"/a/service/4"},
+  qq{"e":"https://other.org/a/x"},
+  qq{"f":"//a/service/5"},
+  qq{"g":"/data/a/thing"},
+  qq{"h":"/a/service/6"},
+);
+eval { $A->assertNoRelative($partial, 'tracks.conf') };
+like($@, qr/3 site-relative URL/,
+     'a partially rewritten string counts only the STILL-relative URLs');
+unlike($@, qr/first \d+ shown/,
+       'and lists them all when there are no more than three');
+ok($A->assertNoRelative($A->rewrite($partial, $BASE), 'tracks.conf'),
+   'rewriting the partially rewritten string finishes the job');
+is($A->rewrite($partial, $BASE), $A->rewrite($A->rewrite($partial, $BASE), $BASE),
+   'and re-rewriting a mixed string is still idempotent');
+
 done_testing();

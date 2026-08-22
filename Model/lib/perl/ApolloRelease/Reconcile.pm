@@ -79,6 +79,13 @@ sub reconcile {
         annotation_count => $apollo->{annotation_count},
         is_reference     => $organism->{is_reference},
         is_annotated     => $organism->{is_annotated},
+        # An exception stays in Apollo untouched, so its CURRENT visibility is
+        # part of what a reader needs alongside is_reference/is_annotated to
+        # judge it.  Report-only: no command is generated from an exception, so
+        # unlike `update` and `rename` this value is never echoed back to
+        # Apollo.  It is carried for symmetry with them, and so a report does
+        # not have to reach back into $live for one field.
+        public_mode      => $apollo->{public_mode},
       };
       next;
     }

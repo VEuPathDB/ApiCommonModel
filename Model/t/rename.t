@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 27;
+use Test::More tests => 28;
 use File::Temp qw(tempdir);
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use ApiCommonModel::Model::ApolloRelease::Rename;
@@ -53,7 +53,15 @@ my $none = $R->detect(['cneoJEC21'], $portal,
 is_deeply($none, {}, 'unresolvable organism yields no rename');
 
 my @warnings = $R->warnings();
-like($warnings[0], qr/cneoJEC21/, 'and says so rather than staying silent');
+# Naming the organism is not "saying so": a warning that printed the abbrev and
+# nothing else would pass a /cneoJEC21/ match while telling the operator nothing
+# actionable.  Require the REASON too -- that no previous-release index was
+# found -- since that is what distinguishes an aged-out release directory from
+# a genuine "this organism is gone".
+like($warnings[0], qr/cneoJEC21/,
+     'the warning names the organism it could not resolve');
+like($warnings[0], qr/no index from the previous release/,
+     'and gives the reason -- no previous-release index -- not just the name');
 
 # --- degenerate index files -------------------------------------------------
 # Each of these is a file that EXISTS, so the caller's -e check passes and the

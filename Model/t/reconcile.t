@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 36;
+use Test::More tests => 38;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use ApiCommonModel::Model::ApolloRelease::Portal;
 use ApiCommonModel::Model::ApolloRelease::Apollo;
@@ -80,6 +80,20 @@ my $r5 = $R->reconcile($portal, $live, $overlay, { treeQM6a => 'tbruTREU927' });
 my ($hiddenRename) = @{$r5->{rename}};
 is($hiddenRename->{from_abbrev}, 'treeQM6a', 'the hidden organism is the one renamed');
 is($hiddenRename->{public_mode}, 0, 'rename of a HIDDEN organism carries publicMode 0, not 1');
+
+# An exception generates no command, so this is report-only -- but "stays in
+# Apollo unchanged" is only readable if the report can show WHAT it stays as.
+# Visibility belongs next to is_reference/is_annotated for that judgement.
+my ($exc) = grep { $_->{abbrev} eq 'tbruLister427_2018' } @{$r->{exception}};
+is($exc->{public_mode}, 1, 'exception carries the live publicMode through');
+
+# ...and it is the LIVE value, not a constant that happens to match.  No hidden
+# organism is a real exception in the fixture, so hide one synthetically.
+my %hiddenLive = %$live;
+$hiddenLive{tbruLister427_2018} = { %{$live->{tbruLister427_2018}}, public_mode => 0 };
+my $rHiddenExc = $R->reconcile($portal, \%hiddenLive, $overlay, {});
+my ($hiddenExc) = grep { $_->{abbrev} eq 'tbruLister427_2018' } @{$rHiddenExc->{exception}};
+is($hiddenExc->{public_mode}, 0, 'exception on a HIDDEN organism carries publicMode 0, not 1');
 
 # ---------------------------------------------------------------------------
 # Attacking the invariant directly.  reconcile() cannot construct a violating
