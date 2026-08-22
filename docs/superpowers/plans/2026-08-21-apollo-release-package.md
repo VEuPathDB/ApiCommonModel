@@ -1822,7 +1822,7 @@ Create `Model/t/report.t`:
 ```perl
 use strict;
 use warnings;
-use Test::More tests => 5;
+use Test::More tests => 6;
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use ApiCommonModel::Model::ApolloRelease::Report;
 
@@ -1835,6 +1835,8 @@ my $result = {
                        {abbrev => 'zzzRisky',   annotation_count => 14, common_name => 'Something Curated'} ],
   rename          => [ {from_abbrev => 'cneoJEC21', to_abbrev => 'cdenJEC21', annotation_count => 14} ],
   exception       => [ {abbrev => 'tbruLister427_2018', is_reference => 0, is_annotated => 1} ],
+  redundant_overlay => [ {abbrev => 'staleEntry', directive => 'add', reason => 'approved 2025',
+                          note => 'already in Apollo'} ],
 };
 
 my $text = $R->render($result, {build => 71, environment => 'prod'});
@@ -1844,6 +1846,7 @@ like($text, qr/cneoJEC21.*cdenJEC21/, 'names both sides of a rename');
 like($text, qr/zzzRisky.*14/,      'prune candidates show their annotation count');
 like($text, qr/ANNOTATIONS WILL BE HIDDEN/, 'an annotated prune is called out loudly');
 unlike($text, qr/cglaCBS138.*ANNOTATIONS WILL BE HIDDEN/, 'a zero-annotation prune is not');
+like($text, qr/staleEntry.*already in Apollo/, 'a redundant overlay entry is reported so the file can be tidied');
 ```
 
 - [ ] **Step 2: Run it and watch it fail**
@@ -1878,7 +1881,7 @@ sub render {
                      $context->{build} // '?', $context->{environment} // '?');
 
   push @out, "summary\n";
-  foreach my $bucket (qw(update add_candidate prune_candidate rename exception)) {
+  foreach my $bucket (qw(update add_candidate prune_candidate rename exception redundant_overlay)) {
     push @out, sprintf("  %-18s %d\n", $bucket, scalar @{$result->{$bucket} || []});
   }
   push @out, "\n";
@@ -1909,6 +1912,17 @@ sub render {
       push @out, sprintf("  %-26s %s%s\n", $a->{abbrev},
                          $a->{organism}{name} || '',
                          $a->{approved} ? '  (approved in overlay)' : '');
+    }
+    push @out, "\n";
+  }
+
+  # Report-only.  An overlay line that no longer does anything is a decision
+  # that has been overtaken by events; printing it is how the file gets tidied
+  # instead of accreting entries nobody dares delete.
+  if (@{$result->{redundant_overlay} || []}) {
+    push @out, "redundant overlay entries -- no longer have any effect\n";
+    foreach my $e (sort { $a->{abbrev} cmp $b->{abbrev} } @{$result->{redundant_overlay}}) {
+      push @out, sprintf("  %-26s %-7s %s\n", $e->{abbrev}, $e->{directive}, $e->{note});
     }
     push @out, "\n";
   }
