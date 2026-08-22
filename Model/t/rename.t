@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-use Test::More tests => 17;
+use Test::More tests => 27;
 use File::Temp qw(tempdir);
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use ApiCommonModel::Model::ApolloRelease::Rename;
@@ -84,8 +84,14 @@ my $tie = $R->detect(['cneoJEC21'], $ambiguous,
                      sub { return "$dir/same.fai" },
                      {cneoJEC21 => 'JEC21'});
 is_deeply($tie, {}, 'two equally good matches produce NO rename rather than a guess');
-ok((grep { /cdenJEC21.*cdupJEC21|refusing to guess/ } $R->warnings()),
-   'and the ambiguity is named, not swallowed');
+# Two separate assertions on purpose.  Alternated into one `ok`, a future
+# generic "ambiguous match; refusing to guess" that named neither candidate
+# would keep the test green -- and naming both is the entire point, since the
+# operator has to go and look at both genomes to break the tie.
+my @tieWarnings = $R->warnings();
+ok((grep { /refus/i } @tieWarnings), 'the refusal to guess is stated');
+ok((grep { /cdenJEC21/ && /cdupJEC21/ } @tieWarnings),
+   'and BOTH candidate abbrevs are named, so the operator knows what to compare');
 
 # --- an orphan whose strain abbrev could not be parsed -----------------------
 # The strain filter bounds how many files get opened; sequence identity is what
@@ -118,3 +124,50 @@ my $missingCurrent = $R->detect(['cneoJEC21'], $portal,
                                 {});
 is_deeply($missingCurrent, {cneoJEC21 => 'cdenJEC21'},
           'a candidate with no current index is skipped, not fatal');
+
+# --- an index that exists (or is named) but cannot be opened -----------------
+# sameAssembly collapses this to 0, which is the same answer as "a different
+# assembly".  The collapse is fail-safe, but it must never be SILENT: an
+# operator told "the assembly differs" approves a prune, where "I could not
+# read the file" sends them to fix the build.
+
+my $noSuchDir = "$dir/no-such-dir/genome.fasta.fai";
+is($R->readFai($noSuchDir), undef, 'an index under a missing directory returns undef');
+ok((grep { /no-such-dir/ } $R->warnings()),
+   'and the unreadable path is named, not silently treated as a different assembly');
+
+SKIP: {
+  my $locked = "$dir/locked.fai";
+  writeFai($locked, "AE017341.1\t2300533\t60\t60\t61");
+  chmod 0000, $locked;
+  skip 'running with rights that ignore file modes (root?)', 2 if -r $locked;
+
+  is($R->readFai($locked), undef, 'an unreadable index returns undef');
+  ok((grep { /locked\.fai/ && /Permission denied/ } $R->warnings()),
+     'and the warning names the path and the reason');
+}
+
+# --- "could not check" must not be reported as "assembly differs" ------------
+# Every candidate skipped for a missing current index used to fall through to
+# "no portal organism shares its assembly", which is false and points the
+# operator at exactly the wrong conclusion.
+
+my $unreadableAll = $R->detect(['cneoJEC21'], $portal,
+                               sub { return "$dir/old.fai" },
+                               sub { return "$dir/gone.fai" },
+                               {});
+is_deeply($unreadableAll, {}, 'no rename when nothing could be checked');
+my @uncheckable = $R->warnings();
+ok((grep { /could be checked|NOT evidence/ } @uncheckable),
+   'the warning says the candidates could not be checked');
+ok(!(grep { /shares its assembly/ } @uncheckable),
+   'and does NOT claim the assembly was compared and differs');
+
+# The genuinely-differs case must still say so, and must still be distinct.
+my $reallyDiffers = $R->detect(['cneoJEC21'], $portal,
+                               sub { return "$dir/old.fai" },
+                               sub { return "$dir/other.fai" },
+                               {});
+is_deeply($reallyDiffers, {}, 'no rename when the assemblies genuinely differ');
+ok((grep { /shares its assembly/ } $R->warnings()),
+   'and that case is reported as a real comparison, not as an unreadable one');

@@ -33,7 +33,15 @@ sub warnings { return @WARNINGS }
 sub readFai {
   my ($class, $path) = @_;
 
-  open(my $fh, '<', $path) or return undef;
+  # An unopenable index -- bad permissions, a missing parent directory, a dead
+  # symlink -- must not degrade silently.  sameAssembly() turns this undef into
+  # a plain 0, indistinguishable from "a genuinely different assembly", so
+  # without this warning an environment problem reads to the operator as "the
+  # genome really did change" and gets a prune approved.
+  open(my $fh, '<', $path) or do {
+    push @WARNINGS, "$path: cannot be read ($!); treating it as no evidence of a rename";
+    return undef;
+  };
 
   my %lengths;
   while (my $line = <$fh>) {
@@ -125,11 +133,23 @@ sub detect {
       !defined($strain) || (defined($_->{strain_abbrev}) && $_->{strain_abbrev} eq $strain)
     } values %$portal;
 
+    # Counted, not just skipped.  "I compared it and it differs" and "I never
+    # got to compare it" are opposite conclusions for the operator, and below
+    # they must not produce the same sentence.
     my @matches;
+    my $checked   = 0;
+    my $uncheckable = 0;
+
     foreach my $candidate (@candidates) {
       next if $candidate->{abbrev} eq $orphan;
+
       my $newFai = $currentFai->($candidate);
-      next unless $newFai && -e $newFai;
+      unless ($newFai && -e $newFai) {
+        $uncheckable++;
+        next;
+      }
+
+      $checked++;
       push @matches, $candidate->{abbrev}
         if $class->sameAssembly($oldFai, $newFai);
     }
@@ -146,9 +166,28 @@ sub detect {
         . join(', ', sort @matches)
         . "); refusing to guess. Treating as a prune candidate.";
     }
+    # Nothing matched -- but WHY nothing matched decides what the operator does
+    # next.  "Its assembly is gone from the portal" invites approving a prune.
+    # "I could not open the indexes" invites fixing the build.  Saying the
+    # first when the second is true is how curated annotations get discarded
+    # over a missing file, so the two cases get different sentences.
+    elsif ($checked == 0 && $uncheckable) {
+      push @WARNINGS,
+        "$orphan: none of its $uncheckable candidate portal organisms could be checked "
+        . "(no current index for any of them). This is NOT evidence the genome changed. "
+        . "Treating as a prune candidate.";
+    }
+    elsif ($checked == 0) {
+      push @WARNINGS,
+        "$orphan: no portal organism was even a candidate"
+        . (defined $strain ? " for strain '$strain'" : '')
+        . ". Treating as a prune candidate.";
+    }
     else {
       push @WARNINGS,
-        "$orphan: no portal organism shares its assembly. Treating as a prune candidate.";
+        "$orphan: none of the $checked portal organisms checked shares its assembly"
+        . ($uncheckable ? " ($uncheckable more had no current index and were skipped)" : '')
+        . ". Treating as a prune candidate.";
     }
   }
 
