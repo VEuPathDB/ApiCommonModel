@@ -485,6 +485,14 @@ the package renders read-only evidence and no annotation target.
   so after a rename `commonName` will say *deneoformans* while those fields may not.
   Determine whether the Apollo GUI keys off them; if so, this becomes part of the rename
   command.
+- **Verify the groovy invocation before the first real add.** `add_organism.groovy` is
+  called with `-url https://apollo.apidb.org` while `alter_group_permissions.groovy` is
+  called with `-destinationurl https://apollo.apidb.org/` — different flag names and a
+  trailing-slash difference. Both were carried forward from the legacy script, which shows
+  the same inconsistency, and neither groovy script lives in these repos so it cannot be
+  checked here. Confirm against the Apollo-side scripts before running an add for real; an
+  add is the one command that is **not** idempotent.
+
 - **`--environment qa`.** Retained from the old script and still generated, but the qa and
   prod rosters have never differed by anything but staleness. Revisit whether qa is worth
   producing at all.

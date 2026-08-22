@@ -2442,7 +2442,7 @@ Expect hours. Exit status is non-zero if any organism failed; the summary names 
 - every organism dir has the nine files and a `seq/` with three
 - `twoBit/` count equals the roster size
 - `report.txt` is present in the release dir
-- `Apollo_curl` line count equals updates + renames + approved prunes
+- `Apollo_curl` line count equals updates + renames + approved prunes — **counting only non-`#` lines**; the file carries a header and a `# WARNING` line above each annotated prune
 - `Apollo_groovy` contains only approved adds
 
 - [ ] **Step 4: Sandbox the rename before prod**
