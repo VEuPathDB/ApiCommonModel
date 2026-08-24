@@ -421,7 +421,9 @@ sub generateOrganism {
 
   my $organismDir = "$opts->{outDir}/data/$abbrev";
   my $seqDir      = "$organismDir/seq";
-  my $twoBitDir   = "$opts->{outDir}/twoBit";
+  # Under data/, not beside it: the container mounts data/ as /data/apollo_data,
+  # so a sibling twoBit/ is unreachable from the blatdb paths Commands.pm emits.
+  my $twoBitDir   = "$opts->{outDir}/data/twoBit";
   make_path($seqDir, $twoBitDir);
 
   my %summary = (abbrev => $abbrev, internal_abbrev => $internal,

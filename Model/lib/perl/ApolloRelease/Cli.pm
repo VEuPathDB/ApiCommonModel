@@ -80,7 +80,7 @@ Options:
   --help                  this text
 
 Output: <out-dir>/release-<build>/<environment>/
-          data/<abbrev>/  twoBit/<abbrev>.2bit  updateCommands/  report.txt  report.tsv
+          data/<abbrev>/  data/twoBit/<abbrev>.2bit  updateCommands/  report.txt  report.tsv
 
 Environment: GUS_HOME, and APOLLO_API_USER / APOLLO_API_PASS unless
 --apollo-roster is given.  No password is ever read from the source.

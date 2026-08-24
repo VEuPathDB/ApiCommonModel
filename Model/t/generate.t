@@ -324,8 +324,12 @@ like($results->{errors}{explodes}, qr/simulated failure/, 'the error text is kep
               "$out/data/cdenJEC21/seq/cdenJEC21.fa.fai"]],
             'the genome is sourced by name_for_filenames and lands under the PUBLIC abbrev');
   is_deeply(\@twoBits,
-            [["$out/data/cdenJEC21/seq/cdenJEC21.fa", "$out/twoBit/cdenJEC21.2bit"]],
+            [["$out/data/cdenJEC21/seq/cdenJEC21.fa", "$out/data/twoBit/cdenJEC21.2bit"]],
             'and so does the .2bit');
+  ok(-d "$out/data/twoBit",
+     'twoBit is under data/, which is what the container mounts as /data/apollo_data');
+  ok(!-e "$out/twoBit",
+     'and not beside it, where the emitted blatdb paths could not reach it');
   ok(-f "$out/data/cdenJEC21/trackList.json", 'the organism dir is the PUBLIC abbrev');
   ok(!-e "$out/data/cneoJEC21", 'nothing is written under the internal abbrev');
 
