@@ -69,6 +69,9 @@ Options:
   --organism ABBREV       narrow GENERATION to this organism; repeatable.
                           Reconciliation always runs over everything, so the
                           report and the safety invariants are unaffected.
+  --roster-overlay FILE   read the roster overlay from FILE instead of the
+                          copy installed under GUS_HOME.  For a release's
+                          own approvals, which need no long-term home.
   --apollo-roster FILE    read the Apollo roster from a saved
                           findAllOrganisms response instead of the API.  For
                           offline rehearsal; a real release uses the API.
@@ -121,6 +124,7 @@ sub parseOptions {
     'webservices-dir=s'  => \$opt{ws_dir},
     'previous-release=s' => \$opt{previous_release},
     'apollo-roster=s'    => \$opt{apollo_roster},
+    'roster-overlay=s'   => \$opt{roster_overlay},
     'organism=s'         => $opt{organisms},
     'force'              => \$opt{force},
   ) or do { chomp(my $m = $problem || 'bad options'); die "$m\n" };
@@ -160,12 +164,33 @@ sub parseOptions {
       unless defined $opt{$key} && length $opt{$key};
   }
 
+  # Distinct from the loop above: this option has no default, so an empty value
+  # would silently mean "use the installed copy" -- the opposite of the intent.
+  die "--roster-overlay cannot be empty\n"
+    if defined $opt{roster_overlay} && !length $opt{roster_overlay};
+
   return \%opt;
 }
 
 sub outputDir {
   my ($class, $opt) = @_;
   return "$opt->{out_dir}/release-$opt->{build}/$opt->{environment}";
+}
+
+# The installed copy carries STANDING policy -- host genomes, model fungi -- and
+# overlay.t pins its shape, so a release's own approvals cannot live there.
+# --roster-overlay replaces it wholesale; the report always names the path read.
+sub overlayPath {
+  my ($class, $opt, $env) = @_;
+
+  my $override = $opt->{roster_overlay};
+  return $override if defined $override && length $override;
+
+  die "GUS_HOME is not set, so the installed roster overlay cannot be located.\n"
+    . "Set it, or name a file with --roster-overlay.\n"
+    unless defined $env->{GUS_HOME} && length $env->{GUS_HOME};
+
+  return "$env->{GUS_HOME}/data/ApiCommonModel/Model/apollo/roster-overlay.txt";
 }
 
 # --- Preflight -- everything checkable before any real work ---
@@ -196,6 +221,20 @@ sub assertPreviousRelease {
   die "--previous-release $dir does not exist\n"        unless -e $dir;
   die "--previous-release $dir is not a directory\n"    unless -d $dir;
   die "--previous-release $dir is not readable\n"       unless -r $dir;
+
+  return 1;
+}
+
+# Checked before the roster and the portal are read: a typo here should cost a
+# second, not the minutes those two take.
+sub assertRosterOverlay {
+  my ($class, $path) = @_;
+
+  return 1 unless defined $path && length $path;
+
+  die "--roster-overlay $path does not exist\n"    unless -e $path;
+  die "--roster-overlay $path is not a file\n"     unless -f $path;
+  die "--roster-overlay $path is not readable\n"   unless -r $path;
 
   return 1;
 }
@@ -277,7 +316,7 @@ sub assertUpdateBucketSane {
 # `total`: it answers "what is at stake", not "is a human still deciding".
 # Blocking on it would refuse a release curation already approved.
 sub assertGenerationAllowed {
-  my ($class, $result, $force) = @_;
+  my ($class, $result, $force, $overlayPath) = @_;
 
   my $pending = $REPORT->pendingDecisions($result);
 
@@ -299,7 +338,8 @@ sub assertGenerationAllowed {
   $message .= "Nothing is generated for an unapproved candidate, so the package would be\n"
             . "quietly missing them.  The fix is a roster-overlay entry -- an 'add' or\n"
             . "'remove' line with a reason in\n"
-            . "  \$GUS_HOME/data/ApiCommonModel/Model/apollo/roster-overlay.txt\n"
+            . "  " . ($overlayPath
+                      || '$GUS_HOME/data/ApiCommonModel/Model/apollo/roster-overlay.txt') . "\n"
             . "-- then re-run.  Run with --force only if you accept the omission.\n";
 
   die $message;

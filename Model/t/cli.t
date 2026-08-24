@@ -111,6 +111,53 @@ my $C = 'ApiCommonModel::Model::ApolloRelease::Cli';
   ok($C->assertPreviousRelease(undef), 'no previous release is not an error');
 }
 
+# --- roster overlay: the installed copy, and the per-release override ---
+
+{
+  my $opts = $C->parseOptions('--report', '--build', '71');
+  ok(!defined $opts->{roster_overlay}, 'no roster overlay override by default');
+  is($C->overlayPath($opts, {GUS_HOME => '/g'}),
+     '/g/data/ApiCommonModel/Model/apollo/roster-overlay.txt',
+     'the default overlay is the copy installed under GUS_HOME');
+}
+
+{
+  my $opts = $C->parseOptions('--report', '--build', '71',
+                              '--roster-overlay', '/tmp/b71-overlay.txt');
+  is($opts->{roster_overlay}, '/tmp/b71-overlay.txt', '--roster-overlay carried');
+  is($C->overlayPath($opts, {GUS_HOME => '/g'}), '/tmp/b71-overlay.txt',
+     'an override wins over the installed copy');
+}
+
+{
+  eval { $C->parseOptions('--report', '--build', '71', '--roster-overlay', '') };
+  like($@, qr/--roster-overlay cannot be empty/,
+       'an empty --roster-overlay is refused, not read as "use the default"');
+}
+
+{
+  eval { $C->overlayPath({}, {}) };
+  like($@, qr/GUS_HOME/,
+       'no override and no GUS_HOME refuses rather than building /data/...');
+}
+
+{
+  my $dir = tempdir(CLEANUP => 1);
+  my $file = "$dir/overlay.txt";
+  open(my $fh, '>', $file) or die $!;
+  print $fh "# empty overlay\n";
+  close $fh;
+
+  ok($C->assertRosterOverlay($file), 'a readable override passes preflight');
+  ok($C->assertRosterOverlay(undef), 'no override is not an error');
+
+  eval { $C->assertRosterOverlay("$dir/nope.txt") };
+  like($@, qr/\Q$dir\E\/nope\.txt/, 'a missing override names the path');
+
+  eval { $C->assertRosterOverlay($dir) };
+  like($@, qr/is not a file/, 'a directory is refused before parseFile slurps it');
+}
+
 {
   my %good = (outDir => '/o', base => 'https://veupathdb.org', project => 'UniDB',
               build => 71, wsDir => '/ws', gusHome => '/g');
@@ -191,6 +238,23 @@ sub _portalOf {
   my $clear = {update => [{abbrev => 'a'}], add_candidate => [{abbrev => 'b', approved => 1}],
                prune_candidate => [], rename => []};
   ok($C->assertGenerationAllowed($clear, 0), 'an approved candidate is not pending');
+}
+
+{
+  # The gate's advice must name the overlay the run actually read; with an
+  # override it otherwise sends the reader to edit a file that had no effect.
+  my $pending = {
+    update          => [{abbrev => 'a'}],
+    add_candidate   => [{abbrev => 'hcapNAm1', approved => 0}],
+    prune_candidate => [],
+    rename          => [],
+  };
+
+  eval { $C->assertGenerationAllowed($pending, 0, '/tmp/b71-overlay.txt') };
+  like($@, qr{/tmp/b71-overlay\.txt}, 'the gate names the overlay actually in use');
+
+  eval { $C->assertGenerationAllowed($pending, 0) };
+  like($@, qr/\$GUS_HOME/, 'and falls back to the installed copy when none is named');
 }
 
 {
