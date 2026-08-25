@@ -64,7 +64,17 @@
       <sql>
         <![CDATA[
           WITH ds
-            AS (select pathway_source from ($$ds_pathway_id$$))
+            AS (select pathway_source as input_id from ($$ds_pathway_id$$))
+          -- The param mixes identifier types, so gene input is resolved to its
+          -- canonical gene_source_id here rather than compared case-insensitively
+          -- against TranscriptPathway: that accepts aliases and lets the gene branch
+          -- join on an indexable equality instead of scanning on lower().
+          , dsGene AS (
+              SELECT DISTINCT ds.input_id, gi.gene
+              FROM apidbtuning.GeneId gi
+                , ds
+              WHERE LOWER(gi.id) = LOWER(ds.input_id)
+            )
           SELECT  source_id, pathway_source,
             string_agg(identifier, ',') as identifiers,
             string_agg(type, ',') as type
@@ -72,7 +82,7 @@
               -- Compounds p1
               SELECT distinct pa.source_id as source_id
                 , pa.pathway_source
-                , ds.pathway_source AS identifier
+                , ds.input_id AS identifier
                 , 'compound' as type
                 , edr.external_database_release_id
               FROM webready.PathwayCompounds pc
@@ -81,7 +91,7 @@
                 , sres.externaldatabaserelease edr
                 , ds
               WHERE
-                ds.pathway_source = pc.compound_source_id
+                ds.input_id = pc.compound_source_id
                 AND pc.ext_db_name = ed.name
                 AND edr.external_database_id = ed.external_database_id
                 AND pa.pathway_id = pc.pathway_id
@@ -89,7 +99,7 @@
               -- Compounds p2
               SELECT distinct pa.source_id as source_id
                 , pa.pathway_source
-                , ds.pathway_source AS identifier
+                , ds.input_id AS identifier
                 , 'compound' as type
                 , edr.external_database_release_id
               FROM webready.PathwayCompounds pc
@@ -98,7 +108,7 @@
                 , sres.externaldatabaserelease edr
                 , ds
               WHERE
-                ds.pathway_source = pc.chebi_accession
+                ds.input_id = pc.chebi_accession
                 AND pc.ext_db_name = ed.name
                 AND edr.external_database_id = ed.external_database_id
                 AND pa.pathway_id = pc.pathway_id
@@ -106,7 +116,7 @@
               -- Enzyme
               SELECT distinct pa.source_id as source_id
                 , pa.pathway_source
-                , ds.pathway_source AS identifier
+                , ds.input_id AS identifier
                 , 'enzyme' as type
                 , edr.external_database_release_id
               FROM apidbtuning.TranscriptPathway tp
@@ -114,24 +124,24 @@
                 , sres.externaldatabase ed
                 , sres.externaldatabaserelease edr
                 , ds
-              WHERE ds.pathway_source = tp.ec_number_gene
+              WHERE ds.input_id = tp.ec_number_gene
                 AND pa.pathway_id = tp.pathway_id
                 AND pa.external_db_name = ed.name
                 AND edr.external_database_id = ed.external_database_id
-                AND ds.pathway_source ~ '^[0-9][0-9.n-]*$'
+                AND ds.input_id ~ '^[0-9][0-9.n-]*$'
             UNION
               -- Gene
               SELECT distinct pa.source_id as source_id
                 , pa.pathway_source
-                , ds.pathway_source AS identifier
+                , dsg.input_id AS identifier
                 , 'gene' as type
                 , edr.external_database_release_id
               FROM webready.PathwayAttributes pa
                 , apidbtuning.TranscriptPathway tp
                 , sres.externaldatabase ed
                 , sres.externaldatabaserelease edr
-                , ds
-              WHERE lower(tp.gene_source_id) = lower(ds.pathway_source)
+                , dsGene dsg
+              WHERE tp.gene_source_id = dsg.gene
                 AND tp.pathway_id = pa.pathway_id
                 AND pa.external_db_name = ed.name
                 AND edr.external_database_id = ed.external_database_id
@@ -139,7 +149,7 @@
               -- Reaction
               SELECT distinct pa.source_id as source_id
                 , pa.pathway_source
-                , ds.pathway_source AS identifier
+                , ds.input_id AS identifier
                 , 'reaction' as type
                 , edr.external_database_release_id
               FROM webready.PathwayCompounds pc
@@ -148,7 +158,7 @@
                 , sres.externaldatabase ed
                 , sres.externaldatabaserelease edr
                 , ds
-              WHERE ds.pathway_source = pr.reaction_source_id
+              WHERE ds.input_id = pr.reaction_source_id
                 AND pr.reaction_id = pc.reaction_id
                 AND pc.pathway_id = pa.pathway_id
                 AND pa.external_db_name = pr.ext_db_name
@@ -158,14 +168,14 @@
               -- Pathways from direct pathwayNodes
               SELECT distinct pa.source_id
                 , pa.pathway_source
-                , ds.pathway_source AS identifier
+                , ds.input_id AS identifier
                 , 'pathway' as type
                 , edr.external_database_release_id
               FROM webready.PathwayAttributes pa
                 , sres.externaldatabase ed
                 , sres.externaldatabaserelease edr
                 , ds
-              WHERE ds.pathway_source = pa.source_id
+              WHERE ds.input_id = pa.source_id
                 AND pa.external_db_name = ed.name
                 AND edr.external_database_id = ed.external_database_id
             ) t
@@ -197,15 +207,25 @@
       <column name="ec_gene"/>
       <sql>
         <![CDATA[
-          WITH transform as (
+          -- Resolve input to canonical gene_source_id up front: accepts aliases, and
+          -- lets both joins below use an indexable equality rather than scanning
+          -- TranscriptPathway on lower(). Shared by the transform and its HAVING count.
+          WITH dsGene AS (
+              SELECT DISTINCT gi.gene
+              FROM apidbtuning.GeneId gi
+                , ($$ds_gene_ids$$) ds
+              WHERE LOWER(gi.id) = LOWER(ds.gene_source_id)
+          )
+
+          , transform as (
               SELECT DISTINCT tp.pathway_source_id as source_id
                 , tp.pathway_source
                 , tp.gene_source_id
                 , tp.ec_number_gene as ec_gene
                 , tp.ec_number_pathway as ec_pathway
               FROM apidbtuning.TranscriptPathway tp
-                , ($$ds_gene_ids$$) ds
-              WHERE lower(tp.gene_source_id) = lower(ds.gene_source_id)
+                , dsGene ds
+              WHERE tp.gene_source_id = ds.gene
                 AND tp.complete_ec >= $$exclude_incomplete_ec$$
                 AND tp.exact_match >= $$exact_match_only$$
                 AND (tp.external_database_release_id = $$pathways_source$$ OR $$pathways_source$$ = 1)
@@ -213,8 +233,8 @@
               HAVING (
                 ('$$any_or_all_pathway$$' = 'any')
                 OR (count(*) <= (SELECT count (*)
-                                 FROM apidbtuning.TranscriptPathway tp , ($$ds_gene_ids$$) ds
-                                 WHERE lower(tp.gene_source_id) = lower(ds.gene_source_id)
+                                 FROM apidbtuning.TranscriptPathway tp , dsGene ds
+                                 WHERE tp.gene_source_id = ds.gene
                                 )
                 ))
           )
