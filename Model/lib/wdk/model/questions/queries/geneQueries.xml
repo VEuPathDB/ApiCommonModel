@@ -5482,7 +5482,21 @@ select distinct ta.gene_source_id
       <column name="median_gene_dose_hits"/>
       <sql>
         <![CDATA[
-          WITH bySample AS (
+          -- chrPloidy is split out of bySample, and the sample filter is repeated in
+          -- both, deliberately. Collapsing them back into one join costs ~30%: with the
+          -- chromosome side pre-filtered the planner parallelises the GeneCopyNumbers
+          -- scan (2 workers, bySample 4.3s instead of 7.2s single-threaded). Repeating
+          -- the filter is what lets it - the gene side gets its own restriction rather
+          -- than inheriting one through the join.
+          WITH chrPloidy AS (
+            SELECT c.eda_sample_stable_id
+              , c.na_sequence_id
+              , c.ploidy
+            FROM apidbtuning.ChrCopyNumbers c
+            WHERE c.organism = '$$organismSinglePick$$'
+              AND c.eda_sample_stable_id IN ($$cnv_sample_meta$$)
+          )
+          , bySample AS (
             SELECT DISTINCT g.project_id
               , g.source_id
               , g.gene_source_id
@@ -5490,15 +5504,14 @@ select distinct ta.gene_source_id
               , g.raw_estimate
               , g.ref_cn
               , g.haploid_number
-              , c.ploidy
+              , cp.ploidy
               , g.chromosome
             FROM apidbtuning.GeneCopyNumbers g
-             , apidbtuning.ChrCopyNumbers c
-            WHERE c.eda_sample_stable_id IN ($$cnv_sample_meta$$)
-              AND g.eda_sample_stable_id = c.eda_sample_stable_id
-              AND g.na_sequence_id = c.na_sequence_id
-              AND g.organism = '$$organismSinglePick$$'
-              AND c.organism = '$$organismSinglePick$$'
+            JOIN chrPloidy cp
+              ON g.eda_sample_stable_id = cp.eda_sample_stable_id
+             AND g.na_sequence_id = cp.na_sequence_id
+            WHERE g.organism = '$$organismSinglePick$$'
+              AND g.eda_sample_stable_id IN ($$cnv_sample_meta$$)
           )
           , medians AS (
             SELECT s.gene_source_id
