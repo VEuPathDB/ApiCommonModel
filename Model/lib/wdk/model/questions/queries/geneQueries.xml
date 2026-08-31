@@ -5061,6 +5061,7 @@
       <paramRef ref="geneParams.splice_site_sample_two"/>
       <paramRef ref="geneParams.percent_diff"/>
       <paramRef ref="geneParams.min_norm_count"/>
+      <paramRef ref="organismParams.organismAbbrev"/>
       <column name="project_id"/>
       <column name="source_id"/>
       <column name="gene_source_id"/>
@@ -5075,77 +5076,80 @@
       <column name="two_dist_to_first_atg"/>
       <sql>
         <![CDATA[
-          WITH loc_counts AS ( 'purposely break this query.  it is way way too slow.  needs fixing'
+          -- The webready _p tables are partitioned by org_abbrev; filtering all three on
+          -- $$organismAbbrev$$ (set per-dataset from the template's ${organismAbbrev})
+          -- prunes to one partition instead of scanning 800+.
+          --
+          -- Both CTEs are MATERIALIZED deliberately. A CTE referenced once is inlined by
+          -- Postgres, which flattens the one/two pairing into a cross product joined by
+          -- filter: 35M rows generated and discarded, 6.5 minutes on tbruTREU927 versus
+          -- 0.6s materialized.
+          WITH loc_counts AS (
             SELECT g.source_id
-             , f.protocol_app_node_id
-             , f.na_sequence_id
-             , f.segment_start AS location
-             , sum(f.count_per_million) AS sum_cpm
-            FROM
-             apidb.splicesitegenes g
-             , apidb.splicesitefeature f
-            WHERE g.splice_site_feature_id = f.splice_site_feature_id
-            GROUP BY f.segment_start, f.na_sequence_id, f.protocol_app_node_id, g.source_id
-          ) , stats AS (
-            SELECT source_id
-              , protocol_app_node_id
-              , max(sum_cpm) AS max_cpm
-              , round((max(sum_cpm) / sum(sum_cpm))::numeric, 2) * 100 AS pct_max
-            FROM loc_counts
-            GROUP BY source_id, protocol_app_node_id
-          ) , gene_loc_stats AS (
-            SELECT this.*, stats.pct_max
-            FROM (
-               SELECT g.source_id
+                 , f.protocol_app_node_id
                  , f.na_sequence_id
                  , f.segment_start AS location
                  , sum(f.count_per_million) AS sum_cpm
-                 , f.protocol_app_node_id
-               FROM
-                 apidb.splicesitegenes g
-                 , apidb.splicesitefeature f
-               WHERE g.splice_site_feature_id = f.splice_site_feature_id
-               GROUP BY g.source_id, f.segment_start, f.protocol_app_node_id, f.na_sequence_id
-             ) this
-             , stats
-            WHERE this.sum_cpm = stats.max_cpm
-              AND this.source_id = stats.source_id
-              AND this.protocol_app_node_id = stats.protocol_app_node_id
+            FROM apidb.splicesitegenes g
+            JOIN apidb.splicesitefeature f
+              ON g.splice_site_feature_id = f.splice_site_feature_id
+            WHERE f.protocol_app_node_id IN ($$splice_site_sample_one$$, $$splice_site_sample_two$$)
+            GROUP BY g.source_id, f.protocol_app_node_id, f.na_sequence_id, f.segment_start
+          ) , gene_loc_pct AS (
+            -- One window pass yields both the percentile and the max flag; comparing
+            -- sum_cpm to a max from the SAME pass keeps the float comparison exact.
+            SELECT source_id
+                 , protocol_app_node_id
+                 , na_sequence_id
+                 , location
+                 , sum_cpm
+                 , round((max(sum_cpm) OVER w / sum(sum_cpm) OVER w)::numeric, 2) * 100 AS pct_max
+                 , sum_cpm = max(sum_cpm) OVER w AS is_max
+            FROM loc_counts
+            WINDOW w AS (PARTITION BY source_id, protocol_app_node_id)
+          ) , gene_loc_stats AS MATERIALIZED (
+            SELECT source_id, protocol_app_node_id, na_sequence_id, location, sum_cpm
+            FROM gene_loc_pct
+            WHERE is_max
+              AND pct_max > $$percent_diff$$
+              AND sum_cpm > $$min_norm_count$$
+          ) , pairs AS MATERIALIZED (
+            SELECT one.source_id
+                 , one.na_sequence_id AS one_na_sequence_id, one.location AS one_location
+                 , two.na_sequence_id AS two_na_sequence_id, two.location AS two_location
+            FROM gene_loc_stats one
+            JOIN gene_loc_stats two
+              ON two.source_id = one.source_id
+             AND two.location != one.location
+             AND two.protocol_app_node_id = $$splice_site_sample_two$$
+            WHERE one.protocol_app_node_id = $$splice_site_sample_one$$
           )
-             -- MAIN START
-select distinct ta.gene_source_id
+          SELECT DISTINCT ta.gene_source_id
             , ta.source_id
             , ta.project_id
             , 'Y' AS matched_result
-            , one.location AS one_loc
+            , p.one_location AS one_loc
             , t1.transcript_source_id AS one_transcript_id
             , t1.dist_to_cds AS one_dist_to_cds
             , t1.dist_to_first_atg AS one_dist_to_first_atg
-            , two.location AS two_loc
+            , p.two_location AS two_loc
             , t2.transcript_source_id AS two_transcript_id
             , t2.dist_to_cds AS two_dist_to_cds
             , t2.dist_to_first_atg AS two_dist_to_first_atg
-          FROM
-            gene_loc_stats one
-            , gene_loc_stats two
-            , webready.SpliceSiteTranscript_p t1
-            , webready.SpliceSiteTranscript_p t2
-            , apidbtuning.TranscriptAttributes ta
-          WHERE one.source_id = two.source_id
-            AND one.protocol_app_node_id = $$splice_site_sample_one$$
-            AND two.protocol_app_node_id = $$splice_site_sample_two$$
-            AND one.pct_max > $$percent_diff$$
-            AND two.pct_max > $$percent_diff$$
-            AND one.sum_cpm > $$min_norm_count$$
-            AND two.sum_cpm > $$min_norm_count$$
-            AND one.location != two.location
-            AND one.na_sequence_id = t1.na_sequence_id
-            AND one.location = t1.location
-            AND two.na_sequence_id = t2.na_sequence_id
-            AND two.location = t2.location
-            AND t1.type = 'Splice Site'
-            AND t2.type = 'Splice Site'
-            AND ta.gene_source_id = one.source_id
+          FROM pairs p
+          JOIN webready.SpliceSiteTranscript_p t1
+            ON t1.na_sequence_id = p.one_na_sequence_id
+           AND t1.location = p.one_location
+           AND t1.type = 'Splice Site'
+           AND t1.org_abbrev = $$organismAbbrev$$
+          JOIN webready.SpliceSiteTranscript_p t2
+            ON t2.na_sequence_id = p.two_na_sequence_id
+           AND t2.location = p.two_location
+           AND t2.type = 'Splice Site'
+           AND t2.org_abbrev = $$organismAbbrev$$
+          JOIN webready.TranscriptAttributes_p ta
+            ON ta.gene_source_id = p.source_id
+           AND ta.org_abbrev = $$organismAbbrev$$
         ]]>
       </sql>
     </sqlQuery>
