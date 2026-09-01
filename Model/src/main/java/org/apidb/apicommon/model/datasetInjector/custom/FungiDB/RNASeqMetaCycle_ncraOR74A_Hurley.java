@@ -198,6 +198,13 @@ public class RNASeqMetaCycle_ncraOR74A_Hurley extends RNASeqMetaCycle {
       setPropValue("questionName", "GeneQuestions.GenesByMetaCycle" + getDatasetName());
 
       injectTemplate("internalGeneSearchCategory");
+
+      // missing here (same as RNASeq.java's injectTemplates, which this class
+      // otherwise duplicates instead of calling): without this, the dataset never
+      // appears in datasetAndPresenterProps.conf, so JbrowseRnaAndChipSeqTracks.pm
+      // never generates its JBrowse tracks even though the bigwig data exists.
+      setPropValue("summary", getPropValue("summary").replaceAll("\n", " "));
+      injectTemplate("jbrowseRNASeqBuildProps");
   }
 
 
