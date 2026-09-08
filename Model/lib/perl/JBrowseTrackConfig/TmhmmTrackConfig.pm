@@ -64,6 +64,8 @@ sub getJBrowseObject{
 
     my $jbrowseObject = $self->SUPER::getJBrowseObject();
 
+    $jbrowseObject->{topLevelFeatures} = ["TMhelix"];
+
     return $jbrowseObject;
   }
 
