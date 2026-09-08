@@ -47,6 +47,20 @@
       </help>
     </flatVocabParam>
 
+    <filterParam name="strain_sample_meta"
+                 metadataQueryRef="StrainSegmentVQ.SamplesMetadataByStudyWithRef"
+                 backgroundQueryRef="StrainSegmentVQ.SamplesMetadataByStudyWithRef"
+                 ontologyQueryRef="VariantVQ.SampleOntologyByStudy"
+                 prompt="Samples"
+                 minSelectedCount="2"
+                 dependedParamRef="organismParams.organismSinglePick,variantParams.eda_sample_table_suffix">
+      <help>
+        Select a set of samples whose genomic sequences will be compared. Use the
+        sample characteristics to narrow the group, or accept all samples for the
+        organism you chose.
+      </help>
+    </filterParam>
+
   </paramSet>
 
   <!--===========================================================================-->
@@ -99,6 +113,62 @@
       </sql>
     </sqlQuery>
 
+    <sqlQuery name="SamplesMetadataByStudyWithRef" doNotTest="1">
+      <paramRef ref="variantParams.eda_sample_table_suffix"/>
+      <paramRef ref="organismParams.organismSinglePick" noTranslation="true"/>
+      <column name="internal"/>
+      <column name="ontology_term_name"/>
+      <column name="string_value"/>
+      <column name="number_value"/>
+      <column name="date_value"/>
+      <sql>
+        <![CDATA[
+          SELECT av.sample_stable_id    AS internal,
+                 av.attribute_stable_id AS ontology_term_name,
+                 COALESCE(dp.display_name, av.string_value) AS string_value,
+                 av.number_value,
+                 av.date_value
+          FROM eda.attributevalue_$$eda_sample_table_suffix$$ av
+          LEFT JOIN apidbtuning.datasetpresenter dp
+                 ON dp.dataset_presenter_id = av.string_value
+                AND av.attribute_stable_id IN
+                    (SELECT stable_id
+                     FROM eda.attributegraph_$$eda_sample_table_suffix$$
+                     WHERE provider_label = '["dataset_id"]')
+
+          UNION ALL
+
+          SELECT o.strain_abbrev AS internal,
+                 ag.stable_id    AS ontology_term_name,
+                 CASE
+                   WHEN ag.provider_label IN ('["parasite_strain"]', '["fungal_strain"]')
+                        THEN tn_self.name
+                   WHEN ag.provider_label IN ('["parasite_organism"]', '["fungus_organism"]')
+                        THEN tn_parent.name
+                   WHEN ag.provider_label = '["dataset_id"]'
+                        THEN dp.display_name
+                 END AS string_value,
+                 CAST(NULL AS numeric) AS number_value,
+                 CAST(NULL AS date)    AS date_value
+          FROM eda.attributegraph_$$eda_sample_table_suffix$$ ag
+          CROSS JOIN apidb.organism o
+          JOIN sres.taxon     tx        ON tx.taxon_id = o.taxon_id
+          JOIN sres.taxonname tn_self   ON tn_self.taxon_id = o.taxon_id
+                                       AND tn_self.name_class = 'scientific name'
+          JOIN sres.taxonname tn_parent ON tn_parent.taxon_id = tx.parent_id
+                                       AND tn_parent.name_class = 'scientific name'
+          JOIN apidbtuning.datasetpresenter dp
+                                        ON dp.name = o.abbrev || '_primary_genome_RSRC'
+          WHERE tn_self.name = $$organismSinglePick$$
+            AND ag.provider_label IN ('["parasite_strain"]', '["fungal_strain"]',
+                                      '["parasite_organism"]', '["fungus_organism"]',
+                                      '["dataset_id"]')
+            AND NOT EXISTS (SELECT 1
+                            FROM eda.attributevalue_$$eda_sample_table_suffix$$ av2
+                            WHERE av2.sample_stable_id = o.strain_abbrev)
+        ]]>
+      </sql>
+    </sqlQuery>
   </querySet>
 
 </wdkModel>
