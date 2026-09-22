@@ -9,8 +9,10 @@ use File::Copy qw(cp);
 use File::Temp;
 
 use ApiCommonModel::Model::ApolloRelease::Absolutize;
+use ApiCommonModel::Model::ApolloRelease::JbrowsePath;
 
 my $ABS  = 'ApiCommonModel::Model::ApolloRelease::Absolutize';
+my $JBP  = 'ApiCommonModel::Model::ApolloRelease::JbrowsePath';
 
 # canonical() so two runs produce byte-identical files: the release is diffed
 # against the previous one by hand, and hash order noise would bury the real
@@ -280,11 +282,14 @@ sub stripRefSeqStanza {
 sub writeFile {
   my ($class, $path, $content, $base) = @_;
 
-  my $rewritten = $ABS->rewrite($content, $base);
+  # Order matters: the /a/app/jbrowse exemption is a fixed-width lookbehind, so
+  # the rename has to see the path before absolutization prefixes a base onto it.
+  my $rewritten = $ABS->rewrite($JBP->rewrite($content), $base);
 
   # Not optional: a missed URL is a track that 404s inside Apollo, so the config
   # loads, the track appears, and it is empty.
   $ABS->assertNoRelative($rewritten, $path);
+  $JBP->assertRenamed($rewritten, $path);
 
   # ':raw' deliberately -- every producer hands this octets already, so an
   # encoding layer here would be a second, wrong one.

@@ -168,7 +168,7 @@ my ($untouched, $none) = $G->stripRefSeqStanza($conf =~ s/\[tracks\.refseq\]/[tr
 is($none, 0, 'a tracks.conf without the stanza reports zero');
 like($untouched, qr/faiUrlTemplate/, 'and is returned unchanged');
 
-# --- writeFile: absolutization plus its post-condition ---
+# --- writeFile: the rewrite passes plus their post-conditions ---
 
 my $dir = tempdir(CLEANUP => 1);
 
@@ -178,6 +178,19 @@ my $written = do { local $/; <$fh> };
 close $fh;
 is($written, '{"u":"https://veupathdb.org/a/service/x","f":"seq/tgonME49.fa.fai"}',
    'site-relative URLs absolutized; a bare relative seq/ path is left alone');
+
+# writeFile composes both passes, so pin the combination here rather than trust
+# that two separately-tested rewrites meet correctly.
+$G->writeFile("$dir/j.json",
+  '{"a":"/a/service/jbrowse/store?data=x","b":"/a/app/jbrowse",'
+  . '"c":"/a/jbrowse/jbrowse_embed.conf"}', $BASE);
+open(my $jfh, '<', "$dir/j.json") or die $!;
+my $jwritten = do { local $/; <$jfh> };
+close $jfh;
+is($jwritten,
+   qq[{"a":"$BASE/a/service/jbrowse-apollo/store?data=x","b":"$BASE/a/app/jbrowse",]
+   . qq["c":"$BASE/a/jbrowse-apollo/jbrowse_embed.conf"}],
+   'writeFile renames jbrowse paths and absolutizes, exempting the site app link');
 
 # The encoder must return OCTETS: real track configs carry non-ASCII, and
 # encoding to characters writes the right bytes but emits a "Wide character"
