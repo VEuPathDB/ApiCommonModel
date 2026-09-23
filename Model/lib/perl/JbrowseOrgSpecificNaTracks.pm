@@ -227,9 +227,14 @@ sub addMergedRnaSeq {
   my $genomeName = $nameForFileNames;
 
   my $bigwigBaseDir = "/var/www/Common/apiSiteFilesMirror/webServices/${projectName}/build-${buildNumber}/${nameForFileNames}/bulkrnaseq/bigwig";
-  opendir(my $dh, $bigwigBaseDir) or return;
-  my @datasets = grep { !/^\./ && -d "${bigwigBaseDir}/$_" } readdir($dh);
-  closedir($dh);
+
+  # Only include datasets that are actually registered/public (present in
+  # datasetAndPresenterProps.conf, i.e. $datasetProperties->{rnaseq}) -- a
+  # directory existing under bulkrnaseq/bigwig does not by itself mean the
+  # dataset is meant to be user-visible; some are deliberately internal-only
+  # or superseded (see ToxoDB.xml's commented-out/internalDataset entries).
+  my $rnaSeqDatasets = $datasetProperties->{rnaseq} ? $datasetProperties->{rnaseq} : {};
+  my @datasets = grep { -d "${bigwigBaseDir}/$_" } keys %$rnaSeqDatasets;
 
   foreach my $dataset (@datasets) {
     my $bigWigRelativePath = "${bigwigBaseDir}/${dataset}/mergedBigwigs/*";
