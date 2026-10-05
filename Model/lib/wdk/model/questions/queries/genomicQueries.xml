@@ -39,18 +39,61 @@
       <column name="input_id"/>
       <sql>
         <![CDATA[
-          SELECT DISTINCT t.sequence AS source_id,
-             string_agg(t.source_id, ', ') AS input_id,
-             sa.project_id
-            FROM apidbtuning.GenomicSeqAttributes sa,
-               (SELECT DISTINCT ds.source_id, si.sequence
-                FROM webready.GenomicSequenceId_p si, ($$sequenceId$$) ds
-              -- WHERE LOWER(si.id) LIKE REGEXP_REPLACE(REPLACE(LOWER(ds.source_id), '*', '%'), '[[:space:]]', '')
-                WHERE LOWER(si.id) = LOWER(ds.source_id)
-	       ) t
-           WHERE t.sequence = sa.source_id
-             AND ('@PROJECT_ID@' = 'UniDB' OR sa.project_id = '@PROJECT_ID@')
-          GROUP BY t.sequence, sa.project_id
+          WITH input AS MATERIALIZED (
+            -- normalize each uploaded ID once
+            SELECT DISTINCT
+                   ds.source_id AS input_id,
+                   lower(regexp_replace(ds.source_id, '\s', '', 'g')) AS id_lc
+            FROM ($$sequenceId$$) ds
+          ),
+          orgs AS MATERIALIZED (
+            -- this project's organisms = partition keys of webready.GenomicSequenceId_p
+            SELECT org_abbrev
+            FROM webready.organismabbreviation_p oa
+            WHERE ('@PROJECT_ID@' = 'UniDB' OR oa.project_id = '@PROJECT_ID@')
+          ),
+          wild AS MATERIALIZED (
+            -- wildcard IDs only: escape LIKE metacharacters, then * -> %
+            SELECT input_id,
+                   replace(replace(replace(replace(id_lc, '\', '\\'), '%', '\%'), '_', '\_'), '*', '%') AS pat
+            FROM input
+            WHERE strpos(id_lc, '*') > 0
+          ),
+          matches AS (
+            -- exact IDs: one index probe into one partition per (org, id)
+            SELECT i.input_id, s.sequence
+            FROM input i
+            CROSS JOIN orgs o
+            CROSS JOIN LATERAL (
+              SELECT si.sequence
+              FROM webready.GenomicSequenceId_p si
+              WHERE si.org_abbrev = o.org_abbrev
+                AND lower(si.id) = i.id_lc
+              OFFSET 0  -- optimization fence: stops the planner flattening this LATERAL into a hash join,
+                        -- forcing a per-(org, id) parameterized probe so only that org's partition is touched
+            ) s
+            WHERE strpos(i.id_lc, '*') = 0
+            UNION
+            -- wildcard IDs: scan only this project's partitions
+            SELECT w.input_id, s.sequence
+            FROM wild w
+            CROSS JOIN orgs o
+            CROSS JOIN LATERAL (
+              SELECT si.sequence
+              FROM webready.GenomicSequenceId_p si
+              WHERE si.org_abbrev = o.org_abbrev
+                AND lower(si.id) LIKE w.pat
+              OFFSET 0  -- optimization fence: without it a flattened hash join would scan every
+                        -- partition (all projects); this keeps it to one partition per (org, pattern)
+            ) s
+          )
+          SELECT m.sequence AS source_id,
+                 string_agg(DISTINCT m.input_id, ', ') AS input_id,
+                 sa.project_id
+          FROM matches m
+          JOIN apidbtuning.GenomicSeqAttributes sa ON sa.source_id = m.sequence
+          WHERE ('@PROJECT_ID@' = 'UniDB' OR sa.project_id = '@PROJECT_ID@')
+          GROUP BY m.sequence, sa.project_id
         ]]>
       </sql>
     </sqlQuery>
