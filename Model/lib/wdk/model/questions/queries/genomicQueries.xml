@@ -69,7 +69,8 @@
               FROM webready.GenomicSequenceId_p si
               WHERE si.org_abbrev = o.org_abbrev
                 AND lower(si.id) = i.id_lc
-              OFFSET 0  -- keep the scan parameterized so partitions are pruned per org
+              OFFSET 0  -- optimization fence: stops the planner flattening this LATERAL into a hash join,
+                        -- forcing a per-(org, id) parameterized probe so only that org's partition is touched
             ) s
             WHERE strpos(i.id_lc, '*') = 0
             UNION
@@ -82,7 +83,8 @@
               FROM webready.GenomicSequenceId_p si
               WHERE si.org_abbrev = o.org_abbrev
                 AND lower(si.id) LIKE w.pat
-              OFFSET 0
+              OFFSET 0  -- optimization fence: without it a flattened hash join would scan every
+                        -- partition (all projects); this keeps it to one partition per (org, pattern)
             ) s
           )
           SELECT m.sequence AS source_id,
