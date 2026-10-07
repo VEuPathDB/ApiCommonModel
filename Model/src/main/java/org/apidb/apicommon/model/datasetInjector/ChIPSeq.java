@@ -28,6 +28,11 @@ public class ChIPSeq extends DatasetInjector {
   @Override
   public void addModelReferences() { }
 
+  @Override
+  public String getDefaultLinkCategory() {
+    return "CHIP Seq";
+  }
+
 
     @Override
 	public String[][] getPropertiesDeclaration() {
