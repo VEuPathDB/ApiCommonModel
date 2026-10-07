@@ -181,7 +181,7 @@ sub addVCF {
  	  $keyName =~ s/_/ /g;
 	  $keyName =~ s/\./ /g;
       #my $vcfUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/vcf/${sampleName}/${vcfFileName}.vcf.gz");
-      my $relativePathToVcfFile = "${nameForFileNames}/vcf/${sampleName}/${vcfFileName}.vcf.gz";
+      my $relativePathToVcfFile = "${nameForFileNames}/prealigned/vcf/${sampleName}/${vcfFileName}.vcf.gz";
       my $alignment = ApiCommonModel::Model::JBrowseTrackConfig::VcfTrackConfig->new({
 												project_name => $projectName,
                                                                                                 build_number => $buildNumber,
@@ -1199,7 +1199,11 @@ sub addAntismash {
       );
 
   return if($excludeOrganisms{$nameForFileNames});
-  my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/sorted.gff.gz";
+  my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/antismash.gff.gz";
+
+  # The file was sorted.gff.gz through build-70; skip the track rather than
+  # serve a broken one if it is missing or renamed again.
+  return unless -s "${webservicesDir}/${projectName}/build-${buildNumber}/${relativePathToGffFile}";
 
   my $summary = "Secondary metabolite gene clusters as predicted using antiSmash version 7.1 under default parameters";
 
