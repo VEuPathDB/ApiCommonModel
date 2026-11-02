@@ -32,6 +32,12 @@ public class RNASeq extends  DatasetInjector {
         this.antisenseSamplesParamQueryTemplate = antisenseSamplesParamQueryTemplate;
     }
 
+    private String senseAntisenseQuestionTemplate = "rnaSeqSenseAntisenseQuestion";
+
+    protected void setSenseAntisenseQuestionTemplate(String senseAntisenseQuestionTemplate) {
+        this.senseAntisenseQuestionTemplate = senseAntisenseQuestionTemplate;
+    }
+
     protected void setProfileSamplesHelp() {
         String profileSamplesHelp = "Transcript levels of fragments per kilobase of exon model per million mapped reads (FPKM)";
 
@@ -245,7 +251,7 @@ public class RNASeq extends  DatasetInjector {
 	      if(getPropValueAsBoolean("isStrandSpecific")) {
 		  injectTemplate("strandSpecificGraph");
 		  injectTemplate(this.antisenseSamplesParamQueryTemplate);
-		  injectTemplate("rnaSeqSenseAntisenseQuestion");
+		  injectTemplate(this.senseAntisenseQuestionTemplate);
 		  //              injectTemplate("rnaSeqSenseAntisenseCategories");
 		  setPropValue("searchCategory", "searchCategory-transcriptomics-sense-antisense");
 		  setPropValue("questionName", "GeneQuestions.GenesByRNASeq" + getDatasetName() + "SenseAntisense");
