@@ -9,8 +9,13 @@ public class RNASeqHehl extends RNASeqEbi {
       setProfileSetParamQueryTemplate("rnaSeqProfileSetParamQueryHehlToxo");
       setPctProfileSetParamQueryTemplate("rnaSeqPctProfileSetParamQueryHehlToxo");
       setAntisenseSamplesParamQueryTemplate("antisenseSamplesParamQueryHehlToxo");
+      // the shared sense/antisense query takes one sense strand for all samples,
+      // but the two combined datasets have opposite strand switches
+      setSenseAntisenseQuestionTemplate("rnaSeqSenseAntisenseQuestionHehlToxo");
 
       super.injectTemplates();
+
+      injectTemplate("rnaSeqSenseAntisenseQueryHehlToxo");
   }
 
 
