@@ -374,7 +374,7 @@ like($results->{errors}{explodes}, qr/simulated failure/, 'the error text is kep
   });
   is(scalar(grep { $_->{useAsRefSeqStore} } @{$specific->{tracks}}), 0,
      'and no useAsRefSeqStore track survives into the file');
-  is($specific->{tracks}[0]{urlTemplate}, 'https://veupathdb.org/a/service/jbrowse/store?data=y',
+  is($specific->{tracks}[0]{urlTemplate}, 'https://veupathdb.org/a/service/jbrowse-apollo/store?data=y',
      'the surviving track was absolutized on the way out');
 
   my $refSeqs = decode_json(do {
