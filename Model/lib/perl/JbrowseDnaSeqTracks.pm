@@ -25,8 +25,8 @@ use File::Basename;
 # for diploid organisms - tbruTREU927 has _LOH.bw, the haploid pfal3D7 does not. No
 # per-dataset property could express that, since it varies by organism, not by dataset.
 #
-# JBrowse 2 (decision 0008): per sample, only the measures marked jbrowse2 below - raw
-# and normalised coverage. LOH and the density group are not in the v5 set.
+# JBrowse 2 (decision 0008): every per-sample measure below and the density group, as for
+# JBrowse 1. Each measure's class opts into a JBrowse 2 object (::Coverage, ::CNV).
 
 # The per-sample measures, keyed by the filename suffix the pipeline writes. A measure
 # absent for a sample is normal and silent. Order here is the order tracks appear.
@@ -63,7 +63,6 @@ my @MEASURES = (
     cov_max_score_default => 1000,
     color                 => 'black',
     class                 => 'ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig::Coverage',
-    jbrowse2              => 1,
   },
   { suffix                => '_normalisedCoverage',
     display_name_suffix   => 'Coverage normalised to chromosome copy number (ploidy)',
@@ -75,9 +74,9 @@ my @MEASURES = (
     # the plain class returns undef there, on the grounds that JBrowse2 prefers its
     # multi-coverage handling for the RNASeq/ChIPSeq cases.
     class                 => 'ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig::CNV',
-    jbrowse2              => 1,
   },
   { suffix                => '_LOH',
+    class                 => 'ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig::Coverage',
     display_name_suffix   => 'Loss of heterozygosity',
     track_type_display    => 'Loss of heterozygosity',
     scale                 => 'linear',
@@ -111,8 +110,6 @@ my $DENSITY_GROUP_CLASS = 'ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWi
 
 sub processOrganism {
   my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $applicationType, $jbrowseUtil, $result) = @_;
-
-  my $isJBrowse2 = $applicationType eq 'jbrowse2';
 
   my $datasetProps = $jbrowseUtil->getDatasetProperties();
 
@@ -158,8 +155,6 @@ sub processOrganism {
 
     foreach my $sampleName (sort keys %$samples) {
       foreach my $measure (@MEASURES) {
-        next if($isJBrowse2 && !$measure->{jbrowse2});
-
         my $fileName = $samples->{$sampleName}->{$measure->{suffix}};
         next unless($fileName);
 
@@ -187,8 +182,6 @@ sub processOrganism {
 
         push @{$result->{tracks}}, $track if($track);
       }
-
-      next if($isJBrowse2);
 
       &addDensityGroupTrack($dataset, $sampleName, $samples->{$sampleName}, $datasetConfig,
                             $dnaSeqDatasets->{$dataset}->{datasetDisplayName}, $projectName,

@@ -181,9 +181,16 @@ sub track {
 
   my $jb2 = $produce->('jbrowse2');
   is_deeply([map { $_->{trackId} } @$jb2],
-            [qw(pfal3D7_DS_RSRC_S1 pfal3D7_DS_RSRC_S1_normalisedCoverage
-                pfal3D7_DS_RSRC_S2 pfal3D7_DS_RSRC_S2_normalisedCoverage)],
-            'jbrowse2: coverage and normalised coverage per isolate; no LOH, no density group');
+            [qw(pfal3D7_DS_RSRC_S1 pfal3D7_DS_RSRC_S1_normalisedCoverage pfal3D7_DS_RSRC_S1_LOH
+                pfal3D7_DS_RSRC_S1_variantDensity
+                pfal3D7_DS_RSRC_S2 pfal3D7_DS_RSRC_S2_normalisedCoverage pfal3D7_DS_RSRC_S2_LOH
+                pfal3D7_DS_RSRC_S2_variantDensity)],
+            'jbrowse2: every measure per isolate - coverage, normalised, LOH, density group');
+  my ($density) = grep { $_->{trackId} eq 'pfal3D7_DS_RSRC_S1_variantDensity' } @$jb2;
+  is_deeply([map { $_->{bigWigLocation}{uri} } @{$density->{adapter}{subadapters}}],
+            ['/a/service/jbrowse/store?data=Pfal/dnaseq/bigwig/pfal3D7_DS_RSRC/S1/S1_snpDensity.bw',
+             '/a/service/jbrowse/store?data=Pfal/dnaseq/bigwig/pfal3D7_DS_RSRC/S1/S1_indelDensity.bw'],
+            'the density group overlays SNP and indel density from store locations');
   is($jb2->[0]{adapter}{bigWigLocation}{uri},
      '/a/service/jbrowse/store?data=Pfal/dnaseq/bigwig/pfal3D7_DS_RSRC/S1/S1.bw',
      'raw coverage has a store location');
