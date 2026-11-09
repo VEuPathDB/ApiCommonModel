@@ -148,6 +148,58 @@ sub track {
        'dies naming the class and the label');
 }
 
+# --- decision 0008 (corrected): v5 DNA-seq is per-isolate coverage + normalised coverage ---
+{
+  require ApiCommonModel::Model::JbrowseDnaSeqTracks;
+
+  my $ws = tempdir(CLEANUP => 1);
+  foreach my $sample (qw(S1 S2)) {
+    my $dir = "$ws/PlasmoDB/build-71/Pfal/dnaseq/bigwig/pfal3D7_DS_RSRC/$sample";
+    make_path($dir);
+    foreach my $suffix ('', '_normalisedCoverage', '_LOH', '_snpDensity', '_indelDensity') {
+      open(my $fh, '>', "$dir/$sample$suffix.bw") or die $!;
+      close $fh;
+    }
+  }
+
+  {
+    package FakeJBrowseUtil;
+    sub new { bless {}, shift }
+    sub getDatasetProperties {
+      return {organism => {organismNameForFiles => 'Pfal'},
+              dnaseq => {pfal3D7_DS_RSRC => {datasetDisplayName => 'DS', category => 'Genetic Variation',
+                                             subCategory => 'DNA-Seq'}}};
+    }
+  }
+
+  my $produce = sub {
+    my $result = {tracks => []};
+    ApiCommonModel::Model::JbrowseDnaSeqTracks::processOrganism(
+      'intPfal', 'PlasmoDB', 71, $ws, $_[0], FakeJBrowseUtil->new(), $result);
+    return $result->{tracks};
+  };
+
+  my $jb2 = $produce->('jbrowse2');
+  is_deeply([map { $_->{trackId} } @$jb2],
+            [qw(pfal3D7_DS_RSRC_S1 pfal3D7_DS_RSRC_S1_normalisedCoverage
+                pfal3D7_DS_RSRC_S2 pfal3D7_DS_RSRC_S2_normalisedCoverage)],
+            'jbrowse2: coverage and normalised coverage per isolate; no LOH, no density group');
+  is($jb2->[0]{adapter}{bigWigLocation}{uri},
+     '/a/service/jbrowse/store?data=Pfal/dnaseq/bigwig/pfal3D7_DS_RSRC/S1/S1.bw',
+     'raw coverage has a store location');
+  is_deeply(ApiCommonModel::Model::JBrowseConfigRelease::Validate->validate({
+              assemblies => [{name => 'pfal3D7', sequence => {adapter => {
+                type => 'IndexedFastaAdapter',
+                fastaLocation => {uri => '/a/service/jbrowse/store?data=g.fa'},
+                faiLocation => {uri => '/a/service/jbrowse/store?data=g.fa.fai'}}}}],
+              tracks => $jb2}),
+            [], 'and every one passes the validator');
+
+  my $jb1 = $produce->('jbrowse');
+  is(scalar(@$jb1), 8, 'jbrowse still gets all three measures and the density group per isolate');
+  ok(scalar(grep { $_->{label} =~ /_LOH$/ } @$jb1) == 2, 'including LOH');
+}
+
 # --- the jbrowse application type never sees the contract ---
 {
   my $bw = store('BigWigStore', 'jbrowse', 'P/a.bw');

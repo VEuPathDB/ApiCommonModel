@@ -145,4 +145,16 @@ sub getJBrowse2Object{
 }
 
 
+# DNA-seq raw coverage: opts into a JBrowse 2 object exactly as ::CNV does.
+package ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig::Coverage;
+use base qw(ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig);
+
+use strict;
+
+sub getJBrowse2Object{
+    my $self = shift;
+    return $self->SUPER::getJBrowse2Object(1);
+}
+
+
 1;
