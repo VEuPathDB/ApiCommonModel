@@ -127,7 +127,6 @@ sub getJBrowse2Object {
   $jbrowseObject->{displays}->[0]->{type} = "MultiLinearWiggleDisplay";
 
 
-  $jbrowseObject->{displays}->[0]->{displayId} = "wiggle_" . scalar($self);
   $jbrowseObject->{displays}->[0]->{defaultRendering} = "multirowxy";
 
   foreach(@{$urlTemplates}) {

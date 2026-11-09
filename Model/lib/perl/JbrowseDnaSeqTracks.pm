@@ -25,12 +25,8 @@ use File::Basename;
 # for diploid organisms - tbruTREU927 has _LOH.bw, the haploid pfal3D7 does not. No
 # per-dataset property could express that, since it varies by organism, not by dataset.
 #
-# KNOWN LIMITATION, JBrowse2: SingleCoverageTrackConfig::getJBrowse2Object returns undef
-# unless the caller is the ::CNV subclass, so under application_type 'jbrowse2' (the
-# jbrowse2Config script, not the /service/jbrowse/dnaseq endpoint, which is 'jbrowse')
-# only the normalisedCoverage measure yields a track and the other four are dropped.
-# That predates this rewrite and is recorded here rather than worked around, because
-# picking the JBrowse2 presentation for four new measures is a product decision.
+# JBrowse 2 (decision 0008): every per-sample measure below and the density group, as for
+# JBrowse 1. Each measure's class opts into a JBrowse 2 object (::Coverage, ::CNV).
 
 # The per-sample measures, keyed by the filename suffix the pipeline writes. A measure
 # absent for a sample is normal and silent. Order here is the order tracks appear.
@@ -66,6 +62,7 @@ my @MEASURES = (
     # into the JSON response) and stores 0.
     cov_max_score_default => 1000,
     color                 => 'black',
+    class                 => 'ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig::Coverage',
   },
   { suffix                => '_normalisedCoverage',
     display_name_suffix   => 'Coverage normalised to chromosome copy number (ploidy)',
@@ -79,6 +76,7 @@ my @MEASURES = (
     class                 => 'ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig::CNV',
   },
   { suffix                => '_LOH',
+    class                 => 'ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig::Coverage',
     display_name_suffix   => 'Loss of heterozygosity',
     track_type_display    => 'Loss of heterozygosity',
     scale                 => 'linear',

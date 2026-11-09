@@ -118,7 +118,6 @@ sub getJBrowse2Object{
 
     $jbrowse2Object->{adapter}->{bigWigLocation} = {uri => $self->getStore()->getUrlTemplate(),locationType => "UriLocation"};
     #$jbrowse2Object->{adapter}->{bigWigLocation} = {uri => $uri,locationType => "UriLocation"};
-    $jbrowse2Object->{displays}->[0]->{displayId} = "wiggle_" . scalar($self);
     $jbrowse2Object->{displays}->[0]->{defaultRendering} = "xyplot";
     $jbrowse2Object->{displays}->[0]->{renderers} = {XYPlotRenderer => {type => "XYPlotRenderer",
                                                                         color => $self->getColor()
@@ -143,6 +142,18 @@ use strict;
 sub getJBrowse2Object{
     my $self = shift;
     my $jbrowse2Object = $self->SUPER::getJBrowse2Object(1);
+}
+
+
+# DNA-seq raw coverage and LOH: opt into a JBrowse 2 object exactly as ::CNV does.
+package ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig::Coverage;
+use base qw(ApiCommonModel::Model::JBrowseTrackConfig::SingleCoverageTrackConfig);
+
+use strict;
+
+sub getJBrowse2Object{
+    my $self = shift;
+    return $self->SUPER::getJBrowse2Object(1);
 }
 
 

@@ -84,7 +84,6 @@ sub getJBrowse2Object{
 
     $jbrowse2Object->{adapter}->{gffGzLocation} = {uri => $uri, locationType => "UriLocation"};
     $jbrowse2Object->{adapter}->{index}->{location} = {uri => $indexLocation, locationType => "UriLocation"};
-    $jbrowse2Object->{displays}->[0]->{displayId} = "gff_" . scalar($self);
 
 	return $jbrowse2Object;
 }

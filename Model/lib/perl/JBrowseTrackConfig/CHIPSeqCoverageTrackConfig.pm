@@ -11,7 +11,7 @@ sub getConfigurationObject {
     return $self->getJBrowseObject();
   }
   elsif($self->{application_type} eq 'jbrowse2') {
-    return $self->getJBrowse2Object();
+    return $self->applyJBrowse2Contract($self->getJBrowse2Object());
   }
 
   elsif($self->{application_type} eq 'apollo') {

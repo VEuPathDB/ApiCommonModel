@@ -240,6 +240,9 @@ sub getJBrowse2Object {
     my $trackId = $self->getLabel();
 
     my $store = $self->getStore();
+    unless($store) {
+        die ref($self) . " '" . ($self->getLabel() // '') . "' has no jbrowse2 store\n";
+    }
     my $storeType = $store->getStoreType();
 
     # JBrowse 2 does not work with REST Store
@@ -276,7 +279,7 @@ sub getJBrowse2Object {
                          trackId => $trackId,
                          name => $name,
                          category => \@categoryHierarchy,
-                         adapter => { type => $storeType },
+                         adapter => { type => $storeType, %{$store->getJBrowse2Locations()} },
                          assemblyNames =>  [ $datasetConfig->getOrganismAbbrev() ],
                          displays => []
 
@@ -299,6 +302,82 @@ sub getApolloObject {
     die "Abstract method 'apollo' must be implemented by subclass";
 }
 
+# The JBrowse 2 track contract, applied once to every class's object so no subclass
+# can drift from it: trackId <abbrev>_<dataset>_<variant>, displayId <trackId>-<type>,
+# assemblyNames [<public abbrev>]. A JBrowse 1 shaped object is left for the validator.
+sub applyJBrowse2Contract {
+    my ($self, $object) = @_;
+
+    return $object unless(ref($object) eq 'HASH' && !exists($object->{storeClass}));
+
+    my $abbrev = $self->getPublicOrganismAbbrev();
+    my $trackId = $self->makeJBrowse2TrackId($abbrev);
+
+    $object->{trackId} = $trackId if(defined($trackId));
+    $object->{assemblyNames} = [$abbrev];
+
+    foreach my $display (@{$object->{displays} || []}) {
+        next unless(ref($display) eq 'HASH' && $display->{type} && defined($trackId));
+        $display->{displayId} = "${trackId}-$display->{type}";
+    }
+
+    return $object;
+}
+
+sub makeJBrowse2TrackId {
+    my ($self, $abbrev) = @_;
+
+    my $label = $self->getLabel();
+    return undef unless(defined($label) && length($label));
+
+    my $datasetConfig = $self->getDatasetConfigObj();
+    my $datasetName = $datasetConfig ? $datasetConfig->getDatasetName() : undef;
+
+    my $id = _trackIdToken($label);
+    if($datasetName && index($id, _trackIdToken($datasetName)) < 0) {
+        $id = _trackIdToken($datasetName) . "_$id";
+    }
+    $id = "${abbrev}_$id" if(defined($abbrev) && index($id, "${abbrev}_") != 0);
+
+    return $id;
+}
+
+sub _trackIdToken {
+    my ($text) = @_;
+    $text =~ s/\s+-\s+/_/g;
+    $text =~ s/[^A-Za-z0-9_.-]+/_/g;
+    $text =~ s/_{2,}/_/g;
+    $text =~ s/^[_.-]+|_+$//g;
+    return $text;
+}
+
+my %PUBLIC_ABBREV_CACHE;
+
+# The assembly is named for the PUBLIC abbrev; producers hand over the internal one.
+sub getPublicOrganismAbbrev {
+    my ($self) = @_;
+
+    my $datasetConfig = $self->getDatasetConfigObj();
+    my $internal = $datasetConfig ? $datasetConfig->getOrganismAbbrev() : undef;
+    return undef unless(defined($internal));
+
+    $PUBLIC_ABBREV_CACHE{$internal} = _readPublicOrganismAbbrev($internal)
+        unless(exists($PUBLIC_ABBREV_CACHE{$internal}));
+
+    return $PUBLIC_ABBREV_CACHE{$internal};
+}
+
+sub _readPublicOrganismAbbrev {
+    my ($internal) = @_;
+
+    my $file = "$ENV{GUS_HOME}/lib/jbrowse/auto_generated/$internal/datasetAndPresenterProps.conf";
+    open(my $fh, '<', $file) or die "Cannot read public abbrev for $internal from $file: $!";
+    while(my $line = <$fh>) {
+        return $1 if($line =~ /^organism::publicOrganismAbbrev=(\S+)/);
+    }
+    die "No organism::publicOrganismAbbrev in $file";
+}
+
 sub getConfigurationObject {
     my $self = shift;
     my $applicationType = $self->getApplicationType();
@@ -307,7 +386,7 @@ sub getConfigurationObject {
         return $self->getJBrowseObject();
     }
     elsif($applicationType eq 'jbrowse2') {
-        return $self->getJBrowse2Object();
+        return $self->applyJBrowse2Contract($self->getJBrowse2Object());
     }
 
     elsif($applicationType eq 'apollo') {
