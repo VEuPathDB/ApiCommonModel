@@ -2,9 +2,9 @@ use strict;
 use warnings;
 use Test::More tests => 22;
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use ApiCommonModel::Model::ApolloRelease::Portal;
+use ApiCommonModel::Model::JBrowseConfigRelease::Portal;
 
-my $P = 'ApiCommonModel::Model::ApolloRelease::Portal';
+my $P = 'ApiCommonModel::Model::JBrowseConfigRelease::Portal';
 
 # Filler no test is about, defaulted here so each case shows only the fields it
 # actually exercises.

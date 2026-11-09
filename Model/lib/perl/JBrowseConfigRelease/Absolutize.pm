@@ -1,4 +1,4 @@
-package ApiCommonModel::Model::ApolloRelease::Absolutize;
+package ApiCommonModel::Model::JBrowseConfigRelease::Absolutize;
 
 use strict;
 use warnings;

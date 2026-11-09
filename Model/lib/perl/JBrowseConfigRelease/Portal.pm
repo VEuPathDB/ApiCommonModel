@@ -1,4 +1,4 @@
-package ApiCommonModel::Model::ApolloRelease::Portal;
+package ApiCommonModel::Model::JBrowseConfigRelease::Portal;
 
 use strict;
 use warnings;

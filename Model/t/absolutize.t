@@ -2,9 +2,9 @@ use strict;
 use warnings;
 use Test::More;
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use ApiCommonModel::Model::ApolloRelease::Absolutize;
+use ApiCommonModel::Model::JBrowseConfigRelease::Absolutize;
 
-my $A = 'ApiCommonModel::Model::ApolloRelease::Absolutize';
+my $A = 'ApiCommonModel::Model::JBrowseConfigRelease::Absolutize';
 my $BASE = 'https://veupathdb.org';
 
 is($A->rewrite('"urlTemplate":"/a/service/jbrowse/store?data=x"', $BASE),

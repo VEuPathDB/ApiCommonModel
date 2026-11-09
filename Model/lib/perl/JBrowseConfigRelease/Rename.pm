@@ -1,4 +1,4 @@
-package ApiCommonModel::Model::ApolloRelease::Rename;
+package ApiCommonModel::Model::JBrowseConfigRelease::Rename;
 
 use strict;
 use warnings;

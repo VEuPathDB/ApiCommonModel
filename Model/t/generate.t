@@ -4,9 +4,9 @@ use Test::More;
 use File::Temp qw(tempdir);
 use JSON;
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use ApiCommonModel::Model::ApolloRelease::Generate;
+use ApiCommonModel::Model::JBrowseConfigRelease::Generate;
 
-my $G = 'ApiCommonModel::Model::ApolloRelease::Generate';
+my $G = 'ApiCommonModel::Model::JBrowseConfigRelease::Generate';
 my $BASE = 'https://veupathdb.org';
 
 # --- localNameForInclude ---
@@ -374,7 +374,7 @@ like($results->{errors}{explodes}, qr/simulated failure/, 'the error text is kep
   });
   is(scalar(grep { $_->{useAsRefSeqStore} } @{$specific->{tracks}}), 0,
      'and no useAsRefSeqStore track survives into the file');
-  is($specific->{tracks}[0]{urlTemplate}, 'https://veupathdb.org/a/service/jbrowse/store?data=y',
+  is($specific->{tracks}[0]{urlTemplate}, 'https://veupathdb.org/a/service/jbrowse-apollo/store?data=y',
      'the surviving track was absolutized on the way out');
 
   my $refSeqs = decode_json(do {

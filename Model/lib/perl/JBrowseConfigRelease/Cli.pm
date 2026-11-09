@@ -1,14 +1,14 @@
-package ApiCommonModel::Model::ApolloRelease::Cli;
+package ApiCommonModel::Model::JBrowseConfigRelease::Cli;
 
 use strict;
 use warnings;
 
 use Getopt::Long qw(GetOptionsFromArray);
 
-use ApiCommonModel::Model::ApolloRelease::Rename;
-use ApiCommonModel::Model::ApolloRelease::Report;
+use ApiCommonModel::Model::JBrowseConfigRelease::Rename;
+use ApiCommonModel::Model::JBrowseConfigRelease::Report;
 
-# Everything in createApolloReleasePackage decidable without a database, a
+# Everything in createJBrowseConfigRelease decidable without a database, a
 # subprocess or a filesystem.  A Perl script cannot be `use`d by a test without
 # running its main(), so logic left in Model/bin/ is never exercised until a
 # release engineer runs it against prod -- which is how the tool this replaces
@@ -33,8 +33,8 @@ use ApiCommonModel::Model::ApolloRelease::Report;
 # component database reload cannot trip it.
 use constant PORTAL_FLOOR => 500;
 
-my $RENAME = 'ApiCommonModel::Model::ApolloRelease::Rename';
-my $REPORT = 'ApiCommonModel::Model::ApolloRelease::Report';
+my $RENAME = 'ApiCommonModel::Model::JBrowseConfigRelease::Rename';
+my $REPORT = 'ApiCommonModel::Model::JBrowseConfigRelease::Report';
 
 my @ENVIRONMENTS = qw(qa prod);
 
@@ -42,7 +42,7 @@ my @ENVIRONMENTS = qw(qa prod);
 
 sub usage {
   return <<'USAGE';
-createApolloReleasePackage --build N (--report | --generate) [options]
+createJBrowseConfigRelease --build N (--report | --generate) [options]
 
 Builds the JBrowse configuration and sequence data that Apollo, the genome
 curation platform, serves for a VEuPathDB release -- and the command files a

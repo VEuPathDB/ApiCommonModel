@@ -1,4 +1,4 @@
-package ApiCommonModel::Model::ApolloRelease::Generate;
+package ApiCommonModel::Model::JBrowseConfigRelease::Generate;
 
 use strict;
 use warnings;
@@ -8,11 +8,11 @@ use File::Path qw(make_path);
 use File::Copy qw(cp);
 use File::Temp;
 
-use ApiCommonModel::Model::ApolloRelease::Absolutize;
-use ApiCommonModel::Model::ApolloRelease::JbrowsePath;
+use ApiCommonModel::Model::JBrowseConfigRelease::Absolutize;
+use ApiCommonModel::Model::JBrowseConfigRelease::JbrowsePath;
 
-my $ABS  = 'ApiCommonModel::Model::ApolloRelease::Absolutize';
-my $JBP  = 'ApiCommonModel::Model::ApolloRelease::JbrowsePath';
+my $ABS  = 'ApiCommonModel::Model::JBrowseConfigRelease::Absolutize';
+my $JBP  = 'ApiCommonModel::Model::JBrowseConfigRelease::JbrowsePath';
 
 # canonical() so two runs produce byte-identical files: the release is diffed
 # against the previous one by hand, and hash order noise would bury the real
