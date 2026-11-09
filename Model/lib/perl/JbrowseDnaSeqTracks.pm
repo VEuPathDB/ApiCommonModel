@@ -113,6 +113,10 @@ my $DENSITY_GROUP_CLASS = 'ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWi
 sub processOrganism {
   my ($organismAbbrev, $projectName, $buildNumber, $webservicesDir, $applicationType, $jbrowseUtil, $result) = @_;
 
+  # JBrowse 2 serves DNA-seq only as the merged VCF (JbrowseOrgSpecificNaTracks); the
+  # per-isolate coverage and density tracks are JBrowse 1 only (decision 0008).
+  return if($applicationType eq 'jbrowse2');
+
   my $datasetProps = $jbrowseUtil->getDatasetProperties();
 
   my $publicAbbrevForFiles = $datasetProps->{organism}->{organismNameForFiles};
