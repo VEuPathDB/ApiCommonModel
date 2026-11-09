@@ -1,0 +1,41 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use lib "$ENV{GUS_HOME}/lib/perl";
+
+use JSON;
+use ApiCommonModel::Model::JBrowseConfigRelease::Validate;
+
+my $V = 'ApiCommonModel::Model::JBrowseConfigRelease::Validate';
+
+my $file = shift @ARGV;
+unless(defined($file) && !@ARGV && $file ne '--help' && $file ne '-h') {
+  print STDERR "usage: validateJBrowseConfig <config.json>\n"
+             . "Checks a JBrowse 2 v5 config against the VEuPathDB track contract.\n"
+             . "Exit 0: no violations; 1: violations (listed); 2: usage or unreadable input.\n";
+  exit 2;
+}
+
+my $text = do {
+  open(my $fh, '<', $file) or do { print STDERR "validateJBrowseConfig: cannot read $file: $!\n"; exit 2 };
+  local $/;
+  <$fh>;
+};
+
+my $config = eval { decode_json($text) };
+unless(ref($config) eq 'HASH') {
+  print STDERR "validateJBrowseConfig: $file is not a JSON object: " . ($@ || 'not an object') . "\n";
+  exit 2;
+}
+
+my $violations = $V->validate($config);
+my $tracks = ref($config->{tracks}) eq 'ARRAY' ? scalar(@{$config->{tracks}}) : 0;
+
+print "$_->{rule}\t$_->{where}\t$_->{message}\n" foreach(@$violations);
+
+my $counts = $V->countByRule($violations);
+print STDERR "tracks: $tracks  violations: " . scalar(@$violations) . "\n";
+print STDERR "  $_: $counts->{$_}\n" foreach(sort keys %$counts);
+
+exit(@$violations ? 1 : 0);

@@ -1,0 +1,199 @@
+package ApiCommonModel::Model::JBrowseConfigRelease::Validate;
+
+use strict;
+use warnings;
+
+# Checks a decoded JBrowse 2 v5 config against the VEuPathDB track contract
+# (decision 0007). Pure: no database, no filesystem. Returns every violation
+# rather than stopping at the first, so one run is the whole to-do list.
+
+our $TRACK_ID_PATTERN = qr/^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+our @STORE_PREFIXES = ('/a/service/jbrowse/store?data=', '/a/service/jbrowse/auxiliary?data=');
+
+our %TRACK_TYPES = map { $_ => 1 } qw(
+  FeatureTrack QuantitativeTrack MultiQuantitativeTrack VariantTrack
+  AlignmentsTrack ReferenceSequenceTrack
+);
+
+our %DISPLAY_TYPES = map { $_ => 1 } qw(
+  LinearBasicDisplay LinearWiggleDisplay MultiLinearWiggleDisplay
+  LinearVariantDisplay LinearMarkDisplay LinearAlignmentsDisplay
+  LinearReferenceSequenceDisplay
+);
+
+our %ADAPTER_TYPES = map { $_ => 1 } qw(
+  BigWigAdapter MultiWiggleAdapter Gff3TabixAdapter BEDTabixAdapter
+  VcfTabixAdapter BamAdapter IndexedFastaAdapter
+);
+
+# The location slots an adapter cannot load without.
+our %REQUIRED_LOCATIONS = (
+  BigWigAdapter       => [['bigWigLocation']],
+  Gff3TabixAdapter    => [['gffGzLocation'], ['index', 'location']],
+  BEDTabixAdapter     => [['bedGzLocation'], ['index', 'location']],
+  VcfTabixAdapter     => [['vcfGzLocation'], ['index', 'location']],
+  BamAdapter          => [['bamLocation'],   ['index', 'location']],
+  IndexedFastaAdapter => [['fastaLocation'], ['faiLocation']],
+  MultiWiggleAdapter  => [['subadapters']],
+);
+
+our @RULES = qw(
+  jbrowse1-shape track-id-missing track-id-format track-id-duplicate track-id-prefix
+  track-type assembly-names display-type display-id adapter-type adapter-location
+  location-url assembly-name
+);
+
+sub validate {
+  my ($class, $config) = @_;
+
+  my @violations;
+  my $add = sub {
+    my ($rule, $where, $message) = @_;
+    push @violations, {rule => $rule, where => $where, message => $message};
+  };
+
+  my %assemblyNames;
+  my $assemblies = ref($config->{assemblies}) eq 'ARRAY' ? $config->{assemblies} : [];
+  foreach my $i (0 .. $#$assemblies) {
+    my $assembly = $assemblies->[$i];
+    my $name = $assembly->{name};
+    my $where = "assemblies[$i]" . (defined($name) ? " $name" : '');
+
+    if(!defined($name) || $name !~ $TRACK_ID_PATTERN) {
+      $add->('assembly-name', $where, 'assembly name missing or not an abbrev: ' . _show($name));
+    }
+    else {
+      $assemblyNames{$name} = 1;
+    }
+
+    my $adapter = ref($assembly->{sequence}) eq 'HASH' ? $assembly->{sequence}{adapter} : undef;
+    $class->_checkAdapter($adapter, $where, $add);
+  }
+
+  my %seen;
+  my $tracks = ref($config->{tracks}) eq 'ARRAY' ? $config->{tracks} : [];
+  foreach my $i (0 .. $#$tracks) {
+    my $track = $tracks->[$i];
+    my $trackId = ref($track) eq 'HASH' ? $track->{trackId} : undef;
+    my $where = "tracks[$i]" . (defined($trackId) ? " $trackId" : '');
+
+    unless(ref($track) eq 'HASH') {
+      $add->('track-id-missing', $where, 'track is not an object: ' . _show($track));
+      next;
+    }
+
+    my @jbrowse1Keys = grep { exists($track->{$_}) } qw(storeClass urlTemplate urlTemplates);
+    $add->('jbrowse1-shape', $where, 'JBrowse 1 keys present: ' . join(', ', @jbrowse1Keys))
+      if(@jbrowse1Keys);
+
+    if(!defined($trackId) || $trackId eq '') {
+      $add->('track-id-missing', $where, 'no trackId');
+    }
+    else {
+      $add->('track-id-format', $where, "trackId does not match $TRACK_ID_PATTERN")
+        unless($trackId =~ $TRACK_ID_PATTERN);
+      $add->('track-id-duplicate', $where, 'trackId already used by ' . $seen{$trackId})
+        if($seen{$trackId});
+      $seen{$trackId} ||= "tracks[$i]";
+    }
+
+    my $type = $track->{type};
+    $add->('track-type', $where, 'track type not in the v5 allowlist: ' . _show($type))
+      unless(defined($type) && $TRACK_TYPES{$type});
+
+    my $names = $track->{assemblyNames};
+    my @names = ref($names) eq 'ARRAY' ? @$names : ();
+    if(!@names || grep { !defined($_) || !$assemblyNames{$_} } @names) {
+      $add->('assembly-names', $where,
+             'assemblyNames must name a declared assembly: ' . _show($names));
+    }
+    elsif(defined($trackId) && !grep { index($trackId, "${_}_") == 0 } @names) {
+      $add->('track-id-prefix', $where, "trackId does not start with <abbrev>_ ($names[0]_)");
+    }
+
+    my $displays = ref($track->{displays}) eq 'ARRAY' ? $track->{displays} : [];
+    foreach my $d (0 .. $#$displays) {
+      my $display = $displays->[$d];
+      my $displayType = ref($display) eq 'HASH' ? $display->{type} : undef;
+      my $dwhere = "$where displays[$d]";
+
+      $add->('display-type', $dwhere, 'display type not in the v5 allowlist: ' . _show($displayType))
+        unless(defined($displayType) && $DISPLAY_TYPES{$displayType});
+
+      next unless(defined($trackId) && defined($displayType));
+      my $expected = "${trackId}-$displayType";
+      $add->('display-id', $dwhere, 'displayId ' . _show($display->{displayId}) . " is not $expected")
+        unless(defined($display->{displayId}) && $display->{displayId} eq $expected);
+    }
+
+    $class->_checkAdapter($track->{adapter}, $where, $add);
+  }
+
+  return \@violations;
+}
+
+sub _checkAdapter {
+  my ($class, $adapter, $where, $add) = @_;
+
+  unless(ref($adapter) eq 'HASH') {
+    $add->('adapter-type', $where, 'no adapter');
+    return;
+  }
+
+  my $type = $adapter->{type};
+  $add->('adapter-type', $where, 'adapter type not in the v5 allowlist: ' . _show($type))
+    unless(defined($type) && $ADAPTER_TYPES{$type});
+
+  foreach my $path (@{$REQUIRED_LOCATIONS{$type || ''} || []}) {
+    my $value = $adapter;
+    $value = ref($value) eq 'HASH' ? $value->{$_} : undef foreach(@$path);
+    $add->('adapter-location', $where, "$type has no " . join('.', @$path))
+      unless(defined($value) && (ref($value) ne 'ARRAY' || @$value));
+  }
+
+  foreach my $uri (_locationUris($adapter)) {
+    next if(grep { index($uri, $_) == 0 } @STORE_PREFIXES);
+    $add->('location-url', $where, "location is not a site-relative store URL: $uri");
+  }
+
+  foreach my $sub (@{ref($adapter->{subadapters}) eq 'ARRAY' ? $adapter->{subadapters} : []}) {
+    $class->_checkAdapter($sub, "$where subadapter " . _show(ref($sub) eq 'HASH' ? $sub->{name} : undef), $add);
+  }
+}
+
+# Every {uri} under an adapter, not descending into subadapters (checked on their own).
+sub _locationUris {
+  my ($node) = @_;
+
+  my @uris;
+  if(ref($node) eq 'HASH') {
+    push @uris, $node->{uri} if(defined($node->{uri}) && !ref($node->{uri}));
+    foreach my $key (sort keys %$node) {
+      next if($key eq 'subadapters');
+      push @uris, _locationUris($node->{$key}) if(ref($node->{$key}));
+    }
+  }
+  elsif(ref($node) eq 'ARRAY') {
+    push @uris, _locationUris($_) foreach(@$node);
+  }
+  return @uris;
+}
+
+sub countByRule {
+  my ($class, $violations) = @_;
+
+  my %counts;
+  $counts{$_->{rule}}++ foreach(@$violations);
+  return \%counts;
+}
+
+sub _show {
+  my ($value) = @_;
+  return 'undef' unless(defined($value));
+  return "'$value'" unless(ref($value));
+  return ref($value) eq 'ARRAY'
+    ? '[' . join(', ', map { _show($_) } @$value) . ']'
+    : ref($value);
+}
+
+1;
