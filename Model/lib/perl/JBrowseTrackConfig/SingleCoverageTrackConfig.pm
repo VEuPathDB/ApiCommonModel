@@ -118,7 +118,6 @@ sub getJBrowse2Object{
 
     $jbrowse2Object->{adapter}->{bigWigLocation} = {uri => $self->getStore()->getUrlTemplate(),locationType => "UriLocation"};
     #$jbrowse2Object->{adapter}->{bigWigLocation} = {uri => $uri,locationType => "UriLocation"};
-    $jbrowse2Object->{displays}->[0]->{displayId} = "wiggle_" . scalar($self);
     $jbrowse2Object->{displays}->[0]->{defaultRendering} = "xyplot";
     $jbrowse2Object->{displays}->[0]->{renderers} = {XYPlotRenderer => {type => "XYPlotRenderer",
                                                                         color => $self->getColor()

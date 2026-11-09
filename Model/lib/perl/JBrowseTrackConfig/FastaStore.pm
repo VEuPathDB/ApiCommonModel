@@ -24,7 +24,7 @@ sub new {
     }
     else {
         #die "No GFF Equivalent For JBrowse2 YET";
-        $self->setStoreType("IndexedFasta");
+        $self->setStoreType("IndexedFastaAdapter");
     }
 
     return $self;

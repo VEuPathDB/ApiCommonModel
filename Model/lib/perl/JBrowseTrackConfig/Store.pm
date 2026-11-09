@@ -62,13 +62,40 @@ sub makeUrlTemplate {
     die "TODO:  make apollo work";
   }
   elsif($applicationType eq 'jbrowse2' || $applicationType eq 'apollo3') {
-    $urlTemplate = "${projectName}/build-${buildNumber}/$relativePathToFile";
+    # The store service prepends <project>/build-<n>/ itself, so the path stays relative to it.
+    $urlTemplate = $JBROWSE_STORE_ENDPOINT . uri_escape_utf8($relativePathToFile, '^A-Za-z0-9\-._~/');
   }
   else {
     die "Unsupported application type for Store: $applicationType";
   }
   return $urlTemplate;
 }
+
+my %JBROWSE2_LOCATION_KEYS = (
+  BigWigAdapter       => {data => 'bigWigLocation'},
+  Gff3TabixAdapter    => {data => 'gffGzLocation', index => '.tbi'},
+  BEDTabixAdapter     => {data => 'bedGzLocation', index => '.tbi'},
+  VcfTabixAdapter     => {data => 'vcfGzLocation', index => '.tbi'},
+  BamAdapter          => {data => 'bamLocation',   index => '.bai'},
+  IndexedFastaAdapter => {data => 'fastaLocation', fai => '.fai'},
+);
+
+# Adapter location slots for a single-file store; empty when the store has no file
+# (multi-file adapters such as MultiWiggleAdapter build their own subadapters).
+sub getJBrowse2Locations {
+  my ($self) = @_;
+
+  my $url = $self->getUrlTemplate();
+  my $keys = $JBROWSE2_LOCATION_KEYS{$self->getStoreType() || ''};
+  return {} unless($url && $keys);
+
+  my $locations = {$keys->{data} => _uriLocation($url)};
+  $locations->{index} = {location => _uriLocation($url . $keys->{index})} if($keys->{index});
+  $locations->{faiLocation} = _uriLocation($url . $keys->{fai}) if($keys->{fai});
+  return $locations;
+}
+
+sub _uriLocation { return {uri => $_[0], locationType => 'UriLocation'} }
 
 
 1;

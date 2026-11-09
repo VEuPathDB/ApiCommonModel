@@ -20,7 +20,7 @@ sub makeUrlTemplate {
         return $JBROWSE_AUXILIARY_ENDPOINT . uri_escape_utf8($relativePathToFile);
     }
     elsif($applicationType eq 'jbrowse2' || $applicationType eq 'apollo3') {
-        return "auxiliary/$relativePathToFile";
+        return $JBROWSE_AUXILIARY_ENDPOINT . uri_escape_utf8($relativePathToFile, '^A-Za-z0-9\-._~/');
     }
     else {
         die "Unsupported application type for AuxiliaryGFFStore: $applicationType";
