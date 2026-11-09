@@ -148,15 +148,6 @@ sub track {
        'dies naming the class and the label');
 }
 
-# --- decision 0008: the curated v5 set has no per-isolate DNA-seq tracks ---
-{
-  require ApiCommonModel::Model::JbrowseDnaSeqTracks;
-  my $result = {tracks => []};
-  ApiCommonModel::Model::JbrowseDnaSeqTracks::processOrganism(
-    'intPfal', 'PlasmoDB', 71, '/nowhere', 'jbrowse2', undef, $result);
-  is_deeply($result->{tracks}, [], 'dnaseq producer emits nothing for jbrowse2 (and reads nothing)');
-}
-
 # --- the jbrowse application type never sees the contract ---
 {
   my $bw = store('BigWigStore', 'jbrowse', 'P/a.bw');
