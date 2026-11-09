@@ -2,9 +2,9 @@ use strict;
 use warnings;
 use Test::More tests => 27;
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use ApiCommonModel::Model::ApolloRelease::Apollo;
+use ApiCommonModel::Model::JBrowseConfigRelease::Apollo;
 
-my $A = 'ApiCommonModel::Model::ApolloRelease::Apollo';
+my $A = 'ApiCommonModel::Model::JBrowseConfigRelease::Apollo';
 
 my $live = $A->loadFromFile("Model/t/fixtures/apollo.json");
 

@@ -2,11 +2,11 @@ use strict;
 use warnings;
 use Test::More;
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use ApiCommonModel::Model::ApolloRelease::JbrowsePath;
-use ApiCommonModel::Model::ApolloRelease::Absolutize;
+use ApiCommonModel::Model::JBrowseConfigRelease::JbrowsePath;
+use ApiCommonModel::Model::JBrowseConfigRelease::Absolutize;
 
-my $J = 'ApiCommonModel::Model::ApolloRelease::JbrowsePath';
-my $A = 'ApiCommonModel::Model::ApolloRelease::Absolutize';
+my $J = 'ApiCommonModel::Model::JBrowseConfigRelease::JbrowsePath';
+my $A = 'ApiCommonModel::Model::JBrowseConfigRelease::Absolutize';
 my $BASE = 'https://veupathdb.org';
 
 # --- the bulk: a "jbrowse" path segment moves ---

@@ -3,9 +3,9 @@ use warnings;
 use Test::More;
 use File::Temp qw(tempdir);
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use ApiCommonModel::Model::ApolloRelease::Commands;
+use ApiCommonModel::Model::JBrowseConfigRelease::Commands;
 
-my $C = 'ApiCommonModel::Model::ApolloRelease::Commands';
+my $C = 'ApiCommonModel::Model::JBrowseConfigRelease::Commands';
 
 sub slurp {
   my ($path) = @_;

@@ -3,9 +3,9 @@ use warnings;
 use Test::More tests => 28;
 use File::Temp qw(tempdir);
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use ApiCommonModel::Model::ApolloRelease::Rename;
+use ApiCommonModel::Model::JBrowseConfigRelease::Rename;
 
-my $R = 'ApiCommonModel::Model::ApolloRelease::Rename';
+my $R = 'ApiCommonModel::Model::JBrowseConfigRelease::Rename';
 
 my $dir = tempdir(CLEANUP => 1);
 

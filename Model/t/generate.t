@@ -4,9 +4,9 @@ use Test::More;
 use File::Temp qw(tempdir);
 use JSON;
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use ApiCommonModel::Model::ApolloRelease::Generate;
+use ApiCommonModel::Model::JBrowseConfigRelease::Generate;
 
-my $G = 'ApiCommonModel::Model::ApolloRelease::Generate';
+my $G = 'ApiCommonModel::Model::JBrowseConfigRelease::Generate';
 my $BASE = 'https://veupathdb.org';
 
 # --- localNameForInclude ---

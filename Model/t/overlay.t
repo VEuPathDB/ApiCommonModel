@@ -3,9 +3,9 @@ use warnings;
 use Test::More tests => 18;
 use FindBin;
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use ApiCommonModel::Model::ApolloRelease::Overlay;
+use ApiCommonModel::Model::JBrowseConfigRelease::Overlay;
 
-my $O = 'ApiCommonModel::Model::ApolloRelease::Overlay';
+my $O = 'ApiCommonModel::Model::JBrowseConfigRelease::Overlay';
 
 my $text = <<'OVERLAY';
 # comment line, ignored

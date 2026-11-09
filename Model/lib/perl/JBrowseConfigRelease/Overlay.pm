@@ -1,4 +1,4 @@
-package ApiCommonModel::Model::ApolloRelease::Overlay;
+package ApiCommonModel::Model::JBrowseConfigRelease::Overlay;
 
 use strict;
 use warnings;

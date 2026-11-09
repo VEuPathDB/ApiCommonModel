@@ -3,9 +3,9 @@ use warnings;
 use Test::More;
 use File::Temp qw(tempdir);
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use ApiCommonModel::Model::ApolloRelease::Cli;
+use ApiCommonModel::Model::JBrowseConfigRelease::Cli;
 
-my $C = 'ApiCommonModel::Model::ApolloRelease::Cli';
+my $C = 'ApiCommonModel::Model::JBrowseConfigRelease::Cli';
 
 # --- option parsing and the two phases ---
 
@@ -577,7 +577,7 @@ sub _p {
 # --- the installed script answers --help with nothing set ---
 
 {
-  my $script = "$ENV{GUS_HOME}/bin/createApolloReleasePackage";
+  my $script = "$ENV{GUS_HOME}/bin/createJBrowseConfigRelease";
   ok(-x $script, 'the CLI is installed and executable');
 
   my $help = `env -u APOLLO_API_USER -u APOLLO_API_PASS -u GUS_HOME PERL5LIB=$ENV{GUS_HOME}/lib/perl $script --help 2>&1`;

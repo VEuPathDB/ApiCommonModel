@@ -2,9 +2,9 @@ use strict;
 use warnings;
 use Test::More;
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use ApiCommonModel::Model::ApolloRelease::Report;
+use ApiCommonModel::Model::JBrowseConfigRelease::Report;
 
-my $R = 'ApiCommonModel::Model::ApolloRelease::Report';
+my $R = 'ApiCommonModel::Model::JBrowseConfigRelease::Report';
 
 # A mixed result shaped like a real build: a large routine `update` bucket, two
 # renames, an annotated prune next to a harmless one, an approved add next to an

@@ -2,16 +2,16 @@ use strict;
 use warnings;
 use Test::More tests => 38;
 use lib $ENV{GUS_HOME} . "/lib/perl";
-use ApiCommonModel::Model::ApolloRelease::Portal;
-use ApiCommonModel::Model::ApolloRelease::Apollo;
-use ApiCommonModel::Model::ApolloRelease::Overlay;
-use ApiCommonModel::Model::ApolloRelease::Reconcile;
+use ApiCommonModel::Model::JBrowseConfigRelease::Portal;
+use ApiCommonModel::Model::JBrowseConfigRelease::Apollo;
+use ApiCommonModel::Model::JBrowseConfigRelease::Overlay;
+use ApiCommonModel::Model::JBrowseConfigRelease::Reconcile;
 
-my $R = 'ApiCommonModel::Model::ApolloRelease::Reconcile';
+my $R = 'ApiCommonModel::Model::JBrowseConfigRelease::Reconcile';
 
-my $portal  = ApiCommonModel::Model::ApolloRelease::Portal->loadFromFile("Model/t/fixtures/portal.json");
-my $live    = ApiCommonModel::Model::ApolloRelease::Apollo->loadFromFile("Model/t/fixtures/apollo.json");
-my $overlay = ApiCommonModel::Model::ApolloRelease::Overlay->parseString("remove hsapREF # host genome\n");
+my $portal  = ApiCommonModel::Model::JBrowseConfigRelease::Portal->loadFromFile("Model/t/fixtures/portal.json");
+my $live    = ApiCommonModel::Model::JBrowseConfigRelease::Apollo->loadFromFile("Model/t/fixtures/apollo.json");
+my $overlay = ApiCommonModel::Model::JBrowseConfigRelease::Overlay->parseString("remove hsapREF # host genome\n");
 
 # No renames supplied: cneoJEC21 and cglaCBS138 are unmatched, so both are prunes.
 my $r = $R->reconcile($portal, $live, $overlay, {});
@@ -47,7 +47,7 @@ ok(!$prune2{cneoJEC21} && !$add2{cdenJEC21},
 
 is(scalar(@{$r2->{rename}}), 1, 'and produces exactly one rename entry');
 
-my $overlayWithPrune = ApiCommonModel::Model::ApolloRelease::Overlay->parseString(
+my $overlayWithPrune = ApiCommonModel::Model::JBrowseConfigRelease::Overlay->parseString(
   "remove cglaCBS138 # renamed to nglaCBS138, zero annotations\n");
 my $r3 = $R->reconcile($portal, $live, $overlayWithPrune, {});
 my ($cgla) = grep { $_->{abbrev} eq 'cglaCBS138' } @{$r3->{prune_candidate}};
@@ -156,7 +156,7 @@ like($@, qr/rename target tgonME49 is already in Apollo; that is a merge, not a 
 
 is(scalar(@{$r->{redundant_overlay}}), 0, 'a fully-effective overlay reports nothing redundant');
 
-my $noisyOverlay = ApiCommonModel::Model::ApolloRelease::Overlay->parseString(
+my $noisyOverlay = ApiCommonModel::Model::JBrowseConfigRelease::Overlay->parseString(
     "add tgonME49 # already live, left over from last release\n"
   . "remove zzzGhost # organism nobody has heard of\n");
 my $r4 = $R->reconcile($portal, $live, $noisyOverlay, {});
@@ -168,7 +168,7 @@ is($redundant{tgonME49}{reason}, 'already live, left over from last release',
 
 # A rename consumes BOTH abbrevs, disarming an overlay line naming either end.
 # Neither shows up in any other bucket, so this is the only place they surface.
-my $renameShadowedOverlay = ApiCommonModel::Model::ApolloRelease::Overlay->parseString(
+my $renameShadowedOverlay = ApiCommonModel::Model::JBrowseConfigRelease::Overlay->parseString(
     "add cdenJEC21 # approved before we knew it was a rename\n"
   . "remove cneoJEC21 # thought it was gone; it was reclassified\n");
 my $r6 = $R->reconcile($portal, $live, $renameShadowedOverlay, { cneoJEC21 => 'cdenJEC21' });

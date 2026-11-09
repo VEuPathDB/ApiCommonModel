@@ -1,4 +1,4 @@
-package ApiCommonModel::Model::ApolloRelease::JbrowsePath;
+package ApiCommonModel::Model::JBrowseConfigRelease::JbrowsePath;
 
 use strict;
 use warnings;

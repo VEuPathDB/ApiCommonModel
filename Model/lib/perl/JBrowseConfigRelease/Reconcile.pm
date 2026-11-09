@@ -1,9 +1,9 @@
-package ApiCommonModel::Model::ApolloRelease::Reconcile;
+package ApiCommonModel::Model::JBrowseConfigRelease::Reconcile;
 
 use strict;
 use warnings;
 
-use ApiCommonModel::Model::ApolloRelease::Portal;
+use ApiCommonModel::Model::JBrowseConfigRelease::Portal;
 
 # Pure set logic over the three inputs.  Produces five buckets:
 #
@@ -71,7 +71,7 @@ sub reconcile {
 
     # In Apollo but failing the criteria: a decision made once, reported so
     # nobody "fixes" it, and so a newly-demoted organism becomes visible.
-    unless (ApiCommonModel::Model::ApolloRelease::Portal->qualifies($organism)) {
+    unless (ApiCommonModel::Model::JBrowseConfigRelease::Portal->qualifies($organism)) {
       push @{$result{exception}}, {
         abbrev           => $abbrev,
         apollo_id        => $apollo->{id},
@@ -103,7 +103,7 @@ sub reconcile {
     next if $overlay->{remove}{$abbrev};
 
     my $organism = $portal->{$abbrev};
-    next unless ApiCommonModel::Model::ApolloRelease::Portal->qualifies($organism)
+    next unless ApiCommonModel::Model::JBrowseConfigRelease::Portal->qualifies($organism)
              || $overlay->{add}{$abbrev};
 
     push @{$result{add_candidate}}, {
