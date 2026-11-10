@@ -181,6 +181,10 @@ sub processOrganism {
 
     push @{$result->{tracks}}, $uniqueMultiBigWigDensity if($uniqueMultiBigWigDensity); # ChipSeq are all unique
 
+    # JBrowse 2 has no density variant; ChIP-seq is one multi-wiggle per experiment there.
+    if ($technologyType eq 'ChIPSeq' && $applicationType eq 'jbrowse2') {
+      push @{$result->{tracks}}, $uniqueMultiBigWigXYPlot if($uniqueMultiBigWigXYPlot);
+    }
     if ($technologyType eq 'RNASeq') {
       push @{$result->{tracks}}, $multiBigWigDensity if($multiBigWigDensity);
       push @{$result->{tracks}}, $multiBigWigXYPlot if($multiBigWigXYPlot);

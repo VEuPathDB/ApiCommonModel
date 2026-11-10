@@ -21,7 +21,7 @@ sub new {
     }
     else {
         #die "No GFF Equivalent For JBrowse2 YET";
-        $self->setStoreType("BEDTabixAdapter");
+        $self->setStoreType("BedTabixAdapter");
     }
 
     return $self;

@@ -124,10 +124,10 @@ sub getJBrowse2Object {
   my $urlTemplates = $store->getUrlTemplates();
 
 
-  $jbrowseObject->{displays}->[0]->{type} = "MultiLinearWiggleDisplay";
-
-
-  $jbrowseObject->{displays}->[0]->{defaultRendering} = "multirowxy";
+  # MultiLinearWiggleDisplay is retired on v5: one LinearWiggleDisplay, a row per source.
+  $jbrowseObject->{displays}->[0]->{type} = "LinearWiggleDisplay";
+  $jbrowseObject->{displays}->[0]->{mark} = "bar";
+  $jbrowseObject->{displays}->[0]->{rows} = "source";
 
   foreach(@{$urlTemplates}) {
     my $name = $_->{name};
@@ -221,7 +221,8 @@ sub new {
 sub getJBrowse2Object {
   my ($self) = @_;
   my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
-  $jbrowse2Object->{displays}->[0]->{defaultRendering} = "multiline";
+  $jbrowse2Object->{displays}->[0]->{mark} = "line";
+  delete $jbrowse2Object->{displays}->[0]->{rows};
   my $label = $self->getLabel();
   $jbrowse2Object->{name} = $label;
   $jbrowse2Object->{metadata}{dataset} = $label;

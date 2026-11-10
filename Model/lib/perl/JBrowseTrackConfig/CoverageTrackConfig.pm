@@ -95,9 +95,8 @@ sub getJBrowse2Object{
       $minScore = 1;
     }
 
-    $jbrowse2Object->{displays}->[0]->{minScore} = $minScore;
-    $jbrowse2Object->{displays}->[0]->{maxScore} = $maxScore;
-    $jbrowse2Object->{displays}->[0]->{scaleType} = $scale;
+    $jbrowse2Object->{displays}->[0]->{encoding}->{y}->{scale} =
+        {type => $scale, domainMin => $minScore + 0, domainMax => $maxScore + 0};
 
     return $jbrowse2Object;
 }

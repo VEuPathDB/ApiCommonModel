@@ -30,11 +30,12 @@ sub new {
         $self->setColor("{gsnapIntronColorFromStrandAndScore}");
     }
     else {
-        # TODO
         $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
-	$self->setDisplayType("NeatCanvasFeatures/View/Track/NeatFeatures");
-        $self->setGlyph("JBrowse/View/FeatureGlyph/ProcessedTranscript");
-
+        $self->setTrackType("FeatureTrack");
+        $self->setDisplayType("LinearBasicDisplay");
+        $self->setTrackTypeDisplay("Predicted Intron Junctions");
+        $self->setId("RNA-Seq Evidence for Introns");
+        $self->setLabel("RNA-Seq Evidence for Introns");
     }
 
     $self->setStore($store);

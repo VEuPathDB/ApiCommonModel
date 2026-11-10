@@ -33,6 +33,9 @@ use ApiCommonModel::Model::JBrowseTrackConfig::EstTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::ClonedInsertEndsTrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::AuxiliaryGffTrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig;
+use ApiCommonModel::Model::JBrowseTrackConfig::GFFStore;
+use ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig;
 
 use Data::Dumper;
 
@@ -58,14 +61,14 @@ sub processOrganism {
   my $isAnnotated = ($orgHash->{isAnnotatedGenome});
   my $isReference = ($orgHash->{isReferenceStrain});
 
-  &addReferenceSequence($applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
-  &addScaffolds($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
-  &addCentromere($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
-  &addTransposableElements($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
-  &addMicrosatelliteSts($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
-  &addHaplotypeBlock($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
-  &addFeatureBindingSite($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
-  &addUnifiedMassSpec($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber);
+  &addReferenceSequence($applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev);
+  &addScaffolds($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev);
+  &addCentromere($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev);
+  &addTransposableElements($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev);
+  &addMicrosatelliteSts($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev);
+  &addHaplotypeBlock($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev);
+  &addFeatureBindingSite($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev);
+  &addUnifiedMassSpec($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev);
   &addMergedShortVariants($applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $webservicesDir, $organismAbbrev);
 
   #  &addSynteny($applicationType, $dbh, $result);
@@ -77,21 +80,21 @@ sub processOrganism {
 
   &addSynteny($applicationType, $dbh, $result, $organismAbbrev, $projectName);
 
-  &addChipChipTracks($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber,$nameForFileNames, $applicationType);
-  &addSmallNcRnaSeq($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result);
+  &addChipChipTracks($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber,$nameForFileNames, $applicationType, $organismAbbrev);
+  &addSmallNcRnaSeq($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result, $organismAbbrev);
 
-  &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
+  &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev);
 
-  &addTandemRepeats($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
-  &addRepeatMaskerRepeats($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
+  &addTandemRepeats($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev);
+  &addRepeatMaskerRepeats($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev);
 
   &addESTs($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev);
 
-  &addOrfs($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
+  &addOrfs($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev);
 
-  &addClonedInsertEnds($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber);
+  &addClonedInsertEnds($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev);
 
-  &addAuxiliaryUtrAnnotations($result, $nameForFileNames, $projectName, $buildNumber, $applicationType);
+  &addAuxiliaryUtrAnnotations($result, $nameForFileNames, $projectName, $buildNumber, $applicationType, $organismAbbrev);
 
   &addProteinExpressionMassSpec($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $webservicesDir);
   &addVCF($dbh, $result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType);
@@ -105,20 +108,20 @@ sub processOrganism {
       &addApolloGFF($dbh, $result, $organismAbbrev, $applicationType);
   }
 
-  &addMergedRnaSeq($result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber);
+  &addMergedRnaSeq($result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber, $applicationType);
 
-  &addLongReadRNASeq($result, $datasetProperties, $nameForFileNames, $webservicesDir, $projectName, $buildNumber, $applicationType);
+  &addLongReadRNASeq($result, $datasetProperties, $nameForFileNames, $webservicesDir, $projectName, $buildNumber, $applicationType, $organismAbbrev);
 
 
   # TODO:  need to set isReference 
   if($projectName eq 'FungiDB' && $isReference) {
-      &addAntismash($result, $nameForFileNames, $webservicesDir, $projectName, $applicationType, $buildNumber);
+      &addAntismash($result, $nameForFileNames, $webservicesDir, $projectName, $applicationType, $buildNumber, $organismAbbrev);
   }
 
 
   # other organism specific tracks
   if($organismAbbrev eq 'tcruCLBrenerEsmeraldo-like') {
-      &addCnvArray($result, $projectName, $applicationType, $webservicesDir, $nameForFileNames, $buildNumber);
+      &addCnvArray($result, $projectName, $applicationType, $webservicesDir, $nameForFileNames, $buildNumber, $organismAbbrev);
   }
   # TODO: Add back
   #if ($isAnnotated eq 'true'){
@@ -138,7 +141,10 @@ sub processOrganism {
   }
 
   my $orgPublicAbbrev = $strain{$organismAbbrev}->{public};
-  if ($isAnnotated eq 'true'){
+  if ($isAnnotated eq 'true' && $applicationType eq 'jbrowse2') {
+    &addJBrowse2GeneModels($result, $organismAbbrev, $projectName, $buildNumber, $nameForFileNames);
+  }
+  elsif ($isAnnotated eq 'true'){
     &addGenes($result, $orgPublicAbbrev, $projectName, $nameForFileNames);
     &addGeneDensity($result, $orgPublicAbbrev, $projectName, $nameForFileNames);
   }
@@ -192,6 +198,7 @@ sub addVCF {
                                                                                                 key => "$keyName SNPs from VCF",
                                                                                                 label => "${sampleName} SNPs",
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev,
                                                                                                 attribution => $shortAttribution,
                                                                                                 summary => $summary,
                                                                                               })->getConfigurationObject();
@@ -215,15 +222,17 @@ sub addApolloGFF {
 
     my $track = ApiCommonModel::Model::JBrowseTrackConfig::ApolloGffTrackConfig->new({
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev,
 												summary => $apolloDescription,
                                                                                               })->getConfigurationObject();
-    push @{$result->{tracks}}, $track;
+    push @{$result->{tracks}}, $track if($track);
   }
 }
 
 sub addMergedRnaSeq {
-  my ($result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber) = @_;
+  my ($result, $datasetProperties, $projectName, $nameForFileNames, $organismAbbrev, $buildNumber, $applicationType) = @_;
   my @urlArray;
+  my @multiUrls;
   my $genomeName = $nameForFileNames;
 
   my $bigwigBaseDir = "/var/www/Common/apiSiteFilesMirror/webServices/${projectName}/build-${buildNumber}/${nameForFileNames}/bulkrnaseq/bigwig";
@@ -244,7 +253,28 @@ sub addMergedRnaSeq {
       my $shortBigwigName = "${dataset}_" . substr($bigwigName, 0, -3);
       my $bigwigUrl = "/a/service/jbrowse/store?data=" . uri_escape_utf8("${nameForFileNames}/bulkrnaseq/bigwig/${dataset}/mergedBigwigs/${bigwigName}");
       push @urlArray, { url => $bigwigUrl, name => $shortBigwigName, color => 'black' };
+      push @multiUrls, { relative_path_to_file => "${nameForFileNames}/bulkrnaseq/bigwig/${dataset}/mergedBigwigs/${bigwigName}",
+                         name => $shortBigwigName, color => 'black' };
     }
+  }
+
+  if (($applicationType || '') eq 'jbrowse2') {
+    return unless(@multiUrls);
+    my $track = ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig::XYLine->new({
+      application_type => $applicationType,
+      organism_abbrev  => $organismAbbrev,
+      project_name     => $projectName,
+      build_number     => $buildNumber,
+      multi_urls       => [sort { $a->{name} cmp $b->{name} } @multiUrls],
+      category         => "Transcriptomics",
+      subcategory      => "RNA-Seq",
+      label            => "Combined RNA-Seq",
+      dataset_name     => "Combined_RNA-Seq",
+      study_display_name => "Combined RNA-Seq",
+      has_alignment    => 0,
+    })->getConfigurationObject();
+    push @{$result->{tracks}}, $track if($track);
+    return;
   }
 
   if (@urlArray) {
@@ -301,6 +331,7 @@ sub addProteinExpressionMassSpec {
 																																								 build_number => $buildNumber,
 																																								 relative_path_to_file => $relativePathToGffFile,
 																																								 application_type => $applicationType,
+																																								 organism_abbrev => $organismAbbrev,
 																																								 key => "${datasetDisplayName}  MS/MS Peptides  $shortAttribution",
 																																								 label => "${dataset}",
 																																								 dataset_name => $dataset,
@@ -308,6 +339,7 @@ sub addProteinExpressionMassSpec {
 																																								 study_display_name => $datasetDisplayName,
 																																								 summary => $summary,
 																																								 application_type => $applicationType,
+																																								 organism_abbrev => $organismAbbrev,
 																																								 dataset_presenter_id => $datasetPresenterId,
 																																								})->getConfigurationObject();
 
@@ -316,7 +348,7 @@ sub addProteinExpressionMassSpec {
 }
 
 sub addSmallNcRnaSeq {
-  my($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result) = @_;
+  my($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result, $organismAbbrev) = @_;
 
    my $smallNcRnaSeqDatasets = $datasetProperties->{smallncrnaseq} ? $datasetProperties->{smallncrnaseq} : {};
    foreach my $dataset (keys %$smallNcRnaSeqDatasets){
@@ -349,6 +381,7 @@ sub addSmallNcRnaSeq {
                                                                                                 study_display_name => $datasetDisplayName,
                                                                                                 description => $summary,
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev,
                                                                                                 summary => $summary,
                                                                                                 #url_template => $bamUrl,
                                                                                                 label => "$sampleName Small Non-coding RNAs",
@@ -360,7 +393,7 @@ sub addSmallNcRnaSeq {
 
 
 sub addLowComplexity {
-  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
   my $track;
   my $relativePathToBedFile = "${nameForFileNames}/genomeAndProteome/bed/lowComplexity.bed.gz";
@@ -372,6 +405,7 @@ sub addLowComplexity {
 	 build_number => $buildNumber,
 	 relative_path_to_file => $relativePathToBedFile,
 	 application_type => $applicationType,
+	 organism_abbrev => $organismAbbrev,
 	 summary => $summary,
 	 key => "Low Complexity Regions",
 	 label => "Low Complexity Regions",
@@ -382,7 +416,7 @@ sub addLowComplexity {
 
 
 sub addTandemRepeats {
-  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
   my $track;
   my $relativePathToBedFile = "${nameForFileNames}/genomeAndProteome/bed/tandemRepeats.bed.gz";
@@ -393,6 +427,7 @@ sub addTandemRepeats {
 	 build_number => $buildNumber,
 	 relative_path_to_file => $relativePathToBedFile,
 	 application_type => $applicationType,
+	 organism_abbrev => $organismAbbrev,
 	 key => "Tandem Repeats",
 	 label => "Tandem Repeats",
          subcategory => "Sequence composition, complexity and repeats",
@@ -402,7 +437,7 @@ sub addTandemRepeats {
 }
 
 sub addRepeatMaskerRepeats {
-  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
   my $track;
   my $relativePathToBedFile = "${nameForFileNames}/genomeAndProteome/bed/blocked.seq.bed.gz";
@@ -413,6 +448,7 @@ sub addRepeatMaskerRepeats {
 	 build_number => $buildNumber,
 	 relative_path_to_file => $relativePathToBedFile,
 	 application_type => $applicationType,
+	 organism_abbrev => $organismAbbrev,
 	 key => "RepeatMasker Repeats",
 	 label => "RepeatMasker Repeats",
          subcategory => "Sequence composition, complexity and repeats",
@@ -423,7 +459,7 @@ sub addRepeatMaskerRepeats {
 
 
 sub addClonedInsertEnds {
-  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
   my $clonedInsertEndsDatasets = $datasetProperties->{clonedinsertends} ? $datasetProperties->{clonedinsertends} : {};
 
@@ -446,6 +482,7 @@ sub addClonedInsertEnds {
 	    build_number => $buildNumber,
 	    relative_path_to_file => $relativePathToGffFile,
 	    application_type => $applicationType,
+	    organism_abbrev => $organismAbbrev,
 	    key => $datasetDisplayName,
 	    label => $datasetDisplayName,
 	    subcategory => "Sequence assembly",
@@ -475,6 +512,7 @@ sub addESTs {
          build_number => $buildNumber,
          relative_path_to_file => $relativePathToGffFile,
          application_type => $applicationType,
+         organism_abbrev => $organismAbbrev,
          key => "EST Alignments",
          label => "EST Alignments",
          subcategory => "BLAT and Blast Alignments",
@@ -484,12 +522,13 @@ sub addESTs {
 }
 
 sub addReferenceSequence {
-  my ($applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my ($applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev) = @_;
 
   my $relativePathToFastaFile = "/a/service/jbrowse/store?data=" . $nameForFileNames . "/genomeAndProteome/fasta/genome.fasta";
 
   my $track = ApiCommonModel::Model::JBrowseTrackConfig::ReferenceSequenceTrackConfig->new({
     application_type      => $applicationType,
+    organism_abbrev => $organismAbbrev,
     project_name          => $projectName,
     build_number          => $buildNumber,
     relative_path_to_file => $relativePathToFastaFile,
@@ -501,7 +540,7 @@ sub addReferenceSequence {
 }
 
 sub addCentromere {
-  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev) = @_;
   my $hasCentromere = $datasetProps->{hasCentromere} ? $datasetProps->{hasCentromere} : {};
   if($hasCentromere == 1) {
     my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/centromere.gff.gz";
@@ -510,6 +549,7 @@ sub addCentromere {
                                                                                         build_number => $buildNumber,
                                                                                         relative_path_to_file => $relativePathToGffFile,
                                                                                         application_type => $applicationType,
+                                                                                        organism_abbrev => $organismAbbrev,
                                                                                       })->getConfigurationObject();
     push @{$result->{tracks}}, $track;
   };
@@ -517,7 +557,7 @@ sub addCentromere {
 
 
 sub addTransposableElements {
-  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev) = @_;
   my $hasTransposableElements = $datasetProps->{hasTransposableElements} ? $datasetProps->{hasTransposableElements} : 0;
   if($hasTransposableElements == 1) {
     my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/transposableElements.gff.gz";
@@ -526,6 +566,7 @@ sub addTransposableElements {
                                                                                        build_number          => $buildNumber,
                                                                                        relative_path_to_file => $relativePathToGffFile,
                                                                                        application_type      => $applicationType,
+                                                                                       organism_abbrev => $organismAbbrev,
                                                                                      })->getConfigurationObject();
     push @{$result->{tracks}}, $track;
   }
@@ -533,7 +574,7 @@ sub addTransposableElements {
 
 
 sub addMicrosatelliteSts {
-  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev) = @_;
   my $hasMicrosatelliteSts = $datasetProps->{hasMicrosatelliteSts} ? $datasetProps->{hasMicrosatelliteSts} : 0;
   if($hasMicrosatelliteSts == 1) {
     my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/microsatelliteSts.gff.gz";
@@ -542,6 +583,7 @@ sub addMicrosatelliteSts {
                                                                                                build_number          => $buildNumber,
                                                                                                relative_path_to_file => $relativePathToGffFile,
                                                                                                application_type      => $applicationType,
+                                                                                               organism_abbrev => $organismAbbrev,
                                                                                              })->getConfigurationObject();
     push @{$result->{tracks}}, $track;
   }
@@ -549,7 +591,7 @@ sub addMicrosatelliteSts {
 
 
 sub addHaplotypeBlock {
-  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev) = @_;
   my $hasHaplotypeBlock = $datasetProps->{hasHaplotypeBlock} ? $datasetProps->{hasHaplotypeBlock} : 0;
   if($hasHaplotypeBlock == 1) {
     my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/haplotypeBlock.gff.gz";
@@ -558,6 +600,7 @@ sub addHaplotypeBlock {
                                                                                             build_number          => $buildNumber,
                                                                                             relative_path_to_file => $relativePathToGffFile,
                                                                                             application_type      => $applicationType,
+                                                                                            organism_abbrev => $organismAbbrev,
                                                                                           })->getConfigurationObject();
     push @{$result->{tracks}}, $track;
   }
@@ -565,7 +608,7 @@ sub addHaplotypeBlock {
 
 
 sub addFeatureBindingSite {
-  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev) = @_;
   my $hasFeatureBindingSite = $datasetProps->{hasFeatureBindingSite} ? $datasetProps->{hasFeatureBindingSite} : 0;
   if($hasFeatureBindingSite == 1) {
     my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/featureBindingSite.gff.gz";
@@ -574,6 +617,7 @@ sub addFeatureBindingSite {
                                                                                           build_number          => $buildNumber,
                                                                                           relative_path_to_file => $relativePathToGffFile,
                                                                                           application_type      => $applicationType,
+                                                                                          organism_abbrev => $organismAbbrev,
                                                                                         })->getConfigurationObject();
     push @{$result->{tracks}}, $track;
   }
@@ -581,18 +625,41 @@ sub addFeatureBindingSite {
 
 
 sub addScaffolds {
-  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev) = @_;
   my $hasScaffold = $datasetProps->{hasScaffoldGenome} ? $datasetProps->{hasScaffoldGenome} : 0;
   if($hasScaffold == 1) {
     my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/scaffoldGenome.gff.gz";
     my $track = ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig->new({
       application_type      => $applicationType,
+      organism_abbrev => $organismAbbrev,
       project_name          => $projectName,
       build_number          => $buildNumber,
       relative_path_to_file => $relativePathToGffFile,
     })->getConfigurationObject();
     push @{$result->{tracks}}, $track;
   }
+}
+
+# One gene-model track on the genome assembly. JBrowse 1's separate gene density track has
+# no v5 counterpart: the feature display gates dense regions itself.
+sub addJBrowse2GeneModels {
+  my ($result, $organismAbbrev, $projectName, $buildNumber, $nameForFileNames) = @_;
+
+  my %common = (application_type => 'jbrowse2', project_name => $projectName, build_number => $buildNumber);
+  my $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new({
+    %common, relative_path_to_file => "${nameForFileNames}/genomeAndProteome/gff/annotated_transcripts.gff.gz"});
+
+  my $track = ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig->new({
+    %common,
+    organism_abbrev => $organismAbbrev,
+    store           => $store,
+    label           => "GeneModels",
+    id              => "Annotated Transcripts",
+    category        => "Gene Models",
+    subcategory     => "Transcripts",
+  })->getConfigurationObject();
+
+  push @{$result->{tracks}}, $track if($track);
 }
 
 sub addGenes {
@@ -866,6 +933,7 @@ sub addMergedShortVariants {
     project_name          => $projectName,
     build_number          => $buildNumber,
     application_type      => $applicationType,
+    organism_abbrev => $organismAbbrev,
     organism_abbrev       => $organismAbbrev,
     relative_path_to_file => $relativePathToVcfFile,
     key                   => "Short Variants (SNPs and Indels) - DNA-Seq Samples within Organism",
@@ -890,12 +958,13 @@ sub addMergedShortVariants {
 
 
 sub addUnifiedMassSpec {
-  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber) = @_;
+  my ($datasetProps, $applicationType, $result, $nameForFileNames, $projectName, $buildNumber, $organismAbbrev) = @_;
   my $hasMassSpec = $datasetProps->{hasUnifiedGenomicMassSpec} ? $datasetProps->{hasUnifiedGenomicMassSpec} : 0;
   if($hasMassSpec == 1) {
     my $relativePathToGffFile = "${nameForFileNames}/genomeBrowser/gff/unifiedGenomicMassSpec.gff.gz";
     my $unifiedMassSpecTrack = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedMassSpecTrackConfig->new({
       application_type      => $applicationType,
+      organism_abbrev => $organismAbbrev,
       project_name          => $projectName,
       build_number          => $buildNumber,
       relative_path_to_file => $relativePathToGffFile,
@@ -907,7 +976,7 @@ sub addUnifiedMassSpec {
 
 
 sub addChipChipTracks {
-  my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $organismAbbrev) = @_;
 
   my $chipChipDatasets = $datasetProperties->{chipchip} ? $datasetProperties->{chipchip} : {};
 
@@ -942,15 +1011,15 @@ sub addChipChipTracks {
       # last statement is that push, so they return its value -- the new array
       # length -- and pushing that here appended a bare integer after every
       # ChIP-chip track (56 of them for tgonME49, 28 for pfal3D7).
-      &makeChipChipPeak($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset);
-      &makeChipChipSmoothed($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset);
+      &makeChipChipPeak($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset, $organismAbbrev);
+      &makeChipChipSmoothed($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset, $organismAbbrev);
     }
   }
 }
 
 
 sub makeChipChipPeak {
-  my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset, $organismAbbrev) = @_;
   my $chipChipDatasets = $datasetProperties->{chipchip};
   my $datasetName = $chipChipDatasets->{$dataset}->{datasetName};
   my $datasetDisplayName = $chipChipDatasets->{$dataset}->{datasetDisplayName};
@@ -970,6 +1039,7 @@ sub makeChipChipPeak {
 										       attribution => $shortAttribution,
 										       description => $summary,
 										       application_type => $applicationType,
+										       organism_abbrev => $organismAbbrev,
 										       label => "$sample - peaks",
 										       key => "$sample - peaks",
 										       dataset_presenter_id => $datasetPresenterId,
@@ -984,7 +1054,7 @@ sub makeChipChipPeak {
 }
 
 sub makeChipChipSmoothed {
-  my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $projectName, $buildNumber, $nameForFileNames, $applicationType, $sample, $dataset, $organismAbbrev) = @_;
   my $chipChipDatasets = $datasetProperties->{chipchip};
   my $datasetName = $chipChipDatasets->{$dataset}->{datasetName};
   my $datasetDisplayName = $chipChipDatasets->{$dataset}->{datasetDisplayName};
@@ -1002,6 +1072,7 @@ sub makeChipChipSmoothed {
 											      study_display_name => $datasetDisplayName,
 											      description => $summary,
 											      application_type => $applicationType,
+											      organism_abbrev => $organismAbbrev,
 											      label => "$sample - smoothed",
 											      key => "$sample - smoothed",
 											      summary => $summary,
@@ -1016,7 +1087,7 @@ sub makeChipChipSmoothed {
 
 
 sub addCnvArray {
-  my ($result, $projectName, $applicationType, $webservicesDir, $nameForFileNames, $buildNumber) = @_;
+  my ($result, $projectName, $applicationType, $webservicesDir, $nameForFileNames, $buildNumber, $organismAbbrev) = @_;
 
   my $datasetName = 'tcruCLBrenerEsmeraldo-like_cghArrayExper_Tarelton_GSE23576_CNV_RSRC';
   my $bigwigDir = "${webservicesDir}/${projectName}/build-${buildNumber}/${nameForFileNames}/cghArray/bigwig/${datasetName}";
@@ -1035,6 +1106,7 @@ sub addCnvArray {
                                                                                     study_display_name    => "Comparative Genomic Hybridizations of 33 strains",
                                                                                     description           => $summary,
                                                                                     application_type      => $applicationType,
+                                                                                    organism_abbrev => $organismAbbrev,
                                                                                     name                  => $sample,
                                                                                     label                 => $sample,
                                                                                     key                   => $sample,
@@ -1063,6 +1135,7 @@ my ($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectNam
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToGffFile,
                                                                                                  application_type => $applicationType,
+                                                                                                 organism_abbrev => $organismAbbrev,
                                                                                                  summary => $methodDescription,
                                                                                                 })->getConfigurationObject();
     push @{$result->{tracks}}, $proteinAlignTrack;
@@ -1121,14 +1194,15 @@ my ($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectNam
 # }
 
 sub addOrfs {
-  my ($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 	my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/Orf50.gff.gz";
 
 	my $track = ApiCommonModel::Model::JBrowseTrackConfig::OrfTrackConfig->new({
 																																							project_name => $projectName,
 																																							build_number => $buildNumber,
 																																							relative_path_to_file => $relativePathToGffFile,
-																																							application_type => $applicationType
+																																							application_type => $applicationType,
+																																							organism_abbrev => $organismAbbrev
 																																						 })->getConfigurationObject();
 
 	push @{$result->{tracks}}, $track;
@@ -1136,7 +1210,7 @@ sub addOrfs {
 
 
 sub addAuxiliaryUtrAnnotations {
-  my ($result, $nameForFileNames, $projectName, $buildNumber, $applicationType) = @_;
+  my ($result, $nameForFileNames, $projectName, $buildNumber, $applicationType, $organismAbbrev) = @_;
 
   my $auxiliaryDir = "/var/www/Common/apiSiteFilesMirror/auxiliary/TriTrypDB/UTR_annotations";
 
@@ -1158,6 +1232,7 @@ sub addAuxiliaryUtrAnnotations {
       build_number          => $buildNumber,
       relative_path_to_file => $relativePathToFile,
       application_type      => $applicationType,
+      organism_abbrev => $organismAbbrev,
       key                   => $displayName,
       label                 => $label,
       category              => "Gene Models",
@@ -1170,7 +1245,7 @@ sub addAuxiliaryUtrAnnotations {
 
 
 sub addAntismash {
-  my ($result, $nameForFileNames, $webservicesDir, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $nameForFileNames, $webservicesDir, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
   # These reference genomes returned no result for antismash so no track should be shown
   my %excludeOrganisms = ("AastaciAPO3" => 1,
@@ -1212,6 +1287,7 @@ sub addAntismash {
 											     build_number => $buildNumber,
 											     relative_path_to_file => $relativePathToGffFile,
 											     application_type => $applicationType,
+											     organism_abbrev => $organismAbbrev,
 											     summary => $summary,
 											     gene_legend => "<img src='https://microscope.readthedocs.io/en/stable/_images/antiSMASH7_colorcode_features.png'/>",
 											     region_legend => "<img src='/a/images/antismash_cluster_colors.png'  height='250' width='250' align=left/>",
@@ -1223,7 +1299,7 @@ sub addAntismash {
 }
 
 sub addLongReadRNASeq {
-  my ($result, $datasetProperties, $nameForFileNames, $webservicesDir, $projectName, $buildNumber, $applicationType) = @_;
+  my ($result, $datasetProperties, $nameForFileNames, $webservicesDir, $projectName, $buildNumber, $applicationType, $organismAbbrev) = @_;
 
    my $LongReadRnaSeqDatasets = $datasetProperties->{longreadrnaseq} ? $datasetProperties->{longreadrnaseq} : {};
 
@@ -1250,6 +1326,7 @@ sub addLongReadRNASeq {
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToGffFile,
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev,
                                                                                                 key => "${datasetDisplayName} all models",
                                                                                                 label => "${datasetName}_all_models",
 												summary => $summary,
@@ -1264,6 +1341,7 @@ sub addLongReadRNASeq {
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToGffFile,
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev,
                                                                                                 key => "${datasetDisplayName} high confidence models (> 5 supporting reads)",
                                                                                                 label => "${datasetName}_high_confidence_models",
                                                                                                 summary => $summary,
@@ -1294,6 +1372,7 @@ sub addLongReadRNASeq {
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToBamFile,
 												application_type => $applicationType,
+												organism_abbrev => $organismAbbrev,
 												key => "${sampleDisplayName} long read RNA-Seq",
 												label => "${sampleDisplayName} long read RNA-Seq",
 												type => "JBrowse/View/Track/Alignments2",

@@ -58,13 +58,9 @@ sub getJBrowseObject{
 }
 
 # TODO:
-sub getJBrowse2Object{
-	my $self = shift;
-
-	my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
-
-
-	return $jbrowse2Object;
+# Apollo GFF is served by REST, which JBrowse 2 cannot read: blocked until Apollo3 (0008).
+sub getJBrowse2Object {
+	return undef;
 }
 
 

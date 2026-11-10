@@ -33,7 +33,7 @@ sub new {
         $self->setDisplayMode("normal");
     }
     else {
-        # TODO
+        $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
     }
 
     $self->setStore($store);

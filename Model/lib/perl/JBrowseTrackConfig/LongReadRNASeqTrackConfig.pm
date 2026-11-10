@@ -44,7 +44,7 @@ sub new {
 	$store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
 
         $self->setTrackType("FeatureTrack");
-	#$self->setDisplayType("LinearFeatureDisplay");
+        $self->setDisplayType("LinearBasicDisplay");
 	$self->setTrackTypeDisplay("Alignment"); 
     }
 

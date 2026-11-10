@@ -26,7 +26,7 @@ sub new {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
     }
     else {
-        # TODO
+        $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
     }
 
     $self->setStore($store);

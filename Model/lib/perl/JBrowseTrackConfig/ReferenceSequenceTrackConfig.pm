@@ -48,12 +48,9 @@ sub getJBrowseObject {
 }
 
 
+# JBrowse 2 draws the reference from the assembly's own sequence track (0008).
 sub getJBrowse2Object {
-    my $self = shift;
-
-    my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
-
-    return $jbrowse2Object;
+    return undef;
 }
 
 
