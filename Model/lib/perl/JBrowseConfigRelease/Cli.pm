@@ -42,7 +42,7 @@ my @ENVIRONMENTS = qw(qa prod);
 
 sub usage {
   return <<'USAGE';
-createJBrowseConfigRelease --build N (--report | --generate) [options]
+createJBrowseConfigRelease --build N (--report | --generate | --jbrowse2) [options]
 
 Builds the JBrowse configuration and sequence data that Apollo, the genome
 curation platform, serves for a VEuPathDB release -- and the command files a
@@ -54,6 +54,11 @@ Phases (exactly one, they cost differently):
                   what goes to the curation team.
   --generate      hours.  Everything --report does, then builds the package for
                   the approved roster and writes the update command files.
+  --jbrowse2      the JBrowse 2 v5 configs for --project, into --out-dir itself:
+                  config.json (every organism's genome and protein assembly),
+                  organisms.json, <abbrev>.hub.json per --organism, trix/ and
+                  manifest.tsv.  No Apollo, no roster.  Fails on any contract
+                  violation and on `jbrowse validate`.
 
 Options:
   --build N               release build number                       (required)
@@ -77,6 +82,10 @@ Options:
                           offline rehearsal; a real release uses the API.
   --force                 proceed past the pending-decision gate and past an
                           empty update bucket.  Neither is overridden lightly.
+  --jbrowse-cli PATH      --jbrowse2: the @jbrowse/cli `jbrowse` executable
+                          (validate, text-index).                      (required)
+  --artifact-url-base URL --jbrowse2: URL prefix for files the dump itself writes
+                          (trix).  Default: the store URL of their mirror home.
   --help                  this text
 
 Output: <out-dir>/release-<build>/<environment>/
@@ -102,7 +111,7 @@ sub parseOptions {
     organisms        => [],
   );
 
-  my ($report, $generate, $help);
+  my ($report, $generate, $jbrowse2, $help);
 
   my $parser = Getopt::Long::Parser->new(config => ['no_auto_abbrev', 'no_ignore_case']);
 
@@ -115,6 +124,9 @@ sub parseOptions {
     \@argv,
     'report'             => \$report,
     'generate'           => \$generate,
+    'jbrowse2'           => \$jbrowse2,
+    'jbrowse-cli=s'      => \$opt{jbrowse_cli},
+    'artifact-url-base=s' => \$opt{artifact_url_base},
     'help'               => \$help,
     'build=s'            => \$opt{build},
     'environment=s'      => \$opt{environment},
@@ -138,11 +150,20 @@ sub parseOptions {
     return \%opt;
   }
 
-  die "exactly one of --report or --generate is required (they cost differently:\n"
+  die "exactly one of --report, --generate or --jbrowse2 is required (they cost differently:\n"
     . "--report takes minutes and changes nothing; --generate takes hours)\n"
-    unless ($report ? 1 : 0) + ($generate ? 1 : 0) == 1;
+    unless ($report ? 1 : 0) + ($generate ? 1 : 0) + ($jbrowse2 ? 1 : 0) == 1;
 
-  $opt{phase} = $report ? 'report' : 'generate';
+  $opt{phase} = $report ? 'report' : $generate ? 'generate' : 'jbrowse2';
+
+  if($opt{phase} eq 'jbrowse2') {
+    die "--jbrowse2 needs --jbrowse-cli PATH (validate and text-index run through it)\n"
+      unless(defined $opt{jbrowse_cli} && length $opt{jbrowse_cli});
+  }
+  else {
+    die "--jbrowse-cli and --artifact-url-base apply to --jbrowse2 only\n"
+      if(defined $opt{jbrowse_cli} || defined $opt{artifact_url_base});
+  }
 
   die "--build N is required (the release build number)\n"
     unless defined $opt{build} && length $opt{build};

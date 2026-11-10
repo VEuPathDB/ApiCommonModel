@@ -10,6 +10,7 @@ use lib (defined $ENV{GUS_HOME} && length $ENV{GUS_HOME}
            ? "$ENV{GUS_HOME}/lib/perl" : ());
 
 use File::Path qw(make_path);
+use JSON ();
 
 # Wiring only.  Every rule with a wrong answer worth catching lives in
 # JBrowseConfigRelease::Cli or the module that owns it, because a Perl script cannot be
@@ -39,6 +40,8 @@ exit $status;
 
 sub main {
   my ($opt) = @_;
+
+  return mainJBrowse2($opt) if($opt->{phase} eq 'jbrowse2');
 
   # --- 2. preflight --------------------------------------------------------
   #
@@ -172,6 +175,50 @@ sub main {
   return 1;
 }
 
+sub mainJBrowse2 {
+  my ($opt) = @_;
+
+  $CLI->assertEnvironment(\%ENV, 0);
+  die "--jbrowse-cli $opt->{jbrowse_cli} is not executable\n" unless(-x $opt->{jbrowse_cli});
+
+  my $hub = _hub();
+  my %opts = (
+    outDir          => $opt->{out_dir},
+    project         => $opt->{project},
+    build           => $opt->{build},
+    wsDir           => $opt->{ws_dir},
+    gusHome         => $ENV{GUS_HOME},
+    jbrowse         => $opt->{jbrowse_cli},
+    artifactUrlBase => $opt->{artifact_url_base} // $hub->defaultArtifactUrlBase(),
+  );
+
+  my $json = _generate()->runScript($ENV{GUS_HOME}, 'jbrowse2OrganismList', $opt->{project});
+  my $organisms = JSON::decode_json($json)->{organisms};
+  die "jbrowse2OrganismList returned no organisms for $opt->{project}\n" unless(@$organisms);
+
+  my $result = $hub->dump($organisms, $opt->{organisms}, \%opts);
+
+  print "$opt->{project} build $opt->{build}: $result->{organisms} organisms, "
+      . "$result->{root_assemblies} root assemblies, into $opt->{out_dir}\n";
+  foreach my $abbrev (sort keys %{$result->{hubs}}) {
+    my $built = $result->{hubs}{$abbrev};
+    my $total = scalar @{$built->{hub}{tracks}};
+    print "\n$abbrev.hub.json: $total tracks, 0 violations\n";
+    printf("  %-24s %5d\n", $_, $built->{sources}{$_}) for sort keys %{$built->{sources}};
+    printf("  %5d  %s\n", $built->{shapes}{$_}, $_) for sort keys %{$built->{shapes}};
+  }
+  print "\njbrowse validate:\n";
+  foreach my $file (sort keys %{$result->{jbrowse_validate}}) {
+    my $v = $result->{jbrowse_validate}{$file};
+    my $out = $v->{output}; $out =~ s/\s+$//;
+    print "  $file exit $v->{status}" . (length $out ? ": $out" : '') . "\n";
+  }
+  print "\nfiles (bytes, md5, mirror home):\n";
+  print "  $_->{file}\t$_->{bytes}\t$_->{md5}\t$_->{mirror}\n" for @{$result->{manifest}};
+
+  return 0;
+}
+
 # --- helpers ---
 
 sub _loadApollo {
@@ -240,6 +287,7 @@ sub _reconcile  { _load('Reconcile') }
 sub _report     { _load('Report') }
 sub _generate   { _load('Generate') }
 sub _commands   { _load('Commands') }
+sub _hub        { _load('Hub') }
 
 sub _load {
   my ($name) = @_;

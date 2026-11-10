@@ -52,6 +52,31 @@ my $C = 'ApiCommonModel::Model::JBrowseConfigRelease::Cli';
   like($@, qr/exactly one|mutually exclusive/i, 'both phases at once is refused');
 }
 
+# --- the jbrowse2 phase ---
+{
+  my $opts = $C->parseOptions('--jbrowse2', '--build', '71', '--project', 'PlasmoDB', '--organism', 'pfal3D7',
+                              '--jbrowse-cli', '/opt/jbrowse', '--out-dir', '/tmp/v5');
+  is($opts->{phase}, 'jbrowse2', '--jbrowse2 is a phase');
+  is($opts->{jbrowse_cli}, '/opt/jbrowse', 'it carries the jbrowse CLI');
+  is_deeply($opts->{organisms}, ['pfal3D7'], '--organism names the hubs to build');
+  ok(!defined $opts->{artifact_url_base}, 'artifact url base defaults later, to the store URL');
+}
+
+{
+  eval { $C->parseOptions('--jbrowse2', '--build', '71') };
+  like($@, qr/--jbrowse-cli/, '--jbrowse2 without --jbrowse-cli is refused');
+}
+
+{
+  eval { $C->parseOptions('--jbrowse2', '--generate', '--build', '71', '--jbrowse-cli', 'j') };
+  like($@, qr/exactly one/, '--jbrowse2 with another phase is refused');
+}
+
+{
+  eval { $C->parseOptions('--report', '--build', '71', '--artifact-url-base', '/x/') };
+  like($@, qr/--jbrowse2 only/, 'a jbrowse2 option on another phase is refused');
+}
+
 {
   eval { $C->parseOptions('--report', '--build', 'seventy-one') };
   like($@, qr/--build/, 'a non-numeric build is refused');
