@@ -28,8 +28,12 @@ sub validConfig {
       {type => 'MultiQuantitativeTrack', trackId => 'pfal3D7_ds2_unique', assemblyNames => ['pfal3D7'],
        adapter => {type => 'MultiWiggleAdapter', subadapters => [
          {type => 'BigWigAdapter', name => 's1', bigWigLocation => loc('Pf/s1.bw')}]},
-       displays => [{type => 'MultiLinearWiggleDisplay',
-                     displayId => 'pfal3D7_ds2_unique-MultiLinearWiggleDisplay'}]},
+       displays => [{type => 'LinearWiggleDisplay',
+                     displayId => 'pfal3D7_ds2_unique-LinearWiggleDisplay'}]},
+      {type => 'FeatureTrack', trackId => 'pfal3D7_repeats', assemblyNames => ['pfal3D7'],
+       adapter => {type => 'BedTabixAdapter', bedGzLocation => loc('Pf/r.bed.gz'),
+                   index => {location => loc('Pf/r.bed.gz.tbi')}},
+       displays => [{type => 'LinearBasicDisplay', displayId => 'pfal3D7_repeats-LinearBasicDisplay'}]},
       {type => 'VariantTrack', trackId => 'pfal3D7_dnaseq_merged_short_variants', assemblyNames => ['pfal3D7'],
        adapter => {type => 'VcfTabixAdapter', vcfGzLocation => loc('Pf/v.vcf.gz'),
                    index => {location => loc('Pf/v.vcf.gz.tbi')}},
@@ -77,6 +81,11 @@ violates(sub { delete $_[0]{tracks}[0]{assemblyNames} }, 'assembly-names', 'miss
 violates(sub { $_[0]{tracks}[0]{assemblyNames} = ['pfalIT'] }, 'assembly-names', 'undeclared assembly');
 violates(sub { $_[0]{tracks}[0]{displays}[0]{type} = 'NeatCanvasFeatures/View/Track/NeatFeatures' },
          'display-type', 'JBrowse 1 display class');
+violates(sub { $_[0]{tracks}[1]{displays}[0] = {type => 'MultiLinearWiggleDisplay',
+                                                 displayId => 'pfal3D7_ds2_unique-MultiLinearWiggleDisplay'} },
+         'display-type', 'MultiLinearWiggleDisplay is retired on v5');
+violates(sub { $_[0]{tracks}[4]{adapter}{type} = 'BEDTabixAdapter' }, 'adapter-type',
+         'BEDTabixAdapter is not a v5 adapter (BedTabixAdapter is)');
 violates(sub { $_[0]{tracks}[0]{displays}[0]{displayId} = 'wiggle_X=HASH(0x563d27e80a98)' },
          'display-id', 'Perl object address');
 violates(sub { delete $_[0]{tracks}[0]{displays}[0]{displayId} }, 'display-id', 'missing displayId');
@@ -98,6 +107,17 @@ violates(sub { $_[0]{tracks}[1]{adapter}{subadapters}[0]{bigWigLocation}{uri} = 
 violates(sub { $_[0]{assemblies}[0]{sequence}{adapter}{fastaLocation}{uri} = 'PlasmoDB/build-71/g.fa' },
          'location-url', 'assembly location');
 violates(sub { $_[0]{assemblies}[0]{name} = 'Plasmodium falciparum 3D7' }, 'assembly-name', 'spaces in name');
+
+# --- a caller may accept a further location prefix, and only that one ---
+{
+  my $config = validConfig();
+  $config->{tracks}[0]{adapter}{bigWigLocation}{uri} = '/plasmo.x/jbrowse2-v5dump/a.bw';
+  is_deeply([map { $_->{rule} } @{$V->validate($config)}], ['location-url'], 'rejected by default');
+  is_deeply($V->validate($config, {locationPrefixes => ['/plasmo.x/jbrowse2-v5dump/']}), [],
+            'accepted when the caller names its prefix');
+  is_deeply([map { $_->{rule} } @{$V->validate($config, {locationPrefixes => ['/other/']})}],
+            ['location-url'], 'another prefix does not let it through');
+}
 
 # --- every violation names where it is ---
 {

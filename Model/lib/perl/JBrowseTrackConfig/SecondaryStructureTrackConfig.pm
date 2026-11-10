@@ -29,7 +29,7 @@ sub new {
 
     }
     else {
-        # TODO
+        $store = $self->getStore();
     }
 
     $self->setStore($store);
@@ -65,6 +65,7 @@ sub getJBrowse2Object{
         my $self = shift;
 
         my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
+        $jbrowse2Object->{displays}->[0]->{encoding}->{y}->{scale} = {type => 'linear'};
 
 
         return $jbrowse2Object;

@@ -16,13 +16,13 @@ our %TRACK_TYPES = map { $_ => 1 } qw(
 );
 
 our %DISPLAY_TYPES = map { $_ => 1 } qw(
-  LinearBasicDisplay LinearWiggleDisplay MultiLinearWiggleDisplay
+  LinearBasicDisplay LinearWiggleDisplay
   LinearVariantDisplay LinearMarkDisplay LinearAlignmentsDisplay
   LinearReferenceSequenceDisplay
 );
 
 our %ADAPTER_TYPES = map { $_ => 1 } qw(
-  BigWigAdapter MultiWiggleAdapter Gff3TabixAdapter BEDTabixAdapter
+  BigWigAdapter MultiWiggleAdapter Gff3TabixAdapter BedTabixAdapter
   VcfTabixAdapter BamAdapter IndexedFastaAdapter
 );
 
@@ -30,7 +30,7 @@ our %ADAPTER_TYPES = map { $_ => 1 } qw(
 our %REQUIRED_LOCATIONS = (
   BigWigAdapter       => [['bigWigLocation']],
   Gff3TabixAdapter    => [['gffGzLocation'], ['index', 'location']],
-  BEDTabixAdapter     => [['bedGzLocation'], ['index', 'location']],
+  BedTabixAdapter     => [['bedGzLocation'], ['index', 'location']],
   VcfTabixAdapter     => [['vcfGzLocation'], ['index', 'location']],
   BamAdapter          => [['bamLocation'],   ['index', 'location']],
   IndexedFastaAdapter => [['fastaLocation'], ['faiLocation']],
@@ -43,8 +43,11 @@ our @RULES = qw(
   location-url assembly-name
 );
 
+# $opts->{locationPrefixes}: further accepted location prefixes, beyond the store URLs.
 sub validate {
-  my ($class, $config) = @_;
+  my ($class, $config, $opts) = @_;
+
+  my @prefixes = (@STORE_PREFIXES, @{($opts || {})->{locationPrefixes} || []});
 
   my @violations;
   my $add = sub {
@@ -67,7 +70,7 @@ sub validate {
     }
 
     my $adapter = ref($assembly->{sequence}) eq 'HASH' ? $assembly->{sequence}{adapter} : undef;
-    $class->_checkAdapter($adapter, $where, $add);
+    $class->_checkAdapter($adapter, $where, $add, \@prefixes);
   }
 
   my %seen;
@@ -126,14 +129,14 @@ sub validate {
         unless(defined($display->{displayId}) && $display->{displayId} eq $expected);
     }
 
-    $class->_checkAdapter($track->{adapter}, $where, $add);
+    $class->_checkAdapter($track->{adapter}, $where, $add, \@prefixes);
   }
 
   return \@violations;
 }
 
 sub _checkAdapter {
-  my ($class, $adapter, $where, $add) = @_;
+  my ($class, $adapter, $where, $add, $prefixes) = @_;
 
   unless(ref($adapter) eq 'HASH') {
     $add->('adapter-type', $where, 'no adapter');
@@ -152,12 +155,12 @@ sub _checkAdapter {
   }
 
   foreach my $uri (_locationUris($adapter)) {
-    next if(grep { index($uri, $_) == 0 } @STORE_PREFIXES);
+    next if(grep { index($uri, $_) == 0 } @$prefixes);
     $add->('location-url', $where, "location is not a site-relative store URL: $uri");
   }
 
   foreach my $sub (@{ref($adapter->{subadapters}) eq 'ARRAY' ? $adapter->{subadapters} : []}) {
-    $class->_checkAdapter($sub, "$where subadapter " . _show(ref($sub) eq 'HASH' ? $sub->{name} : undef), $add);
+    $class->_checkAdapter($sub, "$where subadapter " . _show(ref($sub) eq 'HASH' ? $sub->{name} : undef), $add, $prefixes);
   }
 }
 

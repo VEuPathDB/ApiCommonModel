@@ -42,6 +42,9 @@ sub getDisplayName {$_[0]->{display_name}}
 sub setDisplayName {$_[0]->{display_name} = $_[1]}
 
 # this is the track description if we need one
+sub getSequenceType {$_[0]->{sequence_type} || 'genome'}
+sub setSequenceType {$_[0]->{sequence_type} = $_[1]}
+
 sub getDescription {$_[0]->{description}}
 sub setDescription {$_[0]->{description} = $_[1]}
 
@@ -72,6 +75,7 @@ sub new {
     $self->setStore($args->{store});
 
     $self->setDescription($args->{description});
+    $self->setSequenceType($args->{sequence_type});
 
     # These are optional
     $self->setGeneLegend($args->{gene_legend});
@@ -225,6 +229,8 @@ sub getJBrowseObject{
 
 
 
+my %JBROWSE2_FEATURE_ADAPTERS = (Gff3TabixAdapter => 1, BedTabixAdapter => 1);
+
 sub getJBrowse2Object {
     my $self = shift;
 
@@ -275,6 +281,11 @@ sub getJBrowse2Object {
         die "missing a required property (id, storeType, label, displayType, trackType, category)";
     }
 
+    if(!$trackType && $JBROWSE2_FEATURE_ADAPTERS{$storeType}) {
+        $trackType = 'FeatureTrack';
+        $displayType ||= 'LinearBasicDisplay';
+    }
+
     my $jbrowseObject = {type => $trackType,
                          trackId => $trackId,
                          name => $name,
@@ -303,18 +314,18 @@ sub getApolloObject {
 }
 
 # The JBrowse 2 track contract, applied once to every class's object so no subclass
-# can drift from it: trackId <abbrev>_<dataset>_<variant>, displayId <trackId>-<type>,
-# assemblyNames [<public abbrev>]. A JBrowse 1 shaped object is left for the validator.
+# can drift from it: trackId <assembly>_<dataset>_<variant>, displayId <trackId>-<type>,
+# assemblyNames [<assembly>], where <assembly> is the public abbrev (+ _protein). A JBrowse 1 shaped object is left for the validator.
 sub applyJBrowse2Contract {
     my ($self, $object) = @_;
 
     return $object unless(ref($object) eq 'HASH' && !exists($object->{storeClass}));
 
-    my $abbrev = $self->getPublicOrganismAbbrev();
-    my $trackId = $self->makeJBrowse2TrackId($abbrev);
+    my $assemblyName = $self->getJBrowse2AssemblyName();
+    my $trackId = $self->makeJBrowse2TrackId($assemblyName);
 
     $object->{trackId} = $trackId if(defined($trackId));
-    $object->{assemblyNames} = [$abbrev];
+    $object->{assemblyNames} = [$assemblyName];
 
     foreach my $display (@{$object->{displays} || []}) {
         next unless(ref($display) eq 'HASH' && $display->{type} && defined($trackId));
@@ -324,8 +335,17 @@ sub applyJBrowse2Contract {
     return $object;
 }
 
+# Protein-coordinate tracks belong to the organism's protein assembly, <abbrev>_protein.
+sub getJBrowse2AssemblyName {
+    my ($self) = @_;
+
+    my $abbrev = $self->getPublicOrganismAbbrev();
+    return undef unless(defined($abbrev));
+    return $self->getSequenceType() eq 'protein' ? "${abbrev}_protein" : $abbrev;
+}
+
 sub makeJBrowse2TrackId {
-    my ($self, $abbrev) = @_;
+    my ($self, $assemblyName) = @_;
 
     my $label = $self->getLabel();
     return undef unless(defined($label) && length($label));
@@ -337,7 +357,11 @@ sub makeJBrowse2TrackId {
     if($datasetName && index($id, _trackIdToken($datasetName)) < 0) {
         $id = _trackIdToken($datasetName) . "_$id";
     }
-    $id = "${abbrev}_$id" if(defined($abbrev) && index($id, "${abbrev}_") != 0);
+    return $id unless(defined($assemblyName));
+
+    my $abbrev = $self->getPublicOrganismAbbrev();
+    $id =~ s/^\Q${abbrev}\E_// if($assemblyName ne $abbrev && index($id, "${assemblyName}_") != 0);
+    $id = "${assemblyName}_$id" if(index($id, "${assemblyName}_") != 0);
 
     return $id;
 }

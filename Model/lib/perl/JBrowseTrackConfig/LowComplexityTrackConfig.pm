@@ -31,7 +31,7 @@ sub new {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::BedStore->new($args);
     }
     else {
-        # TODO
+        $store = ApiCommonModel::Model::JBrowseTrackConfig::BedStore->new($args);
     }
 
     $self->setStore($store);

@@ -1,0 +1,53 @@
+#!/usr/bin/perl
+
+# The organisms of one project for the JBrowse 2 v5 dump: assemblies, the hub
+# roster and the organism picker. UniDB, the portal, lists every project's.
+
+use strict;
+use lib $ENV{GUS_HOME} . "/lib/perl";
+use JSON;
+use ApiCommonModel::Model::JBrowseUtil;
+
+my ($projectName) = @ARGV;
+die "Usage: jbrowse2OrganismList PROJECT_NAME\n" unless($projectName);
+
+my $dbh = ApiCommonModel::Model::JBrowseUtil->new({projectName => $projectName})->getDbh();
+
+my $sql = "select o.public_abbrev as abbrev
+     , o.abbrev as internal_abbrev
+     , o.name_for_filenames
+     , o.strain_abbrev as strain
+     , o.is_annotated_genome
+     , tn.name
+     , stn.name as species
+from apidb.organism o
+   , sres.taxonname tn
+   , webready.TaxonSpecies_p ts
+   , sres.taxonname stn
+where tn.taxon_id = o.taxon_id
+and tn.name_class = 'scientific name'
+and ts.taxon_id = o.taxon_id
+and stn.taxon_id = ts.species_taxon_id
+and stn.name_class = 'scientific name'
+and (o.project_name = ? or ? = 'UniDB')
+order by o.public_abbrev";
+
+my $sh = $dbh->prepare($sql);
+$sh->execute($projectName, $projectName);
+
+my @organisms;
+while(my $row = $sh->fetchrow_hashref()) {
+  my ($genus) = split(/\s+/, $row->{species});
+  push @organisms, {abbrev             => $row->{abbrev},
+                    internal_abbrev    => $row->{internal_abbrev},
+                    name               => $row->{name},
+                    name_for_filenames => $row->{name_for_filenames},
+                    is_annotated       => ($row->{is_annotated_genome} || 0) + 0 ? 1 : 0,
+                    genus              => $genus,
+                    species            => $row->{species},
+                    strain             => $row->{strain}};
+}
+$sh->finish();
+$dbh->disconnect();
+
+print JSON->new->canonical->encode({organisms => \@organisms}), "\n";

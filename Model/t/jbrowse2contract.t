@@ -8,6 +8,7 @@ use ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::DatasetConfig;
 use ApiCommonModel::Model::JBrowseTrackConfig::BigWigStore;
 use ApiCommonModel::Model::JBrowseTrackConfig::GFFStore;
+use ApiCommonModel::Model::JBrowseTrackConfig::BedStore;
 use ApiCommonModel::Model::JBrowseTrackConfig::VCFStore;
 use ApiCommonModel::Model::JBrowseTrackConfig::BamStore;
 use ApiCommonModel::Model::JBrowseTrackConfig::FastaStore;
@@ -215,6 +216,94 @@ sub track {
   my $obj = $track->getConfigurationObject();
   is($obj->{label}, 'a - b', 'jbrowse label is the raw label');
   ok(!exists($obj->{trackId}) && !exists($obj->{assemblyNames}), 'no jbrowse2 keys on a jbrowse object');
+}
+
+# --- protein-coordinate tracks belong to <abbrev>_protein ---
+{
+  my $gff = store('GFFStore', 'jbrowse2', 'Pfal/genomeAndProteome/gff/iprscan_out.gff.gz');
+  my $make = sub {
+    my (%a) = @_;
+    my $t = "${NS}::TrackConfig"->new({application_type => 'jbrowse2', organism_abbrev => 'intPfal',
+                                       sequence_type => 'protein', category => 'Protein', store => $gff,
+                                       id => 'Display', %a});
+    return $t->getConfigurationObject();
+  };
+
+  my $obj = $make->(label => 'InterproDomains');
+  is($obj->{trackId}, 'pfal3D7_protein_InterproDomains', 'protein trackId is <abbrev>_protein_<name>');
+  is_deeply($obj->{assemblyNames}, ['pfal3D7_protein'], 'and names the protein assembly');
+  is($make->(label => 'pfal3D7_massSpec_X_RSRC', dataset_name => 'pfal3D7_massSpec_X_RSRC')->{trackId},
+     'pfal3D7_protein_massSpec_X_RSRC', 'a dataset label already carrying the genome abbrev is not prefixed twice');
+}
+
+# --- a feature store with no track type is a FeatureTrack on LinearBasicDisplay ---
+{
+  my $bed = store('BedStore', 'jbrowse2', 'Pfal/genomeAndProteome/bed/tandemRepeats.bed.gz');
+  is($bed->getStoreType(), 'BedTabixAdapter', 'jbrowse2 BED adapter has its v5 spelling');
+  is(store('BedStore', 'jbrowse', 'P/a.bed.gz')->getStoreType(), 'JBrowse/Store/SeqFeature/BEDTabix',
+     'jbrowse BED store type is unchanged');
+  my $obj = "${NS}::TrackConfig"->new({application_type => 'jbrowse2', organism_abbrev => 'intPfal',
+                                       category => 'Sequence Analysis', store => $bed, label => 'Tandem Repeats',
+                                       id => 'Tandem Repeats'})->getConfigurationObject();
+  is($obj->{type}, 'FeatureTrack', 'type defaults to FeatureTrack');
+  is_deeply([map { $_->{type} } @{$obj->{displays}}], ['LinearBasicDisplay'], 'display defaults to LinearBasicDisplay');
+  is_deeply($obj->{adapter}{index}{location}{uri},
+            '/a/service/jbrowse/store?data=Pfal/genomeAndProteome/bed/tandemRepeats.bed.gz.tbi', 'with its .tbi');
+}
+
+# --- every class the organism-specific producers use emits a conforming jbrowse2 object ---
+{
+  my %classes = (
+    InterproDomainsTrackConfig => ['P/iprscan_out.gff.gz', 'protein'], SignalPeptideTrackConfig => ['P/signalP.gff.gz', 'protein'],
+    TmhmmTrackConfig => ['P/tmhmm.gff.gz', 'protein'], ExportPredTrackConfig => ['P/exportpred.gff.gz', 'protein'],
+    IedbTrackConfig => ['P/iedb.gff.gz', 'protein'], UnifiedPostTranslationalMod => ['P/ptm.gff.gz', 'protein'],
+    HydropathyTrackConfig => ['P/hydropathy.bw', 'protein'], SecondaryStructureTrackConfig => ['P/psipred_helix.bw', 'protein'],
+    LowComplexityTrackConfig => ['P/lowComplexity.bed.gz', 'genome'], RepeatsTrackConfig => ['P/tandemRepeats.bed.gz', 'genome'],
+    UnifiedMassSpecTrackConfig => ['P/unifiedGenomicMassSpec.gff.gz', 'genome'],
+    LongReadRNASeqTrackConfig => ['P/models.gff.gz', 'genome'], RNASeqJunctionTrackConfig => ['P/junctions.gff.gz', 'genome'],
+  );
+  my $assemblies = [map { {name => $_, sequence => {adapter => {type => 'IndexedFastaAdapter',
+                      fastaLocation => {uri => '/a/service/jbrowse/store?data=g.fa'},
+                      faiLocation => {uri => '/a/service/jbrowse/store?data=g.fa.fai'}}}} } qw(pfal3D7 pfal3D7_protein)];
+  foreach my $class (sort keys %classes) {
+    my ($path, $sequence) = @{$classes{$class}};
+    eval "require ${NS}::$class; 1" or die $@;
+    my $obj = eval {
+      "${NS}::$class"->new({application_type => 'jbrowse2', project_name => 'PlasmoDB', build_number => 71,
+                            relative_path_to_file => $path, organism_abbrev => 'intPfal',
+                            ($sequence eq 'protein' ? (sequence_type => 'protein') : ()),
+                            key => "$class key", label => "$class label", summary => 's',
+                            type => 'EbrcTracks/View/Track/GFFByReadCount'})->getConfigurationObject();
+    };
+    ok($obj, "$class: emits an object") or diag $@;
+    is_deeply(ApiCommonModel::Model::JBrowseConfigRelease::Validate->validate(
+                {assemblies => $assemblies, tracks => [$obj]}), [], "$class: conforms")
+      if($obj);
+  }
+
+  foreach my $class (qw(ReferenceSequenceTrackConfig ProteinRefSeqTrackConfig ApolloGffTrackConfig)) {
+    eval "require ${NS}::$class; 1" or die $@;
+    my $obj = "${NS}::$class"->new({application_type => 'jbrowse2', project_name => 'PlasmoDB', build_number => 71,
+                                     relative_path_to_file => 'P/x', organism_abbrev => 'intPfal',
+                                     key => 'k', label => 'l'})->getConfigurationObject();
+    is($obj, undef, "$class: no jbrowse2 track (the assembly, or REST-only Apollo, covers it)");
+  }
+}
+
+# --- wiggle displays use v5 keys, never the retired spellings ---
+{
+  require ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig;
+  my $multi = "${NS}::MultiBigWigTrackConfig::XY"->new({
+    application_type => 'jbrowse2', project_name => 'PlasmoDB', build_number => 71, organism_abbrev => 'intPfal',
+    dataset_name => 'pfal3D7_DS_rnaSeq_RSRC', study_display_name => 'DS', category => 'Transcriptomics',
+    multi_urls => [{relative_path_to_file => 'P/a.bw', name => 'a', color => 'red'}],
+  })->getConfigurationObject();
+  my $display = $multi->{displays}[0];
+  is($display->{type}, 'LinearWiggleDisplay', 'multi-wiggle uses LinearWiggleDisplay');
+  is($display->{rows}, 'source', 'one row per source');
+  ok(!grep({ exists $display->{$_} } qw(defaultRendering scaleType minScore maxScore)), 'no retired keys')
+    or diag explain $display;
+  is($display->{encoding}{y}{scale}{type}, 'log', 'the y scale is an encoding');
 }
 
 done_testing();

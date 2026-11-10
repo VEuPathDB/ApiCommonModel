@@ -332,6 +332,11 @@ sub _defaultRunScript {
   return $out;
 }
 
+sub runScript {
+  my ($class, @args) = @_;
+  return _defaultRunScript(@args);
+}
+
 sub _defaultReadFile {
   my ($path) = @_;
   open(my $fh, '<', $path) or die "Cannot read $path: $!\n";

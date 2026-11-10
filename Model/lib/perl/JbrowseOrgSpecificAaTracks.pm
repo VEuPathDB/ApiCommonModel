@@ -32,30 +32,30 @@ sub processOrganism {
   my $projectName = ($orgHash->{projectName});
 
 
-  &addProteinRefSeq($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
-  &addInterproDomains($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
-  &addSignalPeptide($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
-  &addTmhmm($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
-  &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+  &addProteinRefSeq($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber, $organismAbbrev);
+  &addInterproDomains($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber, $organismAbbrev);
+  &addSignalPeptide($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber, $organismAbbrev);
+  &addTmhmm($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber, $organismAbbrev);
+  &addLowComplexity($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber, $organismAbbrev);
 
-  &addSecondaryStructureHelix($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
-  &addSecondaryStructureCoil($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
-  &addSecondaryStructureStrand($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+  &addSecondaryStructureHelix($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber, $organismAbbrev);
+  &addSecondaryStructureCoil($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber, $organismAbbrev);
+  &addSecondaryStructureStrand($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber, $organismAbbrev);
   if ($ranExportPred eq 'true'){
-    &addExportPred($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+    &addExportPred($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber, $organismAbbrev);
   }
 
   if ($isReference eq 'true' && $isHugeGenome eq 'false'){
-      &addIedb($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
-      &addHydropathy($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
+      &addIedb($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber, $organismAbbrev);
+      &addHydropathy($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber, $organismAbbrev);
   }
 
-  &addProteinExpressionMassSpec($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber);
-  &addUnifiedPTMassSpec($datasetProps, $applicationType, $result, $nameForFileName, $projectName, $buildNumber);
+  &addProteinExpressionMassSpec($result, $datasetProps, $webservicesDir, $nameForFileName, $projectName, $applicationType, $buildNumber, $organismAbbrev);
+  &addUnifiedPTMassSpec($datasetProps, $applicationType, $result, $nameForFileName, $projectName, $buildNumber, $organismAbbrev);
 }
 
 sub addProteinRefSeq {
-  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
     my $refSeqTrack;
     my $relativePathToFastaFile = "/a/service/jbrowse/store?data=" . $nameForFileNames . "/genomeAndProteome/fasta/AnnotatedProteins.fasta";
@@ -67,6 +67,7 @@ sub addProteinRefSeq {
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToFastaFile,
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev, sequence_type => 'protein',
 												summary => $summary,
                                                                                                 key => "Reference Sequence",
                                                                                                 label => "refseq",
@@ -77,7 +78,7 @@ sub addProteinRefSeq {
 
 
 sub addInterproDomains {
-  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
     my $interproDomainsTrack;
     my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/iprscan_out.gff.gz";
@@ -88,6 +89,7 @@ sub addInterproDomains {
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToGffFile,
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev, sequence_type => 'protein',
                                                                                                 summary => $summary,
                                                                                                 key => "InterPro Domains",
                                                                                                 label => "InterproDomains",
@@ -98,7 +100,7 @@ sub addInterproDomains {
 
 
 sub addSignalPeptide {
-  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
     
     my $signalPeptideTrack;
     my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/signalP.gff.gz";
@@ -110,6 +112,7 @@ sub addSignalPeptide {
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToGffFile,
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev, sequence_type => 'protein',
 												summary => $summary,
 												key => "Signal Peptide",
 												label => "SignalP",
@@ -120,7 +123,7 @@ sub addSignalPeptide {
 
 
 sub addTmhmm {
-  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
     my $tmhmmTrack;
     my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/tmhmm.gff.gz";
@@ -132,6 +135,7 @@ sub addTmhmm {
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToGffFile,
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev, sequence_type => 'protein',
 												summary => $summary,
 												key => "Transmembrane Domains (TMHMM)",
                                                                                                 label => "TMHMM",
@@ -142,7 +146,7 @@ sub addTmhmm {
 
 
 sub addLowComplexity {
-  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
     my $lowComplexityTrack;
     my $relativePathToBedFile = "${nameForFileNames}/genomeAndProteome/bed/proteinLowComplexity.bed.gz";
@@ -153,6 +157,7 @@ sub addLowComplexity {
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToBedFile,
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev, sequence_type => 'protein',
                                                                                                 summary => $summary,
                                                                                                 key => "LowComplexity",
                                                                                                 label => "Low Complexity Regions",
@@ -163,7 +168,7 @@ sub addLowComplexity {
 
 
 sub addHydropathy {
-  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
   my $hydropathyTrack;
   my $relativePathToBigWigFile = "${nameForFileNames}/genomeAndProteome/bigwig/hydropathy.bw";
@@ -177,6 +182,7 @@ sub addHydropathy {
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToBigWigFile,
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev, sequence_type => 'protein',
                                                                                                 summary => $summary,
                                                                                                 key => "Kyte-Doolittle hydropathy plot",
                                                                                                 label => "Hydropathy",
@@ -188,7 +194,7 @@ sub addHydropathy {
 
 
 sub addSecondaryStructureHelix {
-  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
     my $secondaryStructureHelixTrack;
     my $relativePathToBigWigFile = "${nameForFileNames}/genomeAndProteome/bigwig/psipred_helix.bw";
@@ -199,6 +205,7 @@ sub addSecondaryStructureHelix {
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToBigWigFile,
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev, sequence_type => 'protein',
                                                                                                 summary => $summary,
                                                                                                 key => "PSIPRED Helix",
                                                                                                 label => "SecondaryStructureHelix",
@@ -210,7 +217,7 @@ sub addSecondaryStructureHelix {
 
 
 sub addSecondaryStructureCoil {
-  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
     my $secondaryStructureCoilTrack;
     my $relativePathToBigWigFile = "${nameForFileNames}/genomeAndProteome/bigwig/psipred_coil.bw";
@@ -222,6 +229,7 @@ sub addSecondaryStructureCoil {
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToBigWigFile,
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev, sequence_type => 'protein',
                                                                                                 summary => $summary,
                                                                                                 key => "PSIPRED Coil",
                                                                                                 label => "SecondaryStructureCoil",
@@ -233,7 +241,7 @@ sub addSecondaryStructureCoil {
 
 
 sub addSecondaryStructureStrand {
-  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
     my $secondaryStructureStrandTrack;
     my $relativePathToBigWigFile = "${nameForFileNames}/genomeAndProteome/bigwig/psipred_extended.bw";
@@ -244,6 +252,7 @@ sub addSecondaryStructureStrand {
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToBigWigFile,
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev, sequence_type => 'protein',
                                                                                                 summary => $summary,
                                                                                                 key => "PSIPRED Strand",
                                                                                                 label => "SecondaryStructureStrand",
@@ -255,7 +264,7 @@ sub addSecondaryStructureStrand {
 
 
 sub addExportPred {
-  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
     my $exportPredTrack;
     my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/exportpred.gff.gz";
@@ -266,6 +275,7 @@ sub addExportPred {
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToGffFile,
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev, sequence_type => 'protein',
                                                                                                 summary => $summary,
                                                                                                 key => "Predicted Protein Export Domains",
                                                                                                 label => "ExportPred",
@@ -275,7 +285,7 @@ sub addExportPred {
 }
 
 sub addIedb {
-    my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+    my ($result, $datasetProperties, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
     my $iedbTrack;
     my $relativePathToGffFile = "${nameForFileNames}/genomeAndProteome/gff/iedb.gff.gz";
@@ -287,6 +297,7 @@ sub addIedb {
                                                                                                 build_number => $buildNumber,
                                                                                                 relative_path_to_file => $relativePathToGffFile,
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev, sequence_type => 'protein',
                                                                                                 summary => $summary,
                                                                                                 key => "IEDB predictions",
                                                                                                 label => "IEDB predictions",
@@ -296,7 +307,7 @@ sub addIedb {
 }
 
 sub addProteinExpressionMassSpec {
-  my ($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber) = @_;
+  my ($result, $datasetProps, $webservicesDir, $nameForFileNames, $projectName, $applicationType, $buildNumber, $organismAbbrev) = @_;
 
   my $proteinExpressionMassSpecDatasets = $datasetProps->{protexpmassspec} ? $datasetProps->{protexpmassspec} : {};
 
@@ -326,6 +337,7 @@ sub addProteinExpressionMassSpec {
                                                                                                 study_display_name => $datasetDisplayName,
                                                                                                 summary => $summary,
                                                                                                 application_type => $applicationType,
+                                                                                                organism_abbrev => $organismAbbrev, sequence_type => 'protein',
                                                                                                 dataset_presenter_id => $datasetPresenterId,
 												glyph => "JBrowse/View/FeatureGlyph/Box",
                                                                                               })->getConfigurationObject();
@@ -336,7 +348,7 @@ sub addProteinExpressionMassSpec {
 
 
 sub addUnifiedPTMassSpec {
-  my ($datasetProps, $applicationType, $result, $nameForFileName, $projectName, $buildNumber) = @_;
+  my ($datasetProps, $applicationType, $result, $nameForFileName, $projectName, $buildNumber, $organismAbbrev) = @_;
 
   my $hasPTMMassSpec = $datasetProps->{hasUnifiedPostTraslationalMod} ? $datasetProps->{hasUnifiedPostTraslationalMod} : 0;
   if($hasPTMMassSpec == 1) {
@@ -344,6 +356,7 @@ sub addUnifiedPTMassSpec {
 
     my $unifiedPTMassSpecTrack = ApiCommonModel::Model::JBrowseTrackConfig::UnifiedPostTranslationalMod->new({
 													       application_type      => $applicationType,
+													       organism_abbrev => $organismAbbrev, sequence_type => 'protein',
 													       project_name          => $projectName,
 													       build_number          => $buildNumber,
 													       relative_path_to_file => $relativePathToGffFile,

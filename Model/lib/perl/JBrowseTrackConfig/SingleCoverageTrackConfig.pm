@@ -118,14 +118,8 @@ sub getJBrowse2Object{
 
     $jbrowse2Object->{adapter}->{bigWigLocation} = {uri => $self->getStore()->getUrlTemplate(),locationType => "UriLocation"};
     #$jbrowse2Object->{adapter}->{bigWigLocation} = {uri => $uri,locationType => "UriLocation"};
-    $jbrowse2Object->{displays}->[0]->{defaultRendering} = "xyplot";
-    $jbrowse2Object->{displays}->[0]->{renderers} = {XYPlotRenderer => {type => "XYPlotRenderer",
-                                                                        color => $self->getColor()
-                                                     },
-                                                     DensityRenderer => {type => "DensityRenderer",
-                                                                         color => $self->getColor()
-                                                     },
-    };
+    $jbrowse2Object->{displays}->[0]->{mark} = "bar";
+    $jbrowse2Object->{displays}->[0]->{encoding}->{color} = {value => $self->getColor()};
 
     return $jbrowse2Object;
 }

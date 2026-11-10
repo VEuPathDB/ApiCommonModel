@@ -74,7 +74,7 @@ sub makeUrlTemplate {
 my %JBROWSE2_LOCATION_KEYS = (
   BigWigAdapter       => {data => 'bigWigLocation'},
   Gff3TabixAdapter    => {data => 'gffGzLocation', index => '.tbi'},
-  BEDTabixAdapter     => {data => 'bedGzLocation', index => '.tbi'},
+  BedTabixAdapter     => {data => 'bedGzLocation', index => '.tbi'},
   VcfTabixAdapter     => {data => 'vcfGzLocation', index => '.tbi'},
   BamAdapter          => {data => 'bamLocation',   index => '.bai'},
   IndexedFastaAdapter => {data => 'fastaLocation', fai => '.fai'},

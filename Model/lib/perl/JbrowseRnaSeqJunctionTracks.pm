@@ -54,6 +54,7 @@ sub processOrganism {
 
   if ($hasUnifiedIntronJunction) {
     my $inclusive = ApiCommonModel::Model::JBrowseTrackConfig::RNASeqJunctionTrackConfig->new({application_type => $applicationType,
+    organism_abbrev => $organismAbbrev,
                                                                                                summary => $methodDescription,
                                                                                                project_name => $projectName,
                                                                                                build_number => $buildNumber,
