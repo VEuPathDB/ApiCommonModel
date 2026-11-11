@@ -51,6 +51,7 @@ sub new {
     $self->setStore($store);
 
     $self->setColor("{processedApolloTranscriptColor}");
+    $self->setJBrowse2Color($self->veupathJexl('veupathStrandColor', '#6666FF', '#F18F74'));
     $self->setBorderColor("{processedTranscriptBorderColor}");
 
     $self->setDisplayMode("normal");

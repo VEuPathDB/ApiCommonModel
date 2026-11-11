@@ -28,6 +28,7 @@ sub new {
     $self->setStore($store);
 
     $self->setColor("{orfColor}");
+    $self->setJBrowse2Color($self->veupathJexl('veupathStrandColor', 'dodgerblue', 'mediumvioletred'));
     #$self->setBorderColor("{processedTranscriptBorderColor}");
 
     $self->setDisplayMode("compact");

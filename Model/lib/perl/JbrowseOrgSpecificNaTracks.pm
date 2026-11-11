@@ -657,6 +657,7 @@ sub addJBrowse2GeneModels {
     id              => "Annotated Transcripts",
     category        => "Gene Models",
     subcategory     => "Transcripts",
+    jbrowse2_color  => ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig->veupathJexl('veupathProcessedTranscriptColor'),
   })->getConfigurationObject();
 
   push @{$result->{tracks}}, $track if($track);

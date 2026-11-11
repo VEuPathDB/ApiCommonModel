@@ -37,10 +37,30 @@ our %REQUIRED_LOCATIONS = (
   MultiWiggleAdapter  => [['subadapters']],
 );
 
+# The VEuPathDBDisplay plugin's jexl functions: its README function table, the contract
+# producers code against. A hub's jexl is exactly one call to one of these.
+our %JEXL_FUNCTIONS = map { $_ => 1 } qw(
+  veupathVariantEffectColor veupathStrandColor veupathProcessedTranscriptColor
+  veupathGsnapIntronColor veupathGsnapIntronLineThickness veupathHaplotypeColor
+  veupathBindingSiteColor veupathInterproColor veupathSignalpColor veupathIedbColor
+  veupathPostTranslationalModColor
+);
+
+our $JEXL_LITERAL = qr/'[^'\\]*'|-?\d+(?:\.\d+)?/;
+our $JEXL_CALL = qr/^jexl:(\w+)\(\s*feature\s*((?:,\s*(?:$JEXL_LITERAL)\s*)*)\)$/;
+
+# Attribute references a jexl string could make. The v5 GFF3 adapter lowercases attribute
+# names, so an uppercase one never matches a field (F1).
+our @JEXL_ATTRIBUTE_REFS = (
+  qr/\bfeature\s*\.\s*([A-Za-z_]\w*)\b(?!\s*\()/,
+  qr/\bget\s*\(\s*feature\s*,\s*'([^']*)'/,
+  qr/\bfeature\s*\.\s*get\s*\(\s*'([^']*)'/,
+);
+
 our @RULES = qw(
   jbrowse1-shape track-id-missing track-id-format track-id-duplicate track-id-prefix
   track-type assembly-names display-type display-id adapter-type adapter-location
-  location-url assembly-name
+  location-url assembly-name jexl-call jexl-attribute-case
 );
 
 # $opts->{locationPrefixes}: further accepted location prefixes, beyond the store URLs.
@@ -130,9 +150,48 @@ sub validate {
     }
 
     $class->_checkAdapter($track->{adapter}, $where, $add, \@prefixes);
+    $class->_checkJexl($track, $where, $add);
   }
 
   return \@violations;
+}
+
+sub _checkJexl {
+  my ($class, $track, $where, $add) = @_;
+
+  foreach my $found (_jexlStrings($track, '')) {
+    my ($path, $jexl) = @$found;
+    my $jwhere = "$where $path";
+
+    my ($name) = $jexl =~ $JEXL_CALL;
+    if(!defined($name)) {
+      $add->('jexl-call', $jwhere, "not a single veupath* call with literal arguments: $jexl");
+    }
+    elsif(!$JEXL_FUNCTIONS{$name}) {
+      $add->('jexl-call', $jwhere, "function not in the VEuPathDBDisplay allowlist: $name");
+    }
+
+    foreach my $pattern (@JEXL_ATTRIBUTE_REFS) {
+      while($jexl =~ /$pattern/g) {
+        my $attribute = $1;
+        next if($attribute eq lc($attribute));
+        $add->('jexl-attribute-case', $jwhere, "attribute '$attribute' is not lowercase: $jexl");
+      }
+    }
+  }
+}
+
+# [path, string] for every "jexl:" string under a node, in key order.
+sub _jexlStrings {
+  my ($node, $path) = @_;
+
+  if(ref($node) eq 'HASH') {
+    return map { _jexlStrings($node->{$_}, $path eq '' ? $_ : "$path.$_") } sort keys %$node;
+  }
+  if(ref($node) eq 'ARRAY') {
+    return map { _jexlStrings($node->[$_], "${path}[$_]") } 0 .. $#$node;
+  }
+  return defined($node) && !ref($node) && $node =~ /^jexl:/ ? ([$path, $node]) : ();
 }
 
 sub _checkAdapter {

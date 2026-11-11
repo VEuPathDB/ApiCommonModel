@@ -23,6 +23,7 @@ sub new {
     $self->setStore($store);
 
     $self->setColor("{colorForBindingSitesByPvalueFxn}");
+    $self->setJBrowse2Color($self->veupathJexl('veupathBindingSiteColor'));
     $self->setBorderColor("darkgray");
     $self->setMaxFeatureScreenDensity(0.03);
     $self->setRegionFeatureDensities(JSON::true);

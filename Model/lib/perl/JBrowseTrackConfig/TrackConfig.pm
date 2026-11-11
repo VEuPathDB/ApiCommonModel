@@ -2,6 +2,7 @@ package ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig;
 use base qw(ApiCommonModel::Model::JBrowseTrackConfig::JBrowseBaseConfig);
 
 use ApiCommonModel::Model::JBrowseTrackConfig::DatasetConfig;
+use ApiCommonModel::Model::JBrowseConfigRelease::Validate;
 
 use strict;
 use warnings;
@@ -38,6 +39,11 @@ sub setHeight {$_[0]->{height} = $_[1]}
 sub getBorderColor {$_[0]->{border_color}}
 sub setBorderColor {$_[0]->{border_color} = $_[1]}
 
+# JBrowse 2's feature fill (displays[0].encoding.color.value): a CSS colour or a veupathJexl
+# call. Separate from the JBrowse 1 colour so neither application's output can leak into the other.
+sub getJBrowse2Color {$_[0]->{jbrowse2_color}}
+sub setJBrowse2Color {$_[0]->{jbrowse2_color} = $_[1]}
+
 sub getDisplayName {$_[0]->{display_name}}
 sub setDisplayName {$_[0]->{display_name} = $_[1]}
 
@@ -69,6 +75,7 @@ sub new {
     $self->setId($args->{id});
 
     $self->setColor($args->{color});
+    $self->setJBrowse2Color($args->{jbrowse2_color});
     $self->setHeight($args->{height});
 
 #    $self->setStoreType($args->{store});
@@ -298,6 +305,8 @@ sub getJBrowse2Object {
 
     if($displayType) {
         $jbrowseObject->{displays}->[0] = {type => $displayType};
+        my $color = $self->getJBrowse2Color();
+        $jbrowseObject->{displays}->[0]->{encoding}->{color} = {value => $color} if(defined($color));
     }
     $jbrowseObject->{metadata} = $metadata if($metadata);
 
@@ -311,6 +320,20 @@ sub getJBrowse2Object {
 sub getApolloObject {
     my $self = shift;
     die "Abstract method 'apollo' must be implemented by subclass";
+}
+
+# "jexl:<name>(feature, '<arg>', ...)": one VEuPathDBDisplay call with literal string arguments,
+# the only jexl shape the validator admits. Dies on anything else rather than emit it.
+sub veupathJexl {
+    my ($class, $name, @args) = @_;
+
+    die "Not a VEuPathDBDisplay jexl function: $name\n"
+        unless($ApiCommonModel::Model::JBrowseConfigRelease::Validate::JEXL_FUNCTIONS{$name});
+    foreach my $arg (@args) {
+        die "jexl argument for $name is not a plain literal: $arg\n" if($arg =~ /['\\\n]/);
+    }
+
+    return "jexl:$name(" . join(', ', 'feature', map { "'$_'" } @args) . ")";
 }
 
 # The JBrowse 2 track contract, applied once to every class's object so no subclass

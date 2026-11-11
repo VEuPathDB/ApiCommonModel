@@ -45,6 +45,8 @@ sub new {
     $self->setViewDetailsContent($detailsFunction);
     #$self->setDisplayMode("compact");
 
+    $self->setJBrowse2Color($self->veupathJexl('veupathIedbColor'));
+
     return $self;
 }
 

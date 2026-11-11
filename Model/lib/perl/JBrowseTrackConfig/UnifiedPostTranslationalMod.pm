@@ -44,6 +44,8 @@ sub new {
 
     $self->setRegionFeatureDensities(JSON::true);
 
+    $self->setJBrowse2Color($self->veupathJexl('veupathPostTranslationalModColor'));
+
     return $self;
 }
 

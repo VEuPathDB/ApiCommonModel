@@ -12,6 +12,8 @@ sub new {
     my $self = $class->SUPER::new($args);
 
     $self->setColor("{massSpecColor}");
+    # massSpecColor reads a feature 'color' these GFFs never carry, so JBrowse 1 always drew its fallback.
+    $self->setJBrowse2Color('gray');
 
     my $datasetConfig = $self->getDatasetConfigObj();
     $datasetConfig->setCategory("Proteomics");

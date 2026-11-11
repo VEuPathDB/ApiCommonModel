@@ -18,6 +18,7 @@ sub new {
     # Both need a per-feature decision, so both are functions from functions.conf.
     $self->setGlyph("{variantGlyphFxn}");
     $self->setColor("{variantEffectColorFxn}");
+    $self->setJBrowse2Color($self->veupathJexl('veupathVariantEffectColor'));
 
     $self->setTrackTypeDisplay("Merged VCF");
 
