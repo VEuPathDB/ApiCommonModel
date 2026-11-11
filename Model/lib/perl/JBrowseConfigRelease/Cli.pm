@@ -55,10 +55,13 @@ Phases (exactly one, they cost differently):
   --generate      hours.  Everything --report does, then builds the package for
                   the approved roster and writes the update command files.
   --jbrowse2      the JBrowse 2 v5 configs for --project, into --out-dir itself:
-                  config.json (every organism's genome and protein assembly),
-                  organisms.json, <abbrev>.hub.json per --organism, trix/ and
-                  manifest.tsv.  No Apollo, no roster.  Fails on any contract
-                  violation and on `jbrowse validate`.
+                  config.json (every organism's genome and protein assembly,
+                  and the hub URL template), organisms.json,
+                  <abbrev>.hub.json per --organism, trix/ and manifest.tsv.
+                  With no --organism it writes no hub at all; the report
+                  lists every root organism left without one.  No Apollo,
+                  no roster.  Fails on any contract violation and on
+                  `jbrowse validate`.
 
 Options:
   --build N               release build number                       (required)
@@ -85,7 +88,8 @@ Options:
   --jbrowse-cli PATH      --jbrowse2: the @jbrowse/cli `jbrowse` executable
                           (validate, text-index).                      (required)
   --artifact-url-base URL --jbrowse2: URL prefix for files the dump itself writes
-                          (trix).  Default: the store URL of their mirror home.
+                          (trix, and the hubs the root's template names).
+                          Default: the store URL of their mirror home.
   --help                  this text
 
 Output: <out-dir>/release-<build>/<environment>/

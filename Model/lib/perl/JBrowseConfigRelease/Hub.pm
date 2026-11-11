@@ -13,8 +13,9 @@ use ApiCommonModel::Model::JBrowseConfigRelease::Generate;
 use ApiCommonModel::Model::JBrowseConfigRelease::Validate;
 
 # The JBrowse 2 v5 dump (decision 0007): per project a root config declaring every
-# organism's genome and protein assembly and no tracks, an organism list for the
-# picker, and per organism a hub (a JBrowse 2 config.json read by
+# organism's genome and protein assembly, no tracks, and the URL template
+# VEuPathDBSite resolves each organism's hub from; an organism list for the
+# picker; and per organism a hub (a JBrowse 2 config.json read by
 # JB2TrackHubConnection) holding that organism's assemblies and tracks.
 #
 # Builders are pure; producers, files and the jbrowse CLI sit behind seams.
@@ -123,11 +124,23 @@ sub assembliesFor {
 
 # --- PURE: the three documents ---
 
+sub hubFile { return "$_[1].hub.json" }
+
+# VEuPathDBSite substitutes {abbrev} itself, so the placeholder must reach it
+# unescaped: never route the template through storeUrl.
+sub hubUrlTemplate {
+  my ($class, $artifactUrlBase) = @_;
+  die "hubUrlTemplate needs the artifact URL base\n"
+    unless(defined $artifactUrlBase && length $artifactUrlBase);
+  return $artifactUrlBase . $class->hubFile('{abbrev}');
+}
+
 sub rootConfig {
-  my ($class, $organisms) = @_;
+  my ($class, $organisms, $artifactUrlBase) = @_;
   my @assemblies = sort { $a->{name} cmp $b->{name} }
                    map { $class->assembliesFor($_) } @$organisms;
-  return {assemblies => \@assemblies};
+  return {assemblies    => \@assemblies,
+          configuration => {VEuPathDBSite => {hubUrlTemplate => $class->hubUrlTemplate($artifactUrlBase)}}};
 }
 
 sub organismList {
@@ -270,18 +283,40 @@ sub _defaultTextIndex {
   }
 }
 
+# The CLI loads no plugins and the root has no plugins key (the site endpoint adds
+# them), so a site plugin's root slot is always an unknown slot to it.
+our @SITE_PLUGIN_SLOTS = ('VEuPathDBSite');
+
+sub _isSitePluginSlot {
+  my ($problem) = @_;
+  return grep { $problem->{level} eq 'error' && $problem->{where} eq "configuration.$_"
+                && index($problem->{message}, qq{unknown slot "$_"}) == 0 } @SITE_PLUGIN_SLOTS;
+}
+
 # A warning fails the dump too: an adapter type v5 does not register is only a warning
 # there, and it is a track that never loads.
+sub judgeJBrowseValidate {
+  my ($class, $exit, $out) = @_;
+  my $report = eval { decode_json($out) };
+  return (1, $out) unless($report);
+
+  my @problems = @{$report->{problems} || []};
+  my @expected = grep { _isSitePluginSlot($_) } @problems;
+  my @rest = grep { !_isSitePluginSlot($_) } @problems;
+  my $errors = $report->{errorCount} - @expected;
+
+  my $summary = "$errors error(s), $report->{warningCount} warning(s)";
+  $summary .= "\n" . join("\n", map { "  $_->{level} $_->{where}: $_->{message}" } @rest) if(@rest);
+  $summary .= "\n" . join("\n", map { "  expected $_->{where}: site plugin slot, unknown to the CLI" } @expected)
+    if(@expected);
+  my $failed = $errors || $report->{warningCount} || ($exit && !@expected);
+  return ($failed ? 1 : 0, $summary);
+}
+
 sub _defaultJBrowseValidate {
   my ($opts, $path) = @_;
   my $out = `'$opts->{jbrowse}' validate --json '$path' 2>/dev/null`;
-  my $exit = $? >> 8;
-  my $report = eval { decode_json($out) };
-  return (1, $out) unless($report);
-  my $summary = "$report->{errorCount} error(s), $report->{warningCount} warning(s)";
-  $summary .= "\n" . join("\n", map { "  $_->{level} $_->{where}: $_->{message}" } @{$report->{problems} || []})
-    if(@{$report->{problems} || []});
-  return (($exit || $report->{errorCount} || $report->{warningCount}) ? 1 : 0, $summary);
+  return __PACKAGE__->judgeJBrowseValidate($? >> 8, $out);
 }
 
 # $organisms: every organism of the project (root + organisms.json).
@@ -313,7 +348,7 @@ sub dump {
   }
 
   my %written;
-  my $root = $class->rootConfig($organisms);
+  my $root = $class->rootConfig($organisms, $opts->{artifactUrlBase});
   $class->writeFile("$outDir/config.json", $class->encodeJson($root));
   $written{'config.json'} = 1;
 
@@ -324,7 +359,7 @@ sub dump {
   foreach my $abbrev (sort @$hubAbbrevs) {
     my $organism = $byAbbrev{$abbrev};
     my $built = $class->buildHub($organism, $opts);
-    my $file = "$abbrev.hub.json";
+    my $file = $class->hubFile($abbrev);
     $class->writeFile("$outDir/$file", $class->encodeJson($built->{hub}));
     $written{$file} = 1;
 
@@ -348,8 +383,11 @@ sub dump {
   $class->writeFile("$outDir/manifest.tsv",
                     join('', map { "$_->{file}\t$_->{bytes}\t$_->{md5}\t$_->{mirror}\n" } @manifest));
 
+  my @noHub = sort grep { !$summaries{$_} } keys %byAbbrev;
   return {root_assemblies => scalar @{$root->{assemblies}}, organisms => scalar @$organisms,
-          hubs => \%summaries, manifest => \@manifest, jbrowse_validate => \%jbrowseValidate};
+          hub_url_template => $root->{configuration}{VEuPathDBSite}{hubUrlTemplate},
+          hubs => \%summaries, no_hub => \@noHub, manifest => \@manifest,
+          jbrowse_validate => \%jbrowseValidate};
 }
 
 1;
