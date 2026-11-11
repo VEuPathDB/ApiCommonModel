@@ -91,11 +91,27 @@ sub slurp { open(my $fh, '<', $_[0]) or die "$_[0]: $!"; local $/; return scalar
 
 # --- root config and organism list ---
 {
-  my $root = $H->rootConfig(\@ORGANISMS);
+  my $root = $H->rootConfig(\@ORGANISMS, '/plasmo.x/jbrowse2-v5dump/');
   is_deeply([map { $_->{name} } @{$root->{assemblies}}],
             [qw(pberANKA pberANKA_protein pfal3D7 pfal3D7_protein pfalNoAnno)],
             'root: every genome and protein assembly, sorted');
   ok(!exists $root->{tracks}, 'root: no tracks');
+  ok(!exists $root->{plugins}, 'root: no plugins (the site endpoint adds them)');
+  is_deeply([sort keys %$root], [qw(assemblies configuration)], 'root: assemblies and configuration only');
+
+  is_deeply($root->{configuration},
+            {VEuPathDBSite => {hubUrlTemplate => '/plasmo.x/jbrowse2-v5dump/{abbrev}.hub.json'}},
+            'root: the hub URL template is the explicit artifact base plus {abbrev}.hub.json');
+
+  my $default = $H->rootConfig(\@ORGANISMS, $H->defaultArtifactUrlBase())
+    ->{configuration}{VEuPathDBSite}{hubUrlTemplate};
+  is($default, "${S}jbrowse2/{abbrev}.hub.json",
+     'root: with the default base the template is the hubs\' store URL');
+  like($default, qr/\{abbrev\}/, 'root: {abbrev} reaches the plugin unescaped');
+  unlike($default, qr/%7B|%7D/i, 'root: the placeholder is never percent-encoded');
+
+  eval { $H->rootConfig(\@ORGANISMS) };
+  like($@, qr/needs the artifact URL base/, 'root: refuses to build a template without a base');
 
   is_deeply($H->organismList([reverse @ORGANISMS])->[1],
             {abbrev => 'pfal3D7', displayName => 'Plasmodium falciparum 3D7', genus => 'Plasmodium',
@@ -176,6 +192,14 @@ sub slurp { open(my $fh, '<', $_[0]) or die "$_[0]: $!"; local $/; return scalar
        'manifest.tsv: file, bytes, md5, mirror path');
   is_deeply([sort keys %{$result->{jbrowse_validate}}], [qw(config.json pfal3D7.hub.json)],
             'jbrowse validate runs on the root and on each hub');
+  is_deeply($result->{no_hub}, [qw(pberANKA pfalNoAnno)], 'reports the root organisms that got no hub');
+  is($result->{hub_url_template}, '/plasmo.x/jbrowse2-v5dump/{abbrev}.hub.json',
+     'reports the template, built from the dump\'s artifact base');
+  is(decode_json(slurp("$out/config.json"))->{configuration}{VEuPathDBSite}{hubUrlTemplate},
+     '/plasmo.x/jbrowse2-v5dump/{abbrev}.hub.json', 'the written root carries the template');
+  is($H->hubUrlTemplate($opts->{artifactUrlBase}) =~ s/\{abbrev\}/pfal3D7/r,
+     $opts->{artifactUrlBase} . $result->{manifest}[2]{file},
+     'the template resolves to the hub file the dump wrote');
 
   my ($again) = opts();
   $H->dump(\@ORGANISMS, ['pfal3D7'], $again);
@@ -185,6 +209,15 @@ sub slurp { open(my $fh, '<', $_[0]) or die "$_[0]: $!"; local $/; return scalar
 
   eval { $H->dump(\@ORGANISMS, ['pfal3D7'], $opts) };
   like($@, qr/is not empty/, 'refuses to write into a directory that already holds a dump');
+}
+
+{
+  my ($opts, $calls) = opts();
+  my $result = $H->dump(\@ORGANISMS, [], $opts);
+  is_deeply([map { $_->{file} } @{$result->{manifest}}], [qw(config.json organisms.json)],
+            'no --organism: the root and organism list, no hub');
+  is_deeply($result->{no_hub}, [qw(pberANKA pfal3D7 pfalNoAnno)], 'no --organism: every root organism is reported hubless');
+  is(scalar(@$calls), 0, 'no --organism: no producer runs');
 }
 
 {
@@ -203,6 +236,39 @@ sub slurp { open(my $fh, '<', $_[0]) or die "$_[0]: $!"; local $/; return scalar
   my ($opts) = opts(jbrowseValidate => sub { (1, '0 error(s), 1 warning(s)') });
   eval { $H->dump(\@ORGANISMS, ['pfal3D7'], $opts) };
   like($@, qr/jbrowse validate config\.json exited 1/, 'jbrowse validate failing fails the dump');
+}
+
+# --- judging `jbrowse validate --json` ---
+{
+  my $problem = sub { my ($level, $where, $message) = @_; {level => $level, where => $where, message => $message} };
+  my $report = sub { my @p = @_;
+    encode_json({problems => \@p, errorCount => scalar(grep { $_->{level} eq 'error' } @p),
+                 warningCount => scalar(grep { $_->{level} eq 'warning' } @p)}) };
+  my $siteSlot = $problem->('error', 'configuration.VEuPathDBSite',
+                            'unknown slot "VEuPathDBSite" — JBrowse ignores keys it does not declare');
+
+  my ($status, $summary) = $H->judgeJBrowseValidate(1, $report->($siteSlot));
+  is($status, 0, 'validate: the site plugin\'s root slot alone passes');
+  like($summary, qr/^0 error\(s\), 0 warning\(s\)\n  expected configuration\.VEuPathDBSite/,
+       'validate: and is reported as expected, not hidden');
+
+  ($status) = $H->judgeJBrowseValidate(1, $report->($siteSlot,
+    $problem->('error', 'configuration.Other', 'unknown slot "Other"')));
+  is($status, 1, 'validate: any other unknown root slot still fails');
+
+  ($status) = $H->judgeJBrowseValidate(0, $report->($siteSlot,
+    $problem->('warning', 'tracks[0].adapter', 'type not registered')));
+  is($status, 1, 'validate: a warning beside the site slot still fails');
+
+  ($status) = $H->judgeJBrowseValidate(1, $report->(
+    $problem->('error', 'tracks[0].configuration.VEuPathDBSite', 'unknown slot "VEuPathDBSite"')));
+  is($status, 1, 'validate: the exemption is for the root slot only');
+
+  ($status) = $H->judgeJBrowseValidate(1, 'not json');
+  is($status, 1, 'validate: unreadable output fails');
+
+  ($status) = $H->judgeJBrowseValidate(0, $report->());
+  is($status, 0, 'validate: a clean report passes');
 }
 
 done_testing();
