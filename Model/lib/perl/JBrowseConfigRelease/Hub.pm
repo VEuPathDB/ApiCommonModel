@@ -7,6 +7,7 @@ use JSON;
 use File::Path qw(make_path);
 use File::Temp;
 use Digest::MD5;
+use Time::HiRes;
 use URI::Escape;
 
 use ApiCommonModel::Model::JBrowseConfigRelease::Generate;
@@ -319,10 +320,18 @@ sub _defaultJBrowseValidate {
   return __PACKAGE__->judgeJBrowseValidate($? >> 8, $out);
 }
 
+# No narrowing means every root organism: the root's template names a hub for each.
+sub hubAbbrevsFor {
+  my ($class, $organisms, $requested) = @_;
+  return [@$requested] if($requested && @$requested);
+  return [map { $_->{abbrev} } @$organisms];
+}
+
 # $organisms: every organism of the project (root + organisms.json).
-# $hubAbbrevs: the organisms that get a hub.
+# $requested: --organism abbrevs narrowing the hubs; empty means all of $organisms.
+# Optional seams: clock() -> seconds, progress($abbrev, $seconds, $done, $total).
 sub dump {
-  my ($class, $organisms, $hubAbbrevs, $opts) = @_;
+  my ($class, $organisms, $requested, $opts) = @_;
 
   my $outDir = $opts->{outDir};
   die "--out-dir $outDir is not empty; the dump writes a whole set, never into an old one\n"
@@ -330,12 +339,15 @@ sub dump {
   make_path("$outDir/trix");
 
   my %byAbbrev = map { $_->{abbrev} => $_ } @$organisms;
+  my $hubAbbrevs = $class->hubAbbrevsFor($organisms, $requested);
   my @unknown = grep { !$byAbbrev{$_} } @$hubAbbrevs;
   die "not organisms of $opts->{project}: @unknown\n" if(@unknown);
 
   my $fileExists = $opts->{fileExists} || sub { -e $_[0] };
   my $textIndex  = $opts->{textIndex}  || \&_defaultTextIndex;
   my $jbValidate = $opts->{jbrowseValidate} || \&_defaultJBrowseValidate;
+  my $clock      = $opts->{clock}    || \&Time::HiRes::time;
+  my $progress   = $opts->{progress} || sub {};
   my $build = "$opts->{wsDir}/$opts->{project}/build-$opts->{build}";
 
   foreach my $organism (@$organisms) {
@@ -347,35 +359,43 @@ sub dump {
     }
   }
 
-  my %written;
+  my (%written, %jbrowseValidate);
+  # Each file is validated as soon as it is written, so a full run fails at the
+  # organism that broke rather than after every other hub is built.
+  my $validate = sub {
+    my ($file) = @_;
+    my ($status, $out) = $jbValidate->($opts, "$outDir/$file");
+    $jbrowseValidate{$file} = {status => $status, output => $out};
+    die "jbrowse validate $file exited $status:\n$out" if($status);
+  };
+
   my $root = $class->rootConfig($organisms, $opts->{artifactUrlBase});
   $class->writeFile("$outDir/config.json", $class->encodeJson($root));
   $written{'config.json'} = 1;
+  $validate->('config.json');
 
   $class->writeFile("$outDir/organisms.json", $class->encodeJson($class->organismList($organisms)));
   $written{'organisms.json'} = 1;
 
   my %summaries;
-  foreach my $abbrev (sort @$hubAbbrevs) {
+  my @ordered = sort @$hubAbbrevs;
+  foreach my $abbrev (@ordered) {
+    my $started = $clock->();
     my $organism = $byAbbrev{$abbrev};
     my $built = $class->buildHub($organism, $opts);
     my $file = $class->hubFile($abbrev);
     $class->writeFile("$outDir/$file", $class->encodeJson($built->{hub}));
     $written{$file} = 1;
+    $validate->($file);
 
     if($organism->{is_annotated}) {
       my $trackId = $class->geneModelsTrackId($organism);
       $textIndex->($opts, "$build/" . $class->geneGffPath($organism), $trackId);
       $written{$_} = 1 foreach($class->trixFiles($trackId));
     }
+    $built->{seconds} = $clock->() - $started;
     $summaries{$abbrev} = $built;
-  }
-
-  my %jbrowseValidate;
-  foreach my $file (grep { /\.json$/ && !/^trix\// && $_ ne 'organisms.json' } sort keys %written) {
-    my ($status, $out) = $jbValidate->($opts, "$outDir/$file");
-    $jbrowseValidate{$file} = {status => $status, output => $out};
-    die "jbrowse validate $file exited $status:\n$out" if($status);
+    $progress->($abbrev, $built->{seconds}, scalar(keys %summaries), scalar @ordered);
   }
 
   my @manifest = map { {file => $_, bytes => -s "$outDir/$_", md5 => _md5("$outDir/$_"),

@@ -176,6 +176,15 @@ sub slurp { open(my $fh, '<', $_[0]) or die "$_[0]: $!"; local $/; return scalar
   like($@, qr/not JSON objects/, 'a producer emitting a non-object fails');
 }
 
+# Every organism's producers emit just its gene-model track; enough for a whole-project dump.
+my %PUBLIC = map { ($_->{internal_abbrev} => $_->{abbrev}) } @ORGANISMS;
+sub geneModelsOnly {
+  my ($gus, $script, $internal) = @_;
+  my $abbrev = $PUBLIC{$internal};
+  return encode_json({tracks => []}) unless($script eq 'jbrowseOrganismSpecificTracks');
+  return encode_json({tracks => [feature("${abbrev}_GeneModels", $abbrev, "x/$abbrev.gff.gz")]});
+}
+
 # --- the dump ---
 {
   my ($opts) = opts();
@@ -212,12 +221,45 @@ sub slurp { open(my $fh, '<', $_[0]) or die "$_[0]: $!"; local $/; return scalar
 }
 
 {
-  my ($opts, $calls) = opts();
+  my $tick = 0;
+  my @progress;
+  my ($opts) = opts(runScript => \&geneModelsOnly,
+                    clock => sub { $tick += 2 },
+                    progress => sub { push @progress, [@_] });
   my $result = $H->dump(\@ORGANISMS, [], $opts);
-  is_deeply([map { $_->{file} } @{$result->{manifest}}], [qw(config.json organisms.json)],
-            'no --organism: the root and organism list, no hub');
-  is_deeply($result->{no_hub}, [qw(pberANKA pfal3D7 pfalNoAnno)], 'no --organism: every root organism is reported hubless');
-  is(scalar(@$calls), 0, 'no --organism: no producer runs');
+  is_deeply([sort keys %{$result->{hubs}}], [qw(pberANKA pfal3D7 pfalNoAnno)],
+            'no --organism: a hub for every root organism');
+  is_deeply($result->{no_hub}, [], 'no --organism: no root organism is left without a hub');
+  is_deeply([map { $_->{file} } @{$result->{manifest}}],
+            [qw(config.json organisms.json pberANKA.hub.json pfal3D7.hub.json pfalNoAnno.hub.json
+                trix/pberANKA_GeneModels.ix trix/pberANKA_GeneModels.ixx
+                trix/pfal3D7_GeneModels.ix trix/pfal3D7_GeneModels.ixx)],
+            'no --organism: trix only for the annotated organisms');
+  is_deeply([sort keys %{$result->{jbrowse_validate}}],
+            [qw(config.json pberANKA.hub.json pfal3D7.hub.json pfalNoAnno.hub.json)],
+            'every hub is validated');
+  is($result->{hubs}{pfal3D7}{seconds}, 2, 'each hub reports its own time');
+  is_deeply([map { [$_->[0], @$_[2, 3]] } @progress],
+            [[pberANKA => 1, 3], [pfal3D7 => 2, 3], [pfalNoAnno => 3, 3]],
+            'progress is reported per organism, in order');
+}
+
+{
+  my ($opts) = opts();
+  my $result = $H->dump(\@ORGANISMS, ['pfal3D7'], $opts);
+  is_deeply([sort keys %{$result->{hubs}}], ['pfal3D7'], '--organism: only the named hubs');
+  is_deeply($result->{no_hub}, [qw(pberANKA pfalNoAnno)], '--organism: the rest are reported hubless');
+}
+
+{
+  my @validated;
+  my ($opts) = opts(jbrowseValidate => sub { push @validated, $_[1] =~ s{.*/}{}r;
+                                             $_[1] =~ /pfal3D7\.hub/ ? (1, 'broken') : (0, 'ok') },
+                    runScript => \&geneModelsOnly);
+  eval { $H->dump(\@ORGANISMS, [], $opts) };
+  like($@, qr/jbrowse validate pfal3D7\.hub\.json exited 1/, 'a failing hub names its organism');
+  is_deeply(\@validated, [qw(config.json pberANKA.hub.json pfal3D7.hub.json)],
+            'and stops there, before building the hubs after it');
 }
 
 {

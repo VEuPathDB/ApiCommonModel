@@ -57,11 +57,11 @@ Phases (exactly one, they cost differently):
   --jbrowse2      the JBrowse 2 v5 configs for --project, into --out-dir itself:
                   config.json (every organism's genome and protein assembly,
                   and the hub URL template), organisms.json,
-                  <abbrev>.hub.json per --organism, trix/ and manifest.tsv.
-                  With no --organism it writes no hub at all; the report
-                  lists every root organism left without one.  No Apollo,
-                  no roster.  Fails on any contract violation and on
-                  `jbrowse validate`.
+                  <abbrev>.hub.json for every root organism, trix/ and
+                  manifest.tsv.  --organism narrows the hubs to those named
+                  (a trial); the report lists the root organisms left
+                  without one.  No Apollo, no roster.  Fails on any
+                  contract violation and on `jbrowse validate`.
 
 Options:
   --build N               release build number                       (required)
@@ -74,7 +74,8 @@ Options:
   --previous-release DIR  the previous release's <env> directory, i.e. the one
                           containing data/.  Enables the assembly-identity
                           fallback for renames the database cannot explain.
-  --organism ABBREV       narrow GENERATION to this organism; repeatable.
+  --organism ABBREV       narrow GENERATION (and --jbrowse2 hubs) to this
+                          organism; repeatable.
                           Reconciliation always runs over everything, so the
                           report and the safety invariants are unaffected.
   --roster-overlay FILE   read the roster overlay from FILE instead of the
