@@ -657,7 +657,9 @@ sub addJBrowse2GeneModels {
     id              => "Annotated Transcripts",
     category        => "Gene Models",
     subcategory     => "Transcripts",
-    jbrowse2_color  => ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig->veupathJexl('veupathProcessedTranscriptColor'),
+    # Noncoding genes lightgrey and UTRs grey: JBrowse 1's synteny gene colours, not the gene track's white UTRs.
+    jbrowse2_color     => ApiCommonModel::Model::JBrowseTrackConfig::TrackConfig->veupathJexl('veupathProcessedTranscriptColor', 'lightgrey'),
+    jbrowse2_utr_color => 'grey',
   })->getConfigurationObject();
 
   push @{$result->{tracks}}, $track if($track);

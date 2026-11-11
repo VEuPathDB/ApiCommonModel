@@ -190,6 +190,25 @@ is_deeply(jexlRules("jexl:get(feature,'score') > 1"), ['jexl-call'],
        'where names the slot');
 }
 
+# the UTR slot takes a literal colour or an allowlisted call, under the same rules
+{
+  my $utr = sub {
+    my ($value) = @_;
+    my $config = validConfig();
+    $config->{tracks}[2]{displays}[0]{utrs} = {encoding => {color => {value => $value}}};
+    return $config;
+  };
+  is_deeply(rulesFor($utr->('grey')), [], 'utrs: a literal colour');
+  is_deeply(rulesFor($utr->("jexl:veupathStrandColor(feature, 'grey', 'silver')")), [], 'utrs: an allowlisted call');
+  is_deeply(rulesFor($utr->("jexl:get(feature,'strand') == 1 ? 'grey' : 'silver'")), ['jexl-call'],
+            'utrs: an inline expression is refused');
+  is_deeply(rulesFor($utr->("jexl:veupathNotAFunction(feature)")), ['jexl-call'], 'utrs: an unlisted function is refused');
+  is_deeply(rulesFor($utr->("jexl:get(feature,'Strand') == 1")), ['jexl-call', 'jexl-attribute-case'],
+            'utrs: an uppercase attribute is refused');
+  my ($v) = @{$V->validate($utr->("jexl:veupathNotAFunction(feature)"))};
+  like($v->{where}, qr/displays\[0\]\.utrs\.encoding\.color\.value$/, 'utrs: where names the UTR slot');
+}
+
 is_deeply([sort keys %ApiCommonModel::Model::JBrowseConfigRelease::Validate::JEXL_FUNCTIONS],
           [sort qw(veupathVariantEffectColor veupathStrandColor veupathProcessedTranscriptColor
                    veupathGsnapIntronColor veupathGsnapIntronLineThickness veupathHaplotypeColor

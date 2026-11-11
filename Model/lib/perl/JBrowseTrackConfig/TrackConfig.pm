@@ -44,6 +44,10 @@ sub setBorderColor {$_[0]->{border_color} = $_[1]}
 sub getJBrowse2Color {$_[0]->{jbrowse2_color}}
 sub setJBrowse2Color {$_[0]->{jbrowse2_color} = $_[1]}
 
+# The UTR boxes' paint over that fill (displays[0].utrs.encoding.color.value), same value rules.
+sub getJBrowse2UtrColor {$_[0]->{jbrowse2_utr_color}}
+sub setJBrowse2UtrColor {$_[0]->{jbrowse2_utr_color} = $_[1]}
+
 sub getDisplayName {$_[0]->{display_name}}
 sub setDisplayName {$_[0]->{display_name} = $_[1]}
 
@@ -76,6 +80,7 @@ sub new {
 
     $self->setColor($args->{color});
     $self->setJBrowse2Color($args->{jbrowse2_color});
+    $self->setJBrowse2UtrColor($args->{jbrowse2_utr_color});
     $self->setHeight($args->{height});
 
 #    $self->setStoreType($args->{store});
@@ -307,6 +312,8 @@ sub getJBrowse2Object {
         $jbrowseObject->{displays}->[0] = {type => $displayType};
         my $color = $self->getJBrowse2Color();
         $jbrowseObject->{displays}->[0]->{encoding}->{color} = {value => $color} if(defined($color));
+        my $utrColor = $self->getJBrowse2UtrColor();
+        $jbrowseObject->{displays}->[0]->{utrs}->{encoding}->{color} = {value => $utrColor} if(defined($utrColor));
     }
     $jbrowseObject->{metadata} = $metadata if($metadata);
 

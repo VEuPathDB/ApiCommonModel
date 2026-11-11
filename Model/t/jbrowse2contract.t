@@ -339,9 +339,20 @@ sub track {
   my $genes = $T->new({application_type => 'jbrowse2', organism_abbrev => 'intPfal', category => 'Gene Models',
                        store => store('GFFStore', 'jbrowse2', 'P/annotated_transcripts.gff.gz'),
                        label => 'GeneModels', id => 'Annotated Transcripts',
-                       jbrowse2_color => $T->veupathJexl('veupathProcessedTranscriptColor')})->getConfigurationObject();
-  is($genes->{displays}[0]{encoding}{color}{value}, 'jexl:veupathProcessedTranscriptColor(feature)',
-     'gene models: veupathProcessedTranscriptColor');
+                       jbrowse2_color => $T->veupathJexl('veupathProcessedTranscriptColor', 'lightgrey'),
+                       jbrowse2_utr_color => 'grey'})->getConfigurationObject();
+  is($genes->{displays}[0]{encoding}{color}{value}, "jexl:veupathProcessedTranscriptColor(feature, 'lightgrey')",
+     'gene models: veupathProcessedTranscriptColor with the noncoding colour');
+  is_deeply($genes->{displays}[0]{utrs}, {encoding => {color => {value => 'grey'}}}, 'gene models: grey UTRs');
+
+  my $noUtr = $T->new({application_type => 'jbrowse2', organism_abbrev => 'intPfal', category => 'Gene Models',
+                       store => store('GFFStore', 'jbrowse2', 'P/annotated_transcripts.gff.gz'),
+                       label => 'GeneModels', id => 'Annotated Transcripts'})->getConfigurationObject();
+  ok(!exists($noUtr->{displays}[0]{utrs}), 'no UTR colour set, no utrs slot');
+
+  my $genesJb1 = "${NS}::TrackConfig"->new({application_type => 'jbrowse', jbrowse2_utr_color => 'grey',
+                                            jbrowse2_color => 'red'})->getJBrowseStyle();
+  ok(!defined($genesJb1), 'the jbrowse2 colours never reach a JBrowse 1 style');
 
   my $junctions = $make->('RNASeqJunctionTrackConfig', 'jbrowse2', 'P/junctions.gff.gz');
   is_deeply($junctions->{displays}, [{
