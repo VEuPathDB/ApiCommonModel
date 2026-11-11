@@ -21,6 +21,7 @@ sub new {
     $self->setStore($store);
 
     $self->setColor("{haplotypeColorFxn}");
+    $self->setJBrowse2Color($self->veupathJexl('veupathHaplotypeColor'));
     $self->setGlyph("JBrowse/View/FeatureGlyph/Segments");
     $self->setMaxFeatureScreenDensity(10);
 

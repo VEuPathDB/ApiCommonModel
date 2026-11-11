@@ -34,7 +34,7 @@ sub new {
     else {
         # TODO
         $store = ApiCommonModel::Model::JBrowseTrackConfig::VCFStore->new($args);
-        $self->setDisplayType("LinearVariantDisplay");
+        $self->setDisplayType("LinearMarkDisplay");
     }
 
     $self->setStore($store);
@@ -69,21 +69,27 @@ sub getJBrowse2Object{
     my $self = shift;
 
     my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
-    my $datasetConfig = $self->getDatasetConfigObj();
-    my $studyDisplayName = $datasetConfig->getStudyDisplayName();
-    my $trackId = $self->getLabel();
 
     my $uri = $self->getStore()->getUrlTemplate();
     my $indexUri = $uri . "\.tbi";
-    my $displayId = $trackId . "-LinearVariantDisplay";
 
     $jbrowse2Object->{type}= "VariantTrack";
     $jbrowse2Object->{adapter}->{vcfGzLocation} = {uri => $uri, locationType => "UriLocation"};
     $jbrowse2Object->{adapter}->{index}->{location} = {uri => $indexUri, locationType => "UriLocation"};
-    $jbrowse2Object->{displays} = [{displayId => $displayId, type => "LinearVariantDisplay"}];
 
-	    return $jbrowse2Object;
-	}
+    # The JBrowse 1 diamond glyph as a stock point mark, stacked by a pileup so overlapping
+    # variants take separate rows instead of drawing over each other (decision 0005).
+    my $encoding = {y => 'row', shape => {value => 'diamond'}};
+    my $color = $self->getJBrowse2Color();
+    $encoding->{color} = {value => $color} if(defined($color));
+
+    $jbrowse2Object->{displays} = [{
+        type  => 'LinearMarkDisplay',
+        marks => [{mark => 'point', transform => [{type => 'pileup'}], encoding => $encoding}],
+    }];
+
+    return $jbrowse2Object;
+}
 
 1;
 

@@ -141,11 +141,86 @@ violates(sub { $_[0]{assemblies}[0]{name} = 'Plasmodium falciparum 3D7' }, 'asse
     or diag explain $V->validate($config);
 }
 
+# --- jexl: one allowlisted veupath* call, literal arguments, lowercase attributes ---
+sub withJexl {
+  my ($jexl) = @_;
+  return sub { $_[0]{tracks}[2]{displays}[0]{encoding}{color}{value} = $jexl };
+}
+
+sub jexlRules {
+  my ($jexl) = @_;
+  my $config = validConfig();
+  withJexl($jexl)->($config);
+  return rulesFor($config);
+}
+
+foreach my $jexl ("jexl:veupathStrandColor(feature, 'deepskyblue', 'pink')",
+                  "jexl:veupathGsnapIntronColor(feature)",
+                  "jexl:veupathStrandColor(feature,'#6666FF','#F18F74')",
+                  "jexl:veupathIedbColor( feature )",
+                  "jexl:veupathStrandColor(feature, 2, -0.5)") {
+  is_deeply(jexlRules($jexl), [], "jexl accepted: $jexl");
+}
+is_deeply(jexlRules('darkgreen'), [], 'a plain colour is not jexl');
+
+violates(withJexl("jexl:get(feature,'score') > 1"), 'jexl-call', 'inline expression');
+violates(withJexl("jexl:veupathNotAFunction(feature)"), 'jexl-call', 'function outside the allowlist');
+violates(withJexl("jexl:strandColor(feature, 'a', 'b')"), 'jexl-call', 'unprefixed plugin function name');
+violates(withJexl("jexl:veupathIedbColor(feature) || 'red'"), 'jexl-call', 'call inside a larger expression');
+violates(withJexl("jexl:veupathStrandColor(feature, feature.strand, 'red')"), 'jexl-call', 'non-literal argument');
+violates(withJexl("jexl:veupathStrandColor('a', 'b')"), 'jexl-call', 'feature is not the first argument');
+violates(withJexl("jexl:veupathStrandColor(feature, 'it\\'s', 'b')"), 'jexl-call', 'escaped quote in a literal');
+
+violates(withJexl("jexl:get(feature,'Score') > 1"), 'jexl-attribute-case', 'get() with an uppercase attribute');
+violates(withJexl("jexl:feature.TotalScore > 2"), 'jexl-attribute-case', 'member access with an uppercase attribute');
+violates(withJexl("jexl:feature.get('Strand') == 1"), 'jexl-attribute-case', 'feature.get with an uppercase attribute');
+is_deeply(jexlRules("jexl:get(feature,'score') > 1"), ['jexl-call'],
+          'a lowercase attribute is only the shape violation');
+
+# jexl in any slot of any display or mark is checked, not just encoding.color
+{
+  my $config = validConfig();
+  $config->{tracks}[2]{displays} = [{
+    type => 'LinearMarkDisplay', displayId => 'pfal3D7_repeats-LinearMarkDisplay',
+    marks => [{mark => 'link', encoding => {strokeWidth => {field => "jexl:feature.TotalScore / 2"}}}],
+  }];
+  my @found = @{$V->validate($config)};
+  is_deeply([sort map { $_->{rule} } @found], ['jexl-attribute-case', 'jexl-call'], 'a mark slot is checked');
+  like($found[0]{where}, qr/^tracks\[2\] pfal3D7_repeats displays\[0\]\.marks\[0\]\.encoding\.strokeWidth\.field$/,
+       'where names the slot');
+}
+
+# the UTR slot takes a literal colour or an allowlisted call, under the same rules
+{
+  my $utr = sub {
+    my ($value) = @_;
+    my $config = validConfig();
+    $config->{tracks}[2]{displays}[0]{utrs} = {encoding => {color => {value => $value}}};
+    return $config;
+  };
+  is_deeply(rulesFor($utr->('grey')), [], 'utrs: a literal colour');
+  is_deeply(rulesFor($utr->("jexl:veupathStrandColor(feature, 'grey', 'silver')")), [], 'utrs: an allowlisted call');
+  is_deeply(rulesFor($utr->("jexl:get(feature,'strand') == 1 ? 'grey' : 'silver'")), ['jexl-call'],
+            'utrs: an inline expression is refused');
+  is_deeply(rulesFor($utr->("jexl:veupathNotAFunction(feature)")), ['jexl-call'], 'utrs: an unlisted function is refused');
+  is_deeply(rulesFor($utr->("jexl:get(feature,'Strand') == 1")), ['jexl-call', 'jexl-attribute-case'],
+            'utrs: an uppercase attribute is refused');
+  my ($v) = @{$V->validate($utr->("jexl:veupathNotAFunction(feature)"))};
+  like($v->{where}, qr/displays\[0\]\.utrs\.encoding\.color\.value$/, 'utrs: where names the UTR slot');
+}
+
+is_deeply([sort keys %ApiCommonModel::Model::JBrowseConfigRelease::Validate::JEXL_FUNCTIONS],
+          [sort qw(veupathVariantEffectColor veupathStrandColor veupathProcessedTranscriptColor
+                   veupathGsnapIntronColor veupathGsnapIntronLineThickness veupathHaplotypeColor
+                   veupathBindingSiteColor veupathInterproColor veupathSignalpColor veupathIedbColor
+                   veupathPostTranslationalModColor)],
+          'the jexl allowlist is the VEuPathDBDisplay README function table');
+
 # --- every documented rule is exercised above ---
 is_deeply([sort @ApiCommonModel::Model::JBrowseConfigRelease::Validate::RULES],
           [sort qw(jbrowse1-shape track-id-missing track-id-format track-id-duplicate track-id-prefix
                    track-type assembly-names display-type display-id adapter-type adapter-location
-                   location-url assembly-name)],
+                   location-url assembly-name jexl-call jexl-attribute-case)],
           'the rule list is the one this file covers');
 
 # --- the CLI ---

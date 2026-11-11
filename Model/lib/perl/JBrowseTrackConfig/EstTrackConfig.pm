@@ -28,6 +28,7 @@ sub new {
     $self->setStore($store);
 
     $self->setColor("{estColor}");
+    $self->setJBrowse2Color($self->veupathJexl('veupathStrandColor', 'deepskyblue', 'pink'));
     $self->setBorderColor("{estBorderColor}");
 
     $self->setDisplayMode("compact");

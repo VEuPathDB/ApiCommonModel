@@ -36,6 +36,10 @@ sub new {
 
     $self->setTrackTypeDisplay("XYPlot");
 
+    # JBrowse 1's pos_color and neg_color are both chipColor, which falls through to its
+    # last colour for bigWig features (see ChipChipPeakTrackConfig).
+    $self->setJBrowse2Color('#B84C00');
+
     my $store;
 
     if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {

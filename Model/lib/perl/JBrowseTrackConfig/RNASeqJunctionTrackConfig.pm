@@ -32,7 +32,7 @@ sub new {
     else {
         $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
         $self->setTrackType("FeatureTrack");
-        $self->setDisplayType("LinearBasicDisplay");
+        $self->setDisplayType("LinearMarkDisplay");
         $self->setTrackTypeDisplay("Predicted Intron Junctions");
         $self->setId("RNA-Seq Evidence for Introns");
         $self->setLabel("RNA-Seq Evidence for Introns");
@@ -78,12 +78,27 @@ sub getJBrowseObject{
 
     return $jbrowseObject;
 }
-# TODO:
+# One link per junction: colour from strand and score, line width from score. The scale's
+# domain equals its range, so the px veupathGsnapIntronLineThickness returns is the px drawn.
+# JBrowse 1's post height has no link-mark channel and is not ported.
 sub getJBrowse2Object{
 	my $self = shift;
 
 	my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
-	
+
+	$jbrowse2Object->{displays} = [{
+	    type  => 'LinearMarkDisplay',
+	    marks => [{
+	        mark     => 'link',
+	        encoding => {
+	            color       => {value => $self->veupathJexl('veupathGsnapIntronColor')},
+	            strokeWidth => {
+	                field => $self->veupathJexl('veupathGsnapIntronLineThickness'),
+	                scale => {type => 'linear', domainMin => 2, domainMax => 6, range => [2, 6]},
+	            },
+	        },
+	    }],
+	}];
 
 	return $jbrowse2Object;
 }

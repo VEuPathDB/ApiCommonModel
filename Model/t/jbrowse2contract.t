@@ -290,6 +290,100 @@ sub track {
   }
 }
 
+# --- styling: each producer binds its VEuPathDBDisplay function, or a literal, in the README slot ---
+{
+  my $T = "${NS}::TrackConfig";
+  is($T->veupathJexl('veupathStrandColor', 'deepskyblue', 'pink'),
+     "jexl:veupathStrandColor(feature, 'deepskyblue', 'pink')", 'veupathJexl: feature first, literals quoted');
+  is($T->veupathJexl('veupathGsnapIntronColor'), 'jexl:veupathGsnapIntronColor(feature)', 'veupathJexl: no arguments');
+  ok(!eval { $T->veupathJexl('strandColor'); 1 }, 'veupathJexl refuses a function outside the allowlist');
+  ok(!eval { $T->veupathJexl('veupathStrandColor', "it's", 'b'); 1 }, 'veupathJexl refuses a quote in a literal');
+
+  my $new = sub {
+    my ($class, $appType, $path) = @_;
+    eval "require ${NS}::$class; 1" or die $@;
+    return "${NS}::$class"->new({application_type => $appType, project_name => 'PlasmoDB', build_number => 71,
+                                 relative_path_to_file => $path, organism_abbrev => 'intPfal',
+                                 key => "$class key", label => "$class label", summary => 's'});
+  };
+  my $make = sub { $new->(@_)->getConfigurationObject() };
+
+  my %fill = (
+    LongReadRNASeqTrackConfig  => "jexl:veupathStrandColor(feature, '#6666FF', '#F18F74')",
+    EstTrackConfig             => "jexl:veupathStrandColor(feature, 'deepskyblue', 'pink')",
+    NrdbProteinTrackConfig     => "jexl:veupathStrandColor(feature, 'mediumblue', 'crimson')",
+    OrfTrackConfig             => "jexl:veupathStrandColor(feature, 'dodgerblue', 'mediumvioletred')",
+    HaplotypeBlockTrackConfig  => 'jexl:veupathHaplotypeColor(feature)',
+    BindingSitesTrackConfig    => 'jexl:veupathBindingSiteColor(feature)',
+    InterproDomainsTrackConfig => 'jexl:veupathInterproColor(feature)',
+    SignalPeptideTrackConfig   => 'jexl:veupathSignalpColor(feature)',
+    IedbTrackConfig            => 'jexl:veupathIedbColor(feature)',
+    UnifiedPostTranslationalMod => 'jexl:veupathPostTranslationalModColor(feature)',
+    UnifiedMassSpecTrackConfig => 'gray',
+    ChipChipPeakTrackConfig    => '#B84C00',
+  );
+  foreach my $class (sort keys %fill) {
+    my $obj = $make->($class, 'jbrowse2', 'P/x.gff.gz');
+    is($obj->{displays}[0]{type}, 'LinearBasicDisplay', "$class: LinearBasicDisplay");
+    is_deeply($obj->{displays}[0]{encoding}, {color => {value => $fill{$class}}}, "$class: encoding.color.value");
+
+    my $jb1Style = $new->($class, 'jbrowse', 'P/x.gff.gz')->getJBrowseStyle() || {};
+    ok(!grep({ defined($_) && !ref($_) && /jexl:/ } values %$jb1Style), "$class: jbrowse style carries no v5 jexl")
+      or diag explain $jb1Style;
+  }
+
+  my $smoothed = $make->('ChipChipSmoothedTrackConfig', 'jbrowse2', 'P/s.bw');
+  is($smoothed->{displays}[0]{encoding}{color}{value}, '#B84C00', 'ChIP-chip smoothed: literal colour');
+  is($smoothed->{displays}[0]{encoding}{y}{scale}{type}, 'log', 'beside the y scale it already had');
+
+  my $genes = $T->new({application_type => 'jbrowse2', organism_abbrev => 'intPfal', category => 'Gene Models',
+                       store => store('GFFStore', 'jbrowse2', 'P/annotated_transcripts.gff.gz'),
+                       label => 'GeneModels', id => 'Annotated Transcripts',
+                       jbrowse2_color => $T->veupathJexl('veupathProcessedTranscriptColor', 'lightgrey'),
+                       jbrowse2_utr_color => 'grey'})->getConfigurationObject();
+  is($genes->{displays}[0]{encoding}{color}{value}, "jexl:veupathProcessedTranscriptColor(feature, 'lightgrey')",
+     'gene models: veupathProcessedTranscriptColor with the noncoding colour');
+  is_deeply($genes->{displays}[0]{utrs}, {encoding => {color => {value => 'grey'}}}, 'gene models: grey UTRs');
+
+  my $noUtr = $T->new({application_type => 'jbrowse2', organism_abbrev => 'intPfal', category => 'Gene Models',
+                       store => store('GFFStore', 'jbrowse2', 'P/annotated_transcripts.gff.gz'),
+                       label => 'GeneModels', id => 'Annotated Transcripts'})->getConfigurationObject();
+  ok(!exists($noUtr->{displays}[0]{utrs}), 'no UTR colour set, no utrs slot');
+
+  my $genesJb1 = "${NS}::TrackConfig"->new({application_type => 'jbrowse', jbrowse2_utr_color => 'grey',
+                                            jbrowse2_color => 'red'})->getJBrowseStyle();
+  ok(!defined($genesJb1), 'the jbrowse2 colours never reach a JBrowse 1 style');
+
+  my $junctions = $make->('RNASeqJunctionTrackConfig', 'jbrowse2', 'P/junctions.gff.gz');
+  is_deeply($junctions->{displays}, [{
+    type => 'LinearMarkDisplay', displayId => "$junctions->{trackId}-LinearMarkDisplay",
+    marks => [{mark => 'link', encoding => {
+      color       => {value => 'jexl:veupathGsnapIntronColor(feature)'},
+      strokeWidth => {field => 'jexl:veupathGsnapIntronLineThickness(feature)',
+                      scale => {type => 'linear', domainMin => 2, domainMax => 6, range => [2, 6]}},
+    }}],
+  }], 'junctions: one link mark, gsnap colour and identity-scaled thickness');
+
+  my $variants = $make->('VariantTrackConfig', 'jbrowse2', 'P/merged.ann.vcf.gz');
+  is_deeply($variants->{displays}, [{
+    type => 'LinearMarkDisplay', displayId => "$variants->{trackId}-LinearMarkDisplay",
+    marks => [{mark => 'point', transform => [{type => 'pileup'}],
+               encoding => {y => 'row', shape => {value => 'diamond'},
+                            color => {value => 'jexl:veupathVariantEffectColor(feature)'}}}],
+  }], 'merged VCF: stacked diamond points coloured by variant effect');
+
+  my $perSample = $make->('VcfTrackConfig', 'jbrowse2', 'P/sample.vcf.gz');
+  is_deeply($perSample->{displays}[0]{marks}[0]{encoding}, {y => 'row', shape => {value => 'diamond'}},
+            'per-sample VCF: the same mark, stock colour (JBrowse 1 set none)');
+
+  my $assemblies = [{name => 'pfal3D7', sequence => {adapter => {type => 'IndexedFastaAdapter',
+                      fastaLocation => {uri => '/a/service/jbrowse/store?data=g.fa'},
+                      faiLocation => {uri => '/a/service/jbrowse/store?data=g.fa.fai'}}}}];
+  is_deeply(ApiCommonModel::Model::JBrowseConfigRelease::Validate->validate(
+              {assemblies => $assemblies, tracks => [$genes, $junctions, $variants]}), [],
+            'gene models, junctions and variants conform');
+}
+
 # --- wiggle displays use v5 keys, never the retired spellings ---
 {
   require ApiCommonModel::Model::JBrowseTrackConfig::MultiBigWigTrackConfig;

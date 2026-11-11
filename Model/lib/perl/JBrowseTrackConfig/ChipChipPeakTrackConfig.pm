@@ -18,6 +18,9 @@ sub new {
     my $self = $class->SUPER::new($args);
 
     $self->setColor("{chipColor}");
+    # chipColor reads sample attributes (antibody, replicate, ...) that peak BEDs and smoothed
+    # bigWigs never carry, so JBrowse 1 always fell through to its last colour.
+    $self->setJBrowse2Color('#B84C00');
 
     my $datasetConfig = $self->getDatasetConfigObj();
     $datasetConfig->setCategory("Epigenomics");

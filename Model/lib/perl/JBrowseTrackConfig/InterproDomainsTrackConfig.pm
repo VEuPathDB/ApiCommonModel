@@ -45,6 +45,8 @@ sub new {
     $self->setOnClickContent($detailsFunction);
     $self->setViewDetailsContent($detailsFunction);
 
+    $self->setJBrowse2Color($self->veupathJexl('veupathInterproColor'));
+
     return $self;
 }
 
