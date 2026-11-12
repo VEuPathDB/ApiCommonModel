@@ -4,8 +4,10 @@ use Test::More;
 use File::Temp qw(tempdir);
 use lib $ENV{GUS_HOME} . "/lib/perl";
 use ApiCommonModel::Model::JBrowseConfigRelease::Cli;
+use ApiCommonModel::Model::JBrowseConfigRelease::Hub;
 
 my $C = 'ApiCommonModel::Model::JBrowseConfigRelease::Cli';
+my $HUB = 'ApiCommonModel::Model::JBrowseConfigRelease::Hub';
 
 # --- option parsing and the two phases ---
 
@@ -60,6 +62,22 @@ my $C = 'ApiCommonModel::Model::JBrowseConfigRelease::Cli';
   is($opts->{jbrowse_cli}, '/opt/jbrowse', 'it carries the jbrowse CLI');
   is_deeply($opts->{organisms}, ['pfal3D7'], '--organism names the hubs to build');
   ok(!defined $opts->{artifact_url_base}, 'artifact url base defaults later, to the store URL');
+}
+
+{
+  my @roster = map { {abbrev => $_} } qw(pberANKA pfal3D7 pvivP01);
+  my $all = $C->parseOptions('--jbrowse2', '--build', '71', '--jbrowse-cli', '/opt/jbrowse');
+  is_deeply($all->{organisms}, [], '--jbrowse2 with no --organism parses as no narrowing');
+  is_deeply($HUB->hubAbbrevsFor(\@roster, $all->{organisms}), [qw(pberANKA pfal3D7 pvivP01)],
+            'and that means a hub for every root organism');
+
+  my $some = $C->parseOptions('--jbrowse2', '--build', '71', '--jbrowse-cli', '/opt/jbrowse',
+                              '--organism', 'pvivP01', '--organism', 'pfal3D7');
+  is_deeply($HUB->hubAbbrevsFor(\@roster, $some->{organisms}), [qw(pvivP01 pfal3D7)],
+            '--organism narrows the hubs to those named');
+
+  like($C->usage, qr/hub\.json for every root organism/, 'usage says no --organism means every hub');
+  like($C->usage, qr/--organism narrows the hubs/, 'and that --organism narrows them');
 }
 
 {

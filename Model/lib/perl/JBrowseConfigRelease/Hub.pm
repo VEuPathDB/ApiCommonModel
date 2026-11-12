@@ -7,6 +7,7 @@ use JSON;
 use File::Path qw(make_path);
 use File::Temp;
 use Digest::MD5;
+use Time::HiRes;
 use URI::Escape;
 
 use ApiCommonModel::Model::JBrowseConfigRelease::Generate;
@@ -44,7 +45,7 @@ our @TRACK_SOURCES = (
    args => sub { my ($i, $o) = @_; ($i, $o->{project}, 0, $o->{build}, $o->{wsDir}, 'jbrowse2') }},
   {name => 'dnaseq',           script => 'jbrowseDNASeqTracks',
    args => sub { my ($i, $o) = @_; ($i, $o->{project}, $o->{build}, $o->{wsDir}, 'jbrowse2') }},
-  {name => 'organismSpecificPbrowse', script => 'jbrowseOrganismSpecificPbrowseTracks',
+  {name => 'organismSpecificPbrowse', script => 'jbrowseOrganismSpecificPbrowseTracks', needsProteinAssembly => 1,
    args => sub { my ($i, $o) = @_; ($i, $o->{project}, $o->{build}, $o->{wsDir}, 'jbrowse2') }},
 );
 
@@ -115,10 +116,12 @@ sub proteinAssembly {
 }
 
 # An organism with no annotation has no proteome, so no protein assembly.
+sub hasProteinAssembly { return $_[1]->{is_annotated} ? 1 : 0 }
+
 sub assembliesFor {
   my ($class, $organism) = @_;
   my @assemblies = ($class->genomeAssembly($organism));
-  push @assemblies, $class->proteinAssembly($organism) if($organism->{is_annotated});
+  push @assemblies, $class->proteinAssembly($organism) if($class->hasProteinAssembly($organism));
   return @assemblies;
 }
 
@@ -224,8 +227,13 @@ sub buildHub {
   my $abbrev = $organism->{abbrev};
   my $internal = $organism->{internal_abbrev} || $abbrev;
 
-  my (@tracks, %bySource);
+  my (@tracks, %bySource, @skipped);
   foreach my $source (@TRACK_SOURCES) {
+    # Its tracks would name an assembly this hub cannot declare.
+    if($source->{needsProteinAssembly} && !$class->hasProteinAssembly($organism)) {
+      push @skipped, $source->{name};
+      next;
+    }
     my $json = $runScript->($opts->{gusHome}, $source->{script}, $source->{args}->($internal, $opts));
     my $document = eval { decode_json($json) };
     die "$abbrev: $source->{script} did not return JSON for $source->{name}\n" unless($document);
@@ -246,7 +254,7 @@ sub buildHub {
       . join(', ', map { "$_ $counts->{$_}" } sort keys %$counts) . ")\n" . join("\n", @shown) . "\n";
   }
 
-  return {hub => $hub, sources => \%bySource, shapes => $class->shapeCounts($hub->{tracks})};
+  return {hub => $hub, sources => \%bySource, skipped => \@skipped, shapes => $class->shapeCounts($hub->{tracks})};
 }
 
 # --- The whole dump ---
@@ -319,10 +327,18 @@ sub _defaultJBrowseValidate {
   return __PACKAGE__->judgeJBrowseValidate($? >> 8, $out);
 }
 
+# No narrowing means every root organism: the root's template names a hub for each.
+sub hubAbbrevsFor {
+  my ($class, $organisms, $requested) = @_;
+  return [@$requested] if($requested && @$requested);
+  return [map { $_->{abbrev} } @$organisms];
+}
+
 # $organisms: every organism of the project (root + organisms.json).
-# $hubAbbrevs: the organisms that get a hub.
+# $requested: --organism abbrevs narrowing the hubs; empty means all of $organisms.
+# Optional seams: clock() -> seconds, progress($abbrev, $seconds, $done, $total).
 sub dump {
-  my ($class, $organisms, $hubAbbrevs, $opts) = @_;
+  my ($class, $organisms, $requested, $opts) = @_;
 
   my $outDir = $opts->{outDir};
   die "--out-dir $outDir is not empty; the dump writes a whole set, never into an old one\n"
@@ -330,12 +346,15 @@ sub dump {
   make_path("$outDir/trix");
 
   my %byAbbrev = map { $_->{abbrev} => $_ } @$organisms;
+  my $hubAbbrevs = $class->hubAbbrevsFor($organisms, $requested);
   my @unknown = grep { !$byAbbrev{$_} } @$hubAbbrevs;
   die "not organisms of $opts->{project}: @unknown\n" if(@unknown);
 
   my $fileExists = $opts->{fileExists} || sub { -e $_[0] };
   my $textIndex  = $opts->{textIndex}  || \&_defaultTextIndex;
   my $jbValidate = $opts->{jbrowseValidate} || \&_defaultJBrowseValidate;
+  my $clock      = $opts->{clock}    || \&Time::HiRes::time;
+  my $progress   = $opts->{progress} || sub {};
   my $build = "$opts->{wsDir}/$opts->{project}/build-$opts->{build}";
 
   foreach my $organism (@$organisms) {
@@ -347,35 +366,43 @@ sub dump {
     }
   }
 
-  my %written;
+  my (%written, %jbrowseValidate);
+  # Each file is validated as soon as it is written, so a full run fails at the
+  # organism that broke rather than after every other hub is built.
+  my $validate = sub {
+    my ($file) = @_;
+    my ($status, $out) = $jbValidate->($opts, "$outDir/$file");
+    $jbrowseValidate{$file} = {status => $status, output => $out};
+    die "jbrowse validate $file exited $status:\n$out" if($status);
+  };
+
   my $root = $class->rootConfig($organisms, $opts->{artifactUrlBase});
   $class->writeFile("$outDir/config.json", $class->encodeJson($root));
   $written{'config.json'} = 1;
+  $validate->('config.json');
 
   $class->writeFile("$outDir/organisms.json", $class->encodeJson($class->organismList($organisms)));
   $written{'organisms.json'} = 1;
 
   my %summaries;
-  foreach my $abbrev (sort @$hubAbbrevs) {
+  my @ordered = sort @$hubAbbrevs;
+  foreach my $abbrev (@ordered) {
+    my $started = $clock->();
     my $organism = $byAbbrev{$abbrev};
     my $built = $class->buildHub($organism, $opts);
     my $file = $class->hubFile($abbrev);
     $class->writeFile("$outDir/$file", $class->encodeJson($built->{hub}));
     $written{$file} = 1;
+    $validate->($file);
 
     if($organism->{is_annotated}) {
       my $trackId = $class->geneModelsTrackId($organism);
       $textIndex->($opts, "$build/" . $class->geneGffPath($organism), $trackId);
       $written{$_} = 1 foreach($class->trixFiles($trackId));
     }
+    $built->{seconds} = $clock->() - $started;
     $summaries{$abbrev} = $built;
-  }
-
-  my %jbrowseValidate;
-  foreach my $file (grep { /\.json$/ && !/^trix\// && $_ ne 'organisms.json' } sort keys %written) {
-    my ($status, $out) = $jbValidate->($opts, "$outDir/$file");
-    $jbrowseValidate{$file} = {status => $status, output => $out};
-    die "jbrowse validate $file exited $status:\n$out" if($status);
+    $progress->($abbrev, $built->{seconds}, scalar(keys %summaries), scalar @ordered);
   }
 
   my @manifest = map { {file => $_, bytes => -s "$outDir/$_", md5 => _md5("$outDir/$_"),
@@ -384,9 +411,10 @@ sub dump {
                     join('', map { "$_->{file}\t$_->{bytes}\t$_->{md5}\t$_->{mirror}\n" } @manifest));
 
   my @noHub = sort grep { !$summaries{$_} } keys %byAbbrev;
+  my @noProteins = sort grep { @{$summaries{$_}{skipped}} } keys %summaries;
   return {root_assemblies => scalar @{$root->{assemblies}}, organisms => scalar @$organisms,
           hub_url_template => $root->{configuration}{VEuPathDBSite}{hubUrlTemplate},
-          hubs => \%summaries, no_hub => \@noHub, manifest => \@manifest,
+          hubs => \%summaries, no_hub => \@noHub, protein_producer_skipped => \@noProteins, manifest => \@manifest,
           jbrowse_validate => \%jbrowseValidate};
 }
 

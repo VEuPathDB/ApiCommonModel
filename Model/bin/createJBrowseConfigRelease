@@ -190,6 +190,7 @@ sub mainJBrowse2 {
     gusHome         => $ENV{GUS_HOME},
     jbrowse         => $opt->{jbrowse_cli},
     artifactUrlBase => $opt->{artifact_url_base} // $hub->defaultArtifactUrlBase(),
+    progress        => sub { printf STDERR "%s: %.1fs (%d/%d)\n", @_ },
   );
 
   my $json = _generate()->runScript($ENV{GUS_HOME}, 'jbrowse2OrganismList', $opt->{project});
@@ -202,10 +203,11 @@ sub mainJBrowse2 {
       . "$result->{root_assemblies} root assemblies, into $opt->{out_dir}\n";
   print "hub URL template: $result->{hub_url_template}\n";
   _printNoHub($result->{no_hub});
+  print "protein-track producer skipped (no protein assembly): " . scalar(@{$result->{protein_producer_skipped}}) . "\n";
   foreach my $abbrev (sort keys %{$result->{hubs}}) {
     my $built = $result->{hubs}{$abbrev};
     my $total = scalar @{$built->{hub}{tracks}};
-    print "\n$abbrev.hub.json: $total tracks, 0 violations\n";
+    printf("\n%s: %d tracks, 0 violations, %.1fs\n", $hub->hubFile($abbrev), $total, $built->{seconds});
     printf("  %-24s %5d\n", $_, $built->{sources}{$_}) for sort keys %{$built->{sources}};
     printf("  %5d  %s\n", $built->{shapes}{$_}, $_) for sort keys %{$built->{shapes}};
   }
@@ -219,6 +221,7 @@ sub mainJBrowse2 {
   print "  $_->{file}\t$_->{bytes}\t$_->{md5}\t$_->{mirror}\n" for @{$result->{manifest}};
   print "  " . scalar(keys %{$result->{hubs}}) . " hub(s); the template resolves to no file for "
       . scalar(@{$result->{no_hub}}) . " root organism(s)\n";
+  _printSlowest($result->{hubs}, 5);
 
   return 0;
 }
@@ -229,6 +232,15 @@ sub _printNoHub {
   my ($noHub) = @_;
   print "root organisms with no hub this run: " . scalar(@$noHub)
       . (@$noHub ? " (" . join(', ', @$noHub) . ")" : '') . "\n";
+}
+
+sub _printSlowest {
+  my ($hubs, $n) = @_;
+  my @slowest = sort { $hubs->{$b}{seconds} <=> $hubs->{$a}{seconds} || $a cmp $b } keys %$hubs;
+  splice(@slowest, $n) if(@slowest > $n);
+  return unless(@slowest);
+  print "\nslowest hubs:\n";
+  printf("  %-24s %8.1fs\n", $_, $hubs->{$_}{seconds}) for @slowest;
 }
 
 # --- helpers ---
