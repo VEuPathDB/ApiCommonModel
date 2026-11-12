@@ -45,7 +45,7 @@ our @TRACK_SOURCES = (
    args => sub { my ($i, $o) = @_; ($i, $o->{project}, 0, $o->{build}, $o->{wsDir}, 'jbrowse2') }},
   {name => 'dnaseq',           script => 'jbrowseDNASeqTracks',
    args => sub { my ($i, $o) = @_; ($i, $o->{project}, $o->{build}, $o->{wsDir}, 'jbrowse2') }},
-  {name => 'organismSpecificPbrowse', script => 'jbrowseOrganismSpecificPbrowseTracks',
+  {name => 'organismSpecificPbrowse', script => 'jbrowseOrganismSpecificPbrowseTracks', needsProteinAssembly => 1,
    args => sub { my ($i, $o) = @_; ($i, $o->{project}, $o->{build}, $o->{wsDir}, 'jbrowse2') }},
 );
 
@@ -116,10 +116,12 @@ sub proteinAssembly {
 }
 
 # An organism with no annotation has no proteome, so no protein assembly.
+sub hasProteinAssembly { return $_[1]->{is_annotated} ? 1 : 0 }
+
 sub assembliesFor {
   my ($class, $organism) = @_;
   my @assemblies = ($class->genomeAssembly($organism));
-  push @assemblies, $class->proteinAssembly($organism) if($organism->{is_annotated});
+  push @assemblies, $class->proteinAssembly($organism) if($class->hasProteinAssembly($organism));
   return @assemblies;
 }
 
@@ -225,8 +227,13 @@ sub buildHub {
   my $abbrev = $organism->{abbrev};
   my $internal = $organism->{internal_abbrev} || $abbrev;
 
-  my (@tracks, %bySource);
+  my (@tracks, %bySource, @skipped);
   foreach my $source (@TRACK_SOURCES) {
+    # Its tracks would name an assembly this hub cannot declare.
+    if($source->{needsProteinAssembly} && !$class->hasProteinAssembly($organism)) {
+      push @skipped, $source->{name};
+      next;
+    }
     my $json = $runScript->($opts->{gusHome}, $source->{script}, $source->{args}->($internal, $opts));
     my $document = eval { decode_json($json) };
     die "$abbrev: $source->{script} did not return JSON for $source->{name}\n" unless($document);
@@ -247,7 +254,7 @@ sub buildHub {
       . join(', ', map { "$_ $counts->{$_}" } sort keys %$counts) . ")\n" . join("\n", @shown) . "\n";
   }
 
-  return {hub => $hub, sources => \%bySource, shapes => $class->shapeCounts($hub->{tracks})};
+  return {hub => $hub, sources => \%bySource, skipped => \@skipped, shapes => $class->shapeCounts($hub->{tracks})};
 }
 
 # --- The whole dump ---
@@ -404,9 +411,10 @@ sub dump {
                     join('', map { "$_->{file}\t$_->{bytes}\t$_->{md5}\t$_->{mirror}\n" } @manifest));
 
   my @noHub = sort grep { !$summaries{$_} } keys %byAbbrev;
+  my @noProteins = sort grep { @{$summaries{$_}{skipped}} } keys %summaries;
   return {root_assemblies => scalar @{$root->{assemblies}}, organisms => scalar @$organisms,
           hub_url_template => $root->{configuration}{VEuPathDBSite}{hubUrlTemplate},
-          hubs => \%summaries, no_hub => \@noHub, manifest => \@manifest,
+          hubs => \%summaries, no_hub => \@noHub, protein_producer_skipped => \@noProteins, manifest => \@manifest,
           jbrowse_validate => \%jbrowseValidate};
 }
 

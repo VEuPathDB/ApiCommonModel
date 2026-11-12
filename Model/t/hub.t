@@ -185,6 +185,49 @@ sub geneModelsOnly {
   return encode_json({tracks => [feature("${abbrev}_GeneModels", $abbrev, "x/$abbrev.gff.gz")]});
 }
 
+# Each organism's producers emit gene models and a centromere on its genome and, from the
+# protein producer, an InterPro track on <abbrev>_protein, as they do for an unannotated one.
+sub genomeAndProteinTracks {
+  my ($gus, $script, $internal) = @_;
+  my $abbrev = $PUBLIC{$internal};
+  return encode_json({tracks => [feature("${abbrev}_Centromere", $abbrev, "x/$abbrev.centromere.gff.gz"),
+                                 feature("${abbrev}_GeneModels", $abbrev, "x/$abbrev.gff.gz")]})
+    if($script eq 'jbrowseOrganismSpecificTracks');
+  return encode_json({tracks => [feature("${abbrev}_protein_InterproDomains", "${abbrev}_protein", "x/$abbrev.ipr.gff.gz")]})
+    if($script eq 'jbrowseOrganismSpecificPbrowseTracks');
+  return encode_json({tracks => []});
+}
+
+# --- the protein producer needs a protein assembly ---
+{
+  my @calls;
+  my $runScript = sub { push @calls, $_[1]; genomeAndProteinTracks(@_) };
+  my ($opts) = opts(runScript => $runScript);
+
+  my $annotated = $H->buildHub($ORGANISMS[1], $opts);
+  ok((grep { $_ eq 'jbrowseOrganismSpecificPbrowseTracks' } @calls), 'annotated: the protein producer runs');
+  is_deeply($annotated->{skipped}, [], 'annotated: nothing skipped');
+  ok((grep { $_->{trackId} eq 'pberANKA_protein_InterproDomains' } @{$annotated->{hub}{tracks}}),
+     'annotated: its protein tracks are in the hub');
+
+  @calls = ();
+  my $unannotated = $H->buildHub($ORGANISMS[2], $opts);
+  ok(!(grep { $_ eq 'jbrowseOrganismSpecificPbrowseTracks' } @calls), 'unannotated: the protein producer does not run');
+  is_deeply($unannotated->{skipped}, ['organismSpecificPbrowse'], 'unannotated: the skip is reported');
+  is_deeply([map { $_->{trackId} } @{$unannotated->{hub}{tracks}}], [qw(pfalNoAnno_Centromere pfalNoAnno_GeneModels)],
+            'unannotated: genome tracks only');
+  is_deeply($H->violations($unannotated->{hub}, $opts->{artifactUrlBase}), [], 'unannotated: the hub validates');
+
+  my $withProteins = {%{$unannotated->{hub}}, tracks => [@{$unannotated->{hub}{tracks}},
+                      feature('pfalNoAnno_protein_InterproDomains', 'pfalNoAnno_protein', 'x/p.gff.gz')]};
+  ok((grep { $_->{rule} eq 'assembly-names' } @{$H->violations($withProteins, $opts->{artifactUrlBase})}),
+     'unannotated: a protein track would name an assembly the hub cannot declare');
+
+  my ($dumpOpts) = opts(runScript => \&genomeAndProteinTracks);
+  my $result = $H->dump(\@ORGANISMS, [], $dumpOpts);
+  is_deeply($result->{protein_producer_skipped}, ['pfalNoAnno'], 'dump: reports the organisms the protein producer skipped');
+}
+
 # --- the dump ---
 {
   my ($opts) = opts();
