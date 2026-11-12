@@ -61,7 +61,10 @@ Phases (exactly one, they cost differently):
                   manifest.tsv.  --organism narrows the hubs to those named
                   (a trial); the report lists the root organisms left
                   without one.  No Apollo, no roster.  Fails on any
-                  contract violation and on `jbrowse validate`.
+                  contract violation and on `jbrowse validate`.  Each hub
+                  also carries the organism's static tracks.conf stanzas
+                  (REST skipped; the report lists them, unmapped styling
+                  callbacks and files missing from the mirror).
 
 Options:
   --build N               release build number                       (required)
