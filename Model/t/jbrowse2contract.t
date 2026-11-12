@@ -261,6 +261,7 @@ sub track {
     LowComplexityTrackConfig => ['P/lowComplexity.bed.gz', 'genome'], RepeatsTrackConfig => ['P/tandemRepeats.bed.gz', 'genome'],
     UnifiedMassSpecTrackConfig => ['P/unifiedGenomicMassSpec.gff.gz', 'genome'],
     LongReadRNASeqTrackConfig => ['P/models.gff.gz', 'genome'], RNASeqJunctionTrackConfig => ['P/junctions.gff.gz', 'genome'],
+    ScaffoldsTrackConfig => ['P/genomeBrowser/gff/scaffoldGenome.gff.gz', 'genome'],
   );
   my $assemblies = [map { {name => $_, sequence => {adapter => {type => 'IndexedFastaAdapter',
                       fastaLocation => {uri => '/a/service/jbrowse/store?data=g.fa'},
@@ -288,6 +289,28 @@ sub track {
                                      key => 'k', label => 'l'})->getConfigurationObject();
     is($obj, undef, "$class: no jbrowse2 track (the assembly, or REST-only Apollo, covers it)");
   }
+}
+
+# --- Scaffolds and gaps: unstyled until VEuPathDBDisplay ships its functions ---
+{
+  require ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig;
+  my $path = 'Pknowlesi/genomeBrowser/gff/scaffoldGenome.gff.gz';
+  my $obj = "${NS}::ScaffoldsTrackConfig"->new({application_type => 'jbrowse2', project_name => 'PlasmoDB',
+                                                build_number => 71, relative_path_to_file => $path,
+                                                organism_abbrev => 'intPfal'})->getConfigurationObject();
+  is($obj->{type}, 'FeatureTrack', 'scaffolds: a feature track');
+  is($obj->{trackId}, 'pfal3D7_Scaffolds', 'scaffolds: <abbrev>_Scaffolds');
+  is_deeply($obj->{assemblyNames}, ['pfal3D7'], 'scaffolds: on the genome assembly');
+  is_deeply($obj->{category}, ['Sequence Analysis', 'Sequence assembly'], 'scaffolds: Sequence assembly');
+  is($obj->{name}, 'Scaffolds and Gaps', 'scaffolds: named as on JBrowse 1');
+  is_deeply($obj->{adapter},
+            {type => 'Gff3TabixAdapter',
+             gffGzLocation => {uri => "/a/service/jbrowse/store?data=$path", locationType => 'UriLocation'},
+             index => {location => {uri => "/a/service/jbrowse/store?data=$path.tbi", locationType => 'UriLocation'}}},
+            'scaffolds: tabix GFF3 on scaffoldGenome.gff.gz and its .tbi');
+  is_deeply($obj->{displays}, [{type => 'LinearBasicDisplay', displayId => 'pfal3D7_Scaffolds-LinearBasicDisplay'}],
+            'scaffolds: LinearBasicDisplay with stock colour and height');
+  ok(!exists $obj->{formatDetails}, 'scaffolds: stock details');
 }
 
 # --- styling: each producer binds its VEuPathDBDisplay function, or a literal, in the README slot ---

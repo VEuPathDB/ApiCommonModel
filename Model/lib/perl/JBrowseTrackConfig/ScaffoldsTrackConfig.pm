@@ -20,16 +20,8 @@ sub new {
     $self->setId("Scaffolds and Gaps");
     $self->setLabel("Scaffolds");
 
-    my $store;
-
-    if($self->getApplicationType() eq 'jbrowse' || $self->getApplicationType() eq 'apollo') {
-        $store = ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args);
-    }
-    else {
-        # TODO
-    }
-
-    $self->setStore($store);
+    # jbrowse2: stock colour and details until VEuPathDBDisplay ships the scaffold functions.
+    $self->setStore(ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args));
 
     $self->setSubParts("sgap");
 
@@ -39,17 +31,5 @@ sub new {
 
     return $self;
 }
-
-
-# TODO:
-sub getJBrowse2Object{
-        my $self = shift;
-
-        my $jbrowse2Object = $self->SUPER::getJBrowse2Object();
-
-
-        return $jbrowse2Object;
-}
-
 
 1;
