@@ -158,8 +158,19 @@ foreach my $jexl ("jexl:veupathStrandColor(feature, 'deepskyblue', 'pink')",
                   "jexl:veupathGsnapIntronColor(feature)",
                   "jexl:veupathStrandColor(feature,'#6666FF','#F18F74')",
                   "jexl:veupathIedbColor( feature )",
-                  "jexl:veupathStrandColor(feature, 2, -0.5)") {
+                  "jexl:veupathStrandColor(feature, 2, -0.5)",
+                  "jexl:veupathStrandColor(feature, 'orange', 'darkseagreen', 'red')",
+                  "jexl:veupathLinkDetails(feature, 'scaffold', 'NCBI', 'https://www.ncbi.nlm.nih.gov/nuccore/', 'note')") {
   is_deeply(jexlRules($jexl), [], "jexl accepted: $jexl");
+}
+
+{
+  my $details = sub { my ($jexl) = @_; sub { $_[0]{tracks}[2]{formatDetails}{feature} = $jexl } };
+  my $config = validConfig();
+  $details->("jexl:veupathLinkDetails(feature, 'scaffold', 'NCBI', 'https://www.ncbi.nlm.nih.gov/nuccore/', 'note')")->($config);
+  is_deeply(rulesFor($config), [], 'formatDetails.feature: a veupathLinkDetails call is accepted');
+  violates($details->("jexl:{ncbi: 'https://www.ncbi.nlm.nih.gov/nuccore/' + get(feature,'note')}"), 'jexl-call',
+           'formatDetails.feature: inline jexl is still refused');
 }
 is_deeply(jexlRules('darkgreen'), [], 'a plain colour is not jexl');
 
@@ -213,7 +224,7 @@ is_deeply([sort keys %ApiCommonModel::Model::JBrowseConfigRelease::Validate::JEX
           [sort qw(veupathVariantEffectColor veupathStrandColor veupathProcessedTranscriptColor
                    veupathGsnapIntronColor veupathGsnapIntronLineThickness veupathHaplotypeColor
                    veupathBindingSiteColor veupathInterproColor veupathSignalpColor veupathIedbColor
-                   veupathPostTranslationalModColor)],
+                   veupathPostTranslationalModColor veupathLinkDetails)],
           'the jexl allowlist is the VEuPathDBDisplay README function table');
 
 # --- every documented rule is exercised above ---

@@ -20,8 +20,12 @@ sub new {
     $self->setId("Scaffolds and Gaps");
     $self->setLabel("Scaffolds");
 
-    # jbrowse2: stock colour and details until VEuPathDBDisplay ships the scaffold functions.
     $self->setStore(ApiCommonModel::Model::JBrowseTrackConfig::GFFStore->new($args));
+
+    # Gaps are the unstranded features; the GenBank accession is the GFF Note attribute.
+    $self->setJBrowse2Color($self->veupathJexl('veupathStrandColor', 'orange', 'darkseagreen', 'red'));
+    $self->setJBrowse2FeatureDetails($self->veupathJexl('veupathLinkDetails', 'scaffold', 'NCBI',
+                                                        'https://www.ncbi.nlm.nih.gov/nuccore/', 'note'));
 
     $self->setSubParts("sgap");
 
