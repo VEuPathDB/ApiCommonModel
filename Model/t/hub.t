@@ -60,6 +60,7 @@ sub opts {
                          if($script eq 'jbrowseRnaAndChipSeqTracks' && $args[4] eq 'ChIPSeq' && !$chipRepeatsRna);
                        return encode_json($PRODUCED{$script} || {tracks => []}) },
     fileExists => sub { 1 },
+    readFile => sub { '' },
     textIndex => sub { my ($o, $file, $trackId) = @_;
                        foreach my $f ($H->trixFiles($trackId)) {
                          open(my $fh, '>', "$o->{outDir}/$f") or die $!; print $fh "index of $file\n"; close $fh } },
@@ -354,6 +355,62 @@ sub genomeAndProteinTracks {
 
   ($status) = $H->judgeJBrowseValidate(0, $report->());
   is($status, 0, 'validate: a clean report passes');
+}
+
+# --- the static tracks.conf, one more source after the producers ---
+my $CONF = <<"CONF";
+[tracks.gcContent]
+storeClass=JBrowse/Store/SeqFeature/REST
+key=GC Content
+
+[tracks.AdamsPiggyBac]
+storeClass=JBrowse/Store/SeqFeature/GFF3Tabix
+urlTemplate=${S}\${nameForFileNames}/prealigned/gff/piggyBac.gff.gz
+key=piggyBac insertion sites
+category=Sequence Analysis
+
+[tracks.HP1]
+storeClass=JBrowse/Store/SeqFeature/BigWig
+urlTemplate=/a/service/jbrowse/auxiliary?data=PlasmoDB/HP1/ring.bw
+key=HP1
+category=Epigenomics
+CONF
+
+{
+  my @read;
+  my ($opts) = opts(runScript => \&geneModelsOnly,
+                    readFile => sub { push @read, $_[0]; $CONF });
+  my $built = $H->buildHub($ORGANISMS[1], $opts);
+
+  is_deeply(\@read, ['/gus/lib/jbrowse/auto_generated/pberANKA_int/tracks.conf'],
+            'tracks.conf is read from auto_generated/<INTERNAL>/ under GUS_HOME');
+  is($built->{sources}{tracksConf}, 2, 'its tracks are counted as their own source');
+  ok((grep { $_->{trackId} eq 'pberANKA_AdamsPiggyBac' } @{$built->{hub}{tracks}}), 'and join the hub');
+  is($built->{tracksConf}{stanzas}, 3, 'the report counts stanzas read');
+  is_deeply($built->{tracksConf}{rest}, ['gcContent'], 'and the REST stanzas skipped');
+  is_deeply($H->violations($built->{hub}, $opts->{artifactUrlBase}), [], 'a hub with static tracks validates');
+
+  my %existing = map { $_ => 1 } '/ws/PlasmoDB/build-71/PbergheiANKA/prealigned/gff/piggyBac.gff.gz';
+  my ($dumpOpts) = opts(runScript => \&geneModelsOnly, readFile => sub { $CONF },
+                        fileExists => sub { $_[0] !~ m{/(prealigned|PlasmoDB/HP1)/} || $existing{$_[0]} });
+  my $result = $H->dump(\@ORGANISMS, ['pberANKA'], $dumpOpts);
+  is_deeply([sort map { $_->{file} } @{$result->{tracks_conf_missing}}],
+            ['/ws/PlasmoDB/HP1/ring.bw', '/ws/PlasmoDB/build-71/PbergheiANKA/prealigned/gff/piggyBac.gff.gz.tbi'],
+            'dump: a store or auxiliary file absent from the mirror is reported, not fatal');
+  is_deeply($result->{tracks_conf_not_mirror}, [], 'dump: every location is a store or auxiliary URL');
+}
+
+{
+  is($H->mirrorFileForUri("${S}a%20b/c.bw", {wsDir => '/x/webServices', project => 'P', build => 9}),
+     '/x/webServices/P/build-9/a b/c.bw', 'mirror path: store data is under <ws>/<project>/build-<n>/, unescaped');
+  is($H->mirrorFileForUri('/a/service/jbrowse/auxiliary?data=T/a.bw', {wsDir => '/x/webServices'}),
+     '/x/auxiliary/T/a.bw', 'mirror path: auxiliary swaps webServices for auxiliary, as JBrowseService does');
+  is($H->mirrorFileForUri('/plasmo.x/jbrowse2-demo/a.bw', {wsDir => '/x/webServices'}), undef,
+     'mirror path: anything else is not a mirror location');
+
+  my ($opts) = opts(runScript => \&geneModelsOnly, readFile => sub { "[tracks.a]\nkey=A\nstray\n" });
+  eval { $H->buildHub($ORGANISMS[0], $opts) };
+  like($@, qr{^/gus/lib/jbrowse/auto_generated/pfal3D7/tracks\.conf:3: not a section}, 'a stanza that does not parse fails the hub');
 }
 
 done_testing();

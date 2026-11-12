@@ -98,6 +98,16 @@ violates(sub { delete $_[0]{tracks}[2]{adapter}{index} }, 'adapter-location', 't
 violates(sub { delete $_[0]{assemblies}[0]{sequence}{adapter}{faiLocation} },
          'adapter-location', 'indexed fasta with no fai');
 violates(sub { $_[0]{tracks}[1]{adapter}{subadapters} = [] }, 'adapter-location', 'multi with no subadapters');
+violates(sub { $_[0]{tracks}[0]{adapter} = {type => 'BigBedAdapter'} }, 'adapter-location', 'bigbed with no file');
+violates(sub { $_[0]{tracks}[0]{adapter} = {type => 'GtfAdapter'} }, 'adapter-location', 'gtf with no file');
+
+# BigBed and GTF are core v5 adapters the static tracks.conf stanzas need.
+foreach my $adapter ({type => 'BigBedAdapter', bigBedLocation => loc('Tg/tss.bigBed')},
+                     {type => 'GtfAdapter',    gtfLocation    => loc('Ac/ACANB.gtf')}) {
+  my $config = validConfig();
+  $config->{tracks}[0]{adapter} = $adapter;
+  is_deeply($V->validate($config), [], "$adapter->{type} is a v5 adapter");
+}
 violates(sub { $_[0]{tracks}[0]{adapter}{bigWigLocation}{uri} = 'PlasmoDB/build-71/Pf/a.bw' },
          'location-url', 'relative build path');
 violates(sub { $_[0]{tracks}[2]{adapter}{index}{location}{uri} = 'https://plasmodb.org/a/x.tbi' },

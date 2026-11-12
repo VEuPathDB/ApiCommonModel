@@ -210,7 +210,9 @@ sub mainJBrowse2 {
     printf("\n%s: %d tracks, 0 violations, %.1fs\n", $hub->hubFile($abbrev), $total, $built->{seconds});
     printf("  %-24s %5d\n", $_, $built->{sources}{$_}) for sort keys %{$built->{sources}};
     printf("  %5d  %s\n", $built->{shapes}{$_}, $_) for sort keys %{$built->{shapes}};
+    _printTracksConfHub($built->{tracksConf});
   }
+  _printTracksConfTotals($result);
   print "\njbrowse validate:\n";
   foreach my $file (sort keys %{$result->{jbrowse_validate}}) {
     my $v = $result->{jbrowse_validate}{$file};
@@ -224,6 +226,37 @@ sub mainJBrowse2 {
   _printSlowest($result->{hubs}, 5);
 
   return 0;
+}
+
+sub _printTracksConfHub {
+  my ($report) = @_;
+  my $emitted = join(', ', map { "$_ $report->{emitted}{$_}" } sort keys %{$report->{emitted}}) || 'none';
+  printf("  tracks.conf: %d stanza(s); emitted %s; REST skipped %d; styling unmapped %d\n",
+         $report->{stanzas}, $emitted, scalar(@{$report->{rest}}), scalar(@{$report->{unmapped}}));
+}
+
+sub _printTracksConfTotals {
+  my ($result) = @_;
+  my (%emitted, %rest, @unmapped, $stanzas);
+  foreach my $built (values %{$result->{hubs}}) {
+    my $report = $built->{tracksConf};
+    $stanzas += $report->{stanzas};
+    $emitted{$_} += $report->{emitted}{$_} for keys %{$report->{emitted}};
+    $rest{$_}++ for @{$report->{rest}};
+    push @unmapped, @{$report->{unmapped}};
+  }
+  print "\ntracks.conf totals: " . ($stanzas // 0) . " stanza(s); emitted "
+      . (join(', ', map { "$_ $emitted{$_}" } sort keys %emitted) || 'none') . "\n";
+  print "REST skipped (label: organisms):\n";
+  printf("  %s: %d\n", $_, $rest{$_}) for sort keys %rest;
+  print "styling unmapped: " . scalar(@unmapped) . "\n";
+  print "  $_->{organism}\t$_->{label}\t$_->{key}\t$_->{callback}\n"
+    for sort { $a->{organism} cmp $b->{organism} || $a->{label} cmp $b->{label} || $a->{key} cmp $b->{key} } @unmapped;
+  foreach my $list (['missing from the mirror', 'tracks_conf_missing'], ['not a store or auxiliary location', 'tracks_conf_not_mirror']) {
+    my $rows = $result->{$list->[1]};
+    print "tracks.conf locations $list->[0]: " . scalar(@$rows) . "\n";
+    print "  $_->{organism}\t$_->{trackId}\t$_->{kind}\t$_->{uri}\n" for @$rows;
+  }
 }
 
 # The root's template names a hub for every root organism, so each one listed

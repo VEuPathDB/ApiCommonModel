@@ -11,6 +11,7 @@ use Time::HiRes;
 use URI::Escape;
 
 use ApiCommonModel::Model::JBrowseConfigRelease::Generate;
+use ApiCommonModel::Model::JBrowseConfigRelease::TracksConf;
 use ApiCommonModel::Model::JBrowseConfigRelease::Validate;
 
 # The JBrowse 2 v5 dump (decision 0007): per project a root config declaring every
@@ -22,11 +23,14 @@ use ApiCommonModel::Model::JBrowseConfigRelease::Validate;
 # Builders are pure; producers, files and the jbrowse CLI sit behind seams.
 
 my $GENERATE = 'ApiCommonModel::Model::JBrowseConfigRelease::Generate';
+my $TRACKS_CONF = 'ApiCommonModel::Model::JBrowseConfigRelease::TracksConf';
 my $VALIDATE = 'ApiCommonModel::Model::JBrowseConfigRelease::Validate';
 
 my $JSON = JSON->new->canonical->utf8->pretty;
 
 our $STORE_PREFIX = '/a/service/jbrowse/store?data=';
+our $AUXILIARY_PREFIX = '/a/service/jbrowse/auxiliary?data=';
+our $TRACKS_CONF_SOURCE = 'tracksConf';
 
 # Where the dump's own files live under <wsDir>/<project>/build-<n>/.
 our $MIRROR_SUBDIR = 'jbrowse2';
@@ -243,6 +247,10 @@ sub buildHub {
     push @tracks, @{$document->{tracks} || []};
   }
 
+  my $static = $class->staticTracks($organism, $opts);
+  $bySource{$TRACKS_CONF_SOURCE} = scalar @{$static->{tracks}};
+  push @tracks, @{$static->{tracks}};
+
   my ($hub, $indexed) = $class->hubConfig($organism, \@tracks, $opts->{artifactUrlBase});
   die "$abbrev: no $GENE_MODELS_LABEL track to index\n" if($organism->{is_annotated} && !$indexed);
 
@@ -254,7 +262,42 @@ sub buildHub {
       . join(', ', map { "$_ $counts->{$_}" } sort keys %$counts) . ")\n" . join("\n", @shown) . "\n";
   }
 
-  return {hub => $hub, sources => \%bySource, skipped => \@skipped, shapes => $class->shapeCounts($hub->{tracks})};
+  return {hub => $hub, sources => \%bySource, skipped => \@skipped, shapes => $class->shapeCounts($hub->{tracks}),
+          tracksConf => $static->{report}, tracksConfUris => $static->{uris}};
+}
+
+sub tracksConfPath {
+  my ($class, $organism, $gusHome) = @_;
+  my $internal = $organism->{internal_abbrev} || $organism->{abbrev};
+  return "$gusHome/lib/jbrowse/auto_generated/$internal/tracks.conf";
+}
+
+sub _slurp {
+  my ($path) = @_;
+  open(my $fh, '<:raw', $path) or die "Cannot read $path: $!\n";
+  local $/;
+  return scalar <$fh>;
+}
+
+# The static stanzas JBrowse 1 includes beside the producers' tracks. Seam: readFile($path).
+sub staticTracks {
+  my ($class, $organism, $opts) = @_;
+  my $readFile = $opts->{readFile} || \&_slurp;
+  my $path = $class->tracksConfPath($organism, $opts->{gusHome});
+  return $TRACKS_CONF->translate($organism, $TRACKS_CONF->parse($readFile->($path), $path), $path);
+}
+
+# The file a store or auxiliary URL serves, or undef for any other location.
+sub mirrorFileForUri {
+  my ($class, $uri, $opts) = @_;
+  foreach my $prefix ($STORE_PREFIX, $AUXILIARY_PREFIX) {
+    next unless(index($uri, $prefix) == 0);
+    my $data = uri_unescape(substr($uri, length($prefix)));
+    return "$opts->{wsDir}/$opts->{project}/build-$opts->{build}/$data" if($prefix eq $STORE_PREFIX);
+    (my $auxiliary = $opts->{wsDir}) =~ s/webServices/auxiliary/;
+    return "$auxiliary/$data";
+  }
+  return undef;
 }
 
 # --- The whole dump ---
@@ -384,12 +427,17 @@ sub dump {
   $class->writeFile("$outDir/organisms.json", $class->encodeJson($class->organismList($organisms)));
   $written{'organisms.json'} = 1;
 
-  my %summaries;
+  my (%summaries, @missing, @notMirror);
   my @ordered = sort @$hubAbbrevs;
   foreach my $abbrev (@ordered) {
     my $started = $clock->();
     my $organism = $byAbbrev{$abbrev};
     my $built = $class->buildHub($organism, $opts);
+    foreach my $location (@{$built->{tracksConfUris}}) {
+      my $mirrorFile = $class->mirrorFileForUri($location->{uri}, $opts);
+      my $problem = !defined($mirrorFile) ? \@notMirror : !$fileExists->($mirrorFile) ? \@missing : undef;
+      push @$problem, {organism => $abbrev, %$location, file => $mirrorFile} if($problem);
+    }
     my $file = $class->hubFile($abbrev);
     $class->writeFile("$outDir/$file", $class->encodeJson($built->{hub}));
     $written{$file} = 1;
@@ -415,7 +463,8 @@ sub dump {
   return {root_assemblies => scalar @{$root->{assemblies}}, organisms => scalar @$organisms,
           hub_url_template => $root->{configuration}{VEuPathDBSite}{hubUrlTemplate},
           hubs => \%summaries, no_hub => \@noHub, protein_producer_skipped => \@noProteins, manifest => \@manifest,
-          jbrowse_validate => \%jbrowseValidate};
+          jbrowse_validate => \%jbrowseValidate,
+          tracks_conf_missing => \@missing, tracks_conf_not_mirror => \@notMirror};
 }
 
 1;

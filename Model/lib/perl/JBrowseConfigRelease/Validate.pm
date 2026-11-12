@@ -23,7 +23,7 @@ our %DISPLAY_TYPES = map { $_ => 1 } qw(
 
 our %ADAPTER_TYPES = map { $_ => 1 } qw(
   BigWigAdapter MultiWiggleAdapter Gff3TabixAdapter BedTabixAdapter
-  VcfTabixAdapter BamAdapter IndexedFastaAdapter
+  VcfTabixAdapter BamAdapter IndexedFastaAdapter BigBedAdapter GtfAdapter
 );
 
 # The location slots an adapter cannot load without.
@@ -35,6 +35,8 @@ our %REQUIRED_LOCATIONS = (
   BamAdapter          => [['bamLocation'],   ['index', 'location']],
   IndexedFastaAdapter => [['fastaLocation'], ['faiLocation']],
   MultiWiggleAdapter  => [['subadapters']],
+  BigBedAdapter       => [['bigBedLocation']],
+  GtfAdapter          => [['gtfLocation']],
 );
 
 # The VEuPathDBDisplay plugin's jexl functions: its README function table, the contract
