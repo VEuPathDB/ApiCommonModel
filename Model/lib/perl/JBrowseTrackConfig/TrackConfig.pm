@@ -48,6 +48,10 @@ sub setJBrowse2Color {$_[0]->{jbrowse2_color} = $_[1]}
 sub getJBrowse2UtrColor {$_[0]->{jbrowse2_utr_color}}
 sub setJBrowse2UtrColor {$_[0]->{jbrowse2_utr_color} = $_[1]}
 
+# The details panel's extra fields (formatDetails.feature): a veupathJexl call returning them.
+sub getJBrowse2FeatureDetails {$_[0]->{jbrowse2_feature_details}}
+sub setJBrowse2FeatureDetails {$_[0]->{jbrowse2_feature_details} = $_[1]}
+
 sub getDisplayName {$_[0]->{display_name}}
 sub setDisplayName {$_[0]->{display_name} = $_[1]}
 
@@ -315,6 +319,8 @@ sub getJBrowse2Object {
         my $utrColor = $self->getJBrowse2UtrColor();
         $jbrowseObject->{displays}->[0]->{utrs}->{encoding}->{color} = {value => $utrColor} if(defined($utrColor));
     }
+    my $featureDetails = $self->getJBrowse2FeatureDetails();
+    $jbrowseObject->{formatDetails} = {feature => $featureDetails} if(defined($featureDetails));
     $jbrowseObject->{metadata} = $metadata if($metadata);
 
     return $jbrowseObject;

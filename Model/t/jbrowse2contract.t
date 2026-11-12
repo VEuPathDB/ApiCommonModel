@@ -291,7 +291,7 @@ sub track {
   }
 }
 
-# --- Scaffolds and gaps: unstyled until VEuPathDBDisplay ships its functions ---
+# --- Scaffolds and gaps: strand colour with gaps red, and an NCBI link for scaffolds ---
 {
   require ApiCommonModel::Model::JBrowseTrackConfig::ScaffoldsTrackConfig;
   my $path = 'Pknowlesi/genomeBrowser/gff/scaffoldGenome.gff.gz';
@@ -308,9 +308,19 @@ sub track {
              gffGzLocation => {uri => "/a/service/jbrowse/store?data=$path", locationType => 'UriLocation'},
              index => {location => {uri => "/a/service/jbrowse/store?data=$path.tbi", locationType => 'UriLocation'}}},
             'scaffolds: tabix GFF3 on scaffoldGenome.gff.gz and its .tbi');
-  is_deeply($obj->{displays}, [{type => 'LinearBasicDisplay', displayId => 'pfal3D7_Scaffolds-LinearBasicDisplay'}],
-            'scaffolds: LinearBasicDisplay with stock colour and height');
-  ok(!exists $obj->{formatDetails}, 'scaffolds: stock details');
+  is_deeply($obj->{displays},
+            [{type => 'LinearBasicDisplay', displayId => 'pfal3D7_Scaffolds-LinearBasicDisplay',
+              encoding => {color => {value => "jexl:veupathStrandColor(feature, 'orange', 'darkseagreen', 'red')"}}}],
+            'scaffolds: + orange, - darkseagreen, unstranded (gaps) red; stock height');
+  is_deeply($obj->{formatDetails},
+            {feature => "jexl:veupathLinkDetails(feature, 'scaffold', 'NCBI', 'https://www.ncbi.nlm.nih.gov/nuccore/', 'note')"},
+            'scaffolds: an NCBI row from the Note attribute, scaffolds only');
+
+  my $jb1 = "${NS}::ScaffoldsTrackConfig"->new({application_type => 'jbrowse', project_name => 'PlasmoDB',
+                                                build_number => 71, relative_path_to_file => $path,
+                                                organism_abbrev => 'intPfal'})->getConfigurationObject();
+  ok(!exists $jb1->{formatDetails} && !grep({ /jexl:/ } values %{$jb1->{style} || {}}),
+     'scaffolds: nothing jbrowse2 leaks into the JBrowse 1 object');
 }
 
 # --- styling: each producer binds its VEuPathDBDisplay function, or a literal, in the README slot ---

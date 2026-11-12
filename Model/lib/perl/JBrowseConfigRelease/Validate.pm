@@ -43,7 +43,7 @@ our %JEXL_FUNCTIONS = map { $_ => 1 } qw(
   veupathVariantEffectColor veupathStrandColor veupathProcessedTranscriptColor
   veupathGsnapIntronColor veupathGsnapIntronLineThickness veupathHaplotypeColor
   veupathBindingSiteColor veupathInterproColor veupathSignalpColor veupathIedbColor
-  veupathPostTranslationalModColor
+  veupathPostTranslationalModColor veupathLinkDetails
 );
 
 our $JEXL_LITERAL = qr/'[^'\\]*'|-?\d+(?:\.\d+)?/;
