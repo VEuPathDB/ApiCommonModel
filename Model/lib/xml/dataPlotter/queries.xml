@@ -145,37 +145,45 @@ and pts.profile_study_id = vals.profile_study_id
     ]]>
     </query>
 
+    <!-- One value per sample across every gene with the EC: the mean for values,
+         and the propagated error of that mean, sqrt(sum(se^2))/n, for standard_error. -->
     <query name="profile_set_by_ec">
     <![CDATA[
-      select $order as profile_order, name, value
-           , samplenames.profile_set_name, samplenames.profile_type
-           , samplenames.element_order
-      from (select  rownum as element_order, ps.* 
-            FROM (SELECT protocol_app_node_name AS name
-                       , '$profileSetName' as profile_set_name, profile_type
-                  FROM  apidbtuning.ProfileSamples
-                  WHERE  study_name || ' [' || node_type || ']' = '$profileSetName'
-                  AND profile_type = '$profileType'
-                  ORDER  BY node_order_num) ps) samplenames,
-           (select distinct rownum as element_order 
-                          , trim(regexp_substr(t.profile_as_string, '[^' || CHR(9) || ']+', 1, levels.column_value))  as value
-                          , profile_set_name, profile_type
-            from (select p.source_id, ec.ec_number, p.profile_as_string
-                      , p.profile_set_name, p.profile_type
-                  from apidbtuning.profile p,
-                       (SELECT DISTINCT ta.gene_source_id, ec.ec_number
-                        FROM dots.aaSequenceEnzymeClass asec
-                           , sres.enzymeClass ec
-                           , webready.TranscriptAttributes_p ta
-                        WHERE ta.aa_sequence_id = asec.aa_sequence_id
-                        AND asec.enzyme_class_id = ec.enzyme_class_id 
-                        AND ec.ec_number LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower('$sourceId'),' ',''),'-', '%'),'*','%'),'any','%')) ec
-                  WHERE p.profile_set_name || ' [' || node_type || ']' = '$profileSetName'
-                  AND p.profile_type = '$profileType'
-                  AND p.source_id = ec.gene_source_id) t
-               , table(cast(multiset(select level from dual connect by  level <= length (regexp_replace(t.profile_as_string, '[^' || CHR(9) || ']+'))  + 1) as sys.OdciNumberList)) levels) samplevalues
-      where samplenames.element_order = samplevalues.element_order
-      and value is not null
+      select $order as profile_order, pts.name, vals.value
+           , '$profileSetName' as profile_set_name, pts.profile_type
+           , pts.node_order_num as element_order
+      from (select row_number() OVER (PARTITION BY dataset_name, study_id, node_type ORDER BY node_order_num) as rn
+                 , ps.*
+            from (select distinct protocol_app_node_name as name, profile_type, node_type
+                       , node_order_num, dataset_name, study_id
+                  from apidbtuning.ProfileSamples
+                  where study_name || ' [' || node_type || ']' = '$profileSetName'
+                  and profile_type = '$profileType') ps
+           ) pts,
+           (select p.dataset_name, p.profile_study_id, p.node_type, v.rn
+                 , case when p.profile_type = 'standard_error'
+                        then sqrt(sum(power(v.val::numeric, 2))) / count(v.val)
+                        else avg(v.val::numeric)
+                   end as value
+            from apidbtuning.Profile p
+               , (select distinct ta.gene_source_id
+                  from dots.aaSequenceEnzymeClass asec
+                     , sres.enzymeClass ec
+                     , webready.TranscriptAttributes_p ta
+                  where ta.aa_sequence_id = asec.aa_sequence_id
+                  and asec.enzyme_class_id = ec.enzyme_class_id
+                  and ec.ec_number LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower('$sourceId'),' ',''),'-', '%'),'*','%'),'any','%')) genes
+               , unnest(string_to_array(p.profile_as_string, chr(9), '')) with ordinality as v(val, rn)
+            where p.source_id = genes.gene_source_id
+            and p.profile_type = '$profileType'
+            and p.profile_set_name || ' [' || p.node_type || ']' = '$profileSetName'
+            group by p.dataset_name, p.profile_study_id, p.node_type, p.profile_type, v.rn
+           ) vals
+      where pts.rn = vals.rn
+      and pts.dataset_name = vals.dataset_name
+      and pts.study_id = vals.profile_study_id
+      and pts.node_type = vals.node_type
+      and vals.value is not null
     ]]>
     </query>
 
@@ -184,16 +192,16 @@ and pts.profile_study_id = vals.profile_study_id
     <![CDATA[
       select case when ec.genus is null then 0 else 1 end as value
            , orgs.o as element_order, orgs.genus as name
-      from (select distinct genus
-            from apidb.ecnumbergenus
-            where ec_number LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower('$sourceId'),' ',''),'-', '%'),'*','%'),'any','%')
-            UNION
-            select distinct 'Plasmodium' as genus
-            from dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec
-            where ec.enzyme_class_id = asec.enzyme_class_id
-            and ec.ec_number LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower('$sourceId'),' ',''),'-', '%'),'*','%'),'any','%')) ec,
-            ($generaSql) orgs
-      where orgs.genus = ec.genus (+)
+      from ($generaSql) orgs
+      left join (select distinct genus
+                 from apidb.ecnumbergenus
+                 where ec_number LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower('$sourceId'),' ',''),'-', '%'),'*','%'),'any','%')
+                 UNION
+                 select distinct 'Plasmodium' as genus
+                 from dots.AaSequenceEnzymeClass asec, sres.EnzymeClass ec
+                 where ec.enzyme_class_id = asec.enzyme_class_id
+                 and ec.ec_number LIKE REPLACE(REPLACE(REPLACE(REPLACE(lower('$sourceId'),' ',''),'-', '%'),'*','%'),'any','%')) ec
+        on orgs.genus = ec.genus
       order by orgs.o asc
     ]]>
     </query>
