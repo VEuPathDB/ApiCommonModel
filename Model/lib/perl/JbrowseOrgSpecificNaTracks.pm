@@ -172,7 +172,7 @@ sub addVCF {
 
   my $vcfDatasets = $datasetProperties->{vcffile} ? $datasetProperties->{vcffile} : {};
 
-  foreach my $dataset (keys %$vcfDatasets) {
+  foreach my $dataset (sort keys %$vcfDatasets) {
     next unless($dataset =~ /VCF/);
     my $experimentName = $dataset =~ m/${organismAbbrev}_(.+)_ebi_VCF_RSRC/;
     my $datasetDisplayName = $vcfDatasets->{$dataset}->{datasetDisplayName};
@@ -243,7 +243,7 @@ sub addMergedRnaSeq {
   # dataset is meant to be user-visible; some are deliberately internal-only
   # or superseded (see ToxoDB.xml's commented-out/internalDataset entries).
   my $rnaSeqDatasets = $datasetProperties->{rnaseq} ? $datasetProperties->{rnaseq} : {};
-  my @datasets = grep { -d "${bigwigBaseDir}/$_" } keys %$rnaSeqDatasets;
+  my @datasets = grep { -d "${bigwigBaseDir}/$_" } sort keys %$rnaSeqDatasets;
 
   foreach my $dataset (@datasets) {
     my $bigWigRelativePath = "${bigwigBaseDir}/${dataset}/mergedBigwigs/*";
@@ -306,7 +306,7 @@ sub addProteinExpressionMassSpec {
   my ($result, $datasetProperties, $nameForFileNames, $organismAbbrev, $projectName, $buildNumber, $applicationType, $datasetProps, $webservicesDir) = @_;
   my $proteinExpressionMassSpecDatasets = $datasetProperties->{protexpmassspec} ? $datasetProperties->{protexpmassspec} : {};
 
-  foreach my $dataset (keys %$proteinExpressionMassSpecDatasets) {
+  foreach my $dataset (sort keys %$proteinExpressionMassSpecDatasets) {
     next unless($dataset =~ /_massSpec_/);
 
     my $experimentName = $proteinExpressionMassSpecDatasets->{$dataset}->{name};
@@ -351,7 +351,7 @@ sub addSmallNcRnaSeq {
   my($datasetProperties, $projectName, $buildNumber, $nameForFileNames, $applicationType, $result, $organismAbbrev) = @_;
 
    my $smallNcRnaSeqDatasets = $datasetProperties->{smallncrnaseq} ? $datasetProperties->{smallncrnaseq} : {};
-   foreach my $dataset (keys %$smallNcRnaSeqDatasets){
+   foreach my $dataset (sort keys %$smallNcRnaSeqDatasets){
 
     next unless($dataset =~ /smallNcRna/);
 
@@ -463,7 +463,7 @@ sub addClonedInsertEnds {
 
   my $clonedInsertEndsDatasets = $datasetProperties->{clonedinsertends} ? $datasetProperties->{clonedinsertends} : {};
 
-  foreach my $dataset (keys %$clonedInsertEndsDatasets){
+  foreach my $dataset (sort keys %$clonedInsertEndsDatasets){
     next unless($dataset =~ /clonedInsertEnds/);
 
     my $datasetName = $clonedInsertEndsDatasets->{$dataset}->{datasetName};
@@ -741,7 +741,8 @@ sub addSynteny {
                RIGHT JOIN (select * from APIDBTUNING.GBROWSETRACKSORGANISM where type = 'synteny' ) gt
                 ON oa.ORGANISM_NAME = gt.organism
             where oa.ORGANISM_NAME = otr.organism
-            and oa.IS_ANNOTATED_GENOME = 1";
+            and oa.IS_ANNOTATED_GENOME = 1
+            order by oa.internal_abbrev";
 
   my $hasSyntenyTracks = 0;
 
@@ -1006,7 +1007,7 @@ sub addChipChipTracks {
   #print Dumper \%cc_data;
 
   # get data from auto_generated prop file
-  foreach my $dataset (keys %$chipChipDatasets){
+  foreach my $dataset (sort keys %$chipChipDatasets){
     next unless($dataset =~ /chipChipExper/);
 
     foreach my $sample (@{$cc_data{$dataset}}) { # for each
@@ -1306,7 +1307,7 @@ sub addLongReadRNASeq {
 
    my $LongReadRnaSeqDatasets = $datasetProperties->{longreadrnaseq} ? $datasetProperties->{longreadrnaseq} : {};
 
-   foreach my $dataset (keys %$LongReadRnaSeqDatasets){
+   foreach my $dataset (sort keys %$LongReadRnaSeqDatasets){
     next unless($dataset =~ /nanopore_longReadRnaSeq/);
 
 

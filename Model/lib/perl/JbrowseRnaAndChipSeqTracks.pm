@@ -24,7 +24,7 @@ sub processOrganism {
   ### Create rnaseq hash and extract datasetName
   my $allDatasetPropertiesForAssayType = ($datasetProps->{lc($technologyType)});
 
-  foreach my $datasetName (keys %$allDatasetPropertiesForAssayType) {
+  foreach my $datasetName (sort keys %$allDatasetPropertiesForAssayType) {
     my %studyProperties = %{$allDatasetPropertiesForAssayType->{$datasetName}};
     next unless($datasetName =~ /_chipSeq_RSRC/ || $datasetName =~ /_rnaSeq_RSRC/);
     my $category = $studyProperties{category};
