@@ -311,7 +311,7 @@ sub addProteinExpressionMassSpec {
 
   my $proteinExpressionMassSpecDatasets = $datasetProps->{protexpmassspec} ? $datasetProps->{protexpmassspec} : {};
 
-  foreach my $dataset (keys %$proteinExpressionMassSpecDatasets) {
+  foreach my $dataset (sort keys %$proteinExpressionMassSpecDatasets) {
     next unless($dataset =~ /_massSpec_/);
 
     my $experimentName = $proteinExpressionMassSpecDatasets->{$dataset}->{name};
