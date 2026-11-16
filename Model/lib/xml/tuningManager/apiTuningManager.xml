@@ -477,6 +477,46 @@
     </sql>
   </tuningTable>
 
+  <!-- Compounds reachable by each project's genes, for CompoundVQ.CompoundID. Computing it live
+       scans every org partition of webready.TranscriptPathway_p (~3 min); precomputed here.
+       exact_match/complete_ec let the vocab follow the search's EC-match params. See ApiCommonModel issue #236 -->
+ <tuningTable name="CompoundProject">
+    <externalDependency name="webready.TranscriptPathway_p"/>
+<!--
+    <externalDependency name="webready.PathwayCompounds"/>
+    <externalDependency name="webready.PathwayReactions"/>
+-->
+    <sql>
+      <![CDATA[
+       create table CompoundProject&1 as
+       with project_pathway_ec as (
+         select distinct project_id, pathway_id, ec_number_pathway, exact_match, complete_ec
+         from webready.TranscriptPathway_p
+       ), compound_pathway_ec as (
+         select distinct pc.chebi_accession, pc.pathway_id, pr.enzyme
+         from webready.PathwayCompounds pc
+         join webready.PathwayReactions pr
+           on pr.reaction_id = pc.reaction_id
+          and pr.ext_db_name = pc.ext_db_name
+         where pc.chebi_accession is not null
+       )
+       select distinct ppe.project_id
+            , cpe.chebi_accession as compound_id
+            , ppe.exact_match
+            , ppe.complete_ec
+       from project_pathway_ec ppe
+       join compound_pathway_ec cpe
+         on cpe.pathway_id = ppe.pathway_id
+        and cpe.enzyme = ppe.ec_number_pathway
+      ]]>
+    </sql>
+    <sql>
+      <![CDATA[
+       create index compoundproject_ix&1 on CompoundProject&1 (project_id, compound_id, exact_match, complete_ec)
+      ]]>
+    </sql>
+  </tuningTable>
+
   <!-- unpartitioned version of this table -->
  <tuningTable name="TranscriptPathway">
     <externalDependency name="webready.TranscriptPathway_p"/>
