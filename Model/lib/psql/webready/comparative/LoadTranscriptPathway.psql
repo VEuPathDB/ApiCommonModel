@@ -6,6 +6,7 @@
 DROP TABLE IF EXISTS :SCHEMA.TranscriptEcUniverse;
 DROP TABLE IF EXISTS :SCHEMA.PathwayEcUniverse;
 DROP TABLE IF EXISTS :SCHEMA.TranscriptPathwayEcMatch;
+DROP TABLE IF EXISTS :SCHEMA.CompoundProject;
 
 -- Just to be safe add these here
 TRUNCATE TABLE :SCHEMA.TranscriptPathway_p;
@@ -177,3 +178,35 @@ DROP TABLE :SCHEMA.TranscriptPathwayEcMatch;
 -- It doesn't hurt to analyze the children at the same time as well. They won't be touched after this.
 ANALYZE :SCHEMA.TranscriptPathway_p;
 ANALYZE :SCHEMA.TranscriptEC_p;
+
+
+/* STEP 8: Compounds reachable by each project's genes, for CompoundVQ.CompoundID.
+   Precomputed because a project_id filter on TranscriptPathway_p (partitioned by org_abbrev)
+   scans every partition. exact_match/complete_ec let the vocab follow the search's EC-match params.
+   See ApiCommonModel issue #236 */
+
+CREATE TABLE :SCHEMA.CompoundProject AS
+WITH project_pathway_ec AS (
+    SELECT DISTINCT project_id, pathway_id, ec_number_pathway, exact_match, complete_ec
+    FROM :SCHEMA.TranscriptPathway_p
+), compound_pathway_ec AS (
+    SELECT DISTINCT pc.chebi_accession, pc.pathway_id, pr.enzyme
+    FROM :SCHEMA.PathwayCompounds pc
+    JOIN :SCHEMA.PathwayReactions pr
+      ON pr.reaction_id = pc.reaction_id
+     AND pr.ext_db_name = pc.ext_db_name
+    WHERE pc.chebi_accession IS NOT NULL
+)
+SELECT DISTINCT ppe.project_id
+     , cpe.chebi_accession AS compound_id
+     , ppe.exact_match
+     , ppe.complete_ec
+     , current_timestamp AS modification_date
+FROM project_pathway_ec ppe
+JOIN compound_pathway_ec cpe
+  ON cpe.pathway_id = ppe.pathway_id
+ AND cpe.enzyme = ppe.ec_number_pathway;
+
+CREATE INDEX CompoundProject_ix ON :SCHEMA.CompoundProject (project_id, compound_id, exact_match, complete_ec);
+
+ANALYZE :SCHEMA.CompoundProject;
