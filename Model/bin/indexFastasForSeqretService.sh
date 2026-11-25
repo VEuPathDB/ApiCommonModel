@@ -14,23 +14,26 @@ main(){
   SQLITE_SUFFIX="$4"
 
   # Which sequence types to retrieve?
-  # Needs three options because of where the files live and how their headers parse:
+  # Needs four options because of where the files live and how their headers parse:
   # - match everything before first space as the ID
   # - match "transcript(.*?) " as the ID (so we can index proteins by their transcript)
   # - dnaseq sequences, which come from the workflow dir rather than the download site
-  # Any of the three may be empty, so you can rebuild just one kind of file.
+  # - orthomcl proteins, one file on the OrthoMCL staging download site, headers kept as they are
+  # Any of the four may be empty, so you can rebuild just one kind of file.
   FILES_ID_BEFORE_FIRST_SPACE="${5:-}"
   FILES_ID_TRANSCRIPT_FIELD="${6:-}"
   FILES_DNASEQ="${7:-}"
+  FILES_ORTHOMCL="${8:-}"
 
   # Check the arguments and if they don't seem right print the usage message and exit
-  if [ "$#" -lt 4 ] || [ "$#" -gt 7 ] \
-    || [ ! "$FILES_ID_BEFORE_FIRST_SPACE" -a ! "$FILES_ID_TRANSCRIPT_FIELD" -a ! "$FILES_DNASEQ" ] \
+  if [ "$#" -lt 4 ] || [ "$#" -gt 8 ] \
+    || [ ! "$FILES_ID_BEFORE_FIRST_SPACE" -a ! "$FILES_ID_TRANSCRIPT_FIELD" -a ! "$FILES_DNASEQ" -a ! "$FILES_ORTHOMCL" ] \
     || [ ! -f "$STAGING_DIR_PATHS_CONFIG" ] ; then
-    echo "Usage: $0 STAGING_DIR_PATHS_CONFIG OUTPUT_DIR FASTA_SUFFIX SQLITE_SUFFIX [FILES_ID_BEFORE_FIRST_SPACE] [FILES_ID_TRANSCRIPT_FIELD] [FILES_DNASEQ]"
-    echo "e.g. $0 ../config/stagingDirPaths.tab ./output fa fa.fai.sqlite Genome,ESTs,Isolates AnnotatedProteins dnaseq"
-    echo "     $0 ../config/stagingDirPaths.tab ./output fa fa.fai.sqlite Genome            # just the genome"
-    echo "     $0 ../config/stagingDirPaths.tab ./output fa fa.fai.sqlite '' '' dnaseq      # just dnaseq"
+    echo "Usage: $0 STAGING_DIR_PATHS_CONFIG OUTPUT_DIR FASTA_SUFFIX SQLITE_SUFFIX [FILES_ID_BEFORE_FIRST_SPACE] [FILES_ID_TRANSCRIPT_FIELD] [FILES_DNASEQ] [FILES_ORTHOMCL]"
+    echo "e.g. $0 ../config/stagingDirPaths.tab ./output fa fa.fai.sqlite Genome,ESTs,Isolates AnnotatedProteins dnaseq orthomcl"
+    echo "     $0 ../config/stagingDirPaths.tab ./output fa fa.fai.sqlite Genome               # just the genome"
+    echo "     $0 ../config/stagingDirPaths.tab ./output fa fa.fai.sqlite '' '' dnaseq         # just dnaseq"
+    echo "     $0 ../config/stagingDirPaths.tab ./output fa fa.fai.sqlite '' '' '' orthomcl    # just orthomcl"
     exit 1
   fi
   mkdir -pv $OUTPUT_DIR
@@ -39,6 +42,7 @@ main(){
   iterSeq "removeAfterSpaceFromHeader:$FILES_ID_BEFORE_FIRST_SPACE" \
           "chooseTranscriptFieldForHeader:$FILES_ID_TRANSCRIPT_FIELD" \
           "dnaseqHeader:$FILES_DNASEQ" \
+          "orthomclHeader:$FILES_ORTHOMCL" \
   | while read SEQUENCE_TYPE PROG; do
     # For each desired result ...
     RESULT_SEQ_FASTA=$OUTPUT_DIR/${SEQUENCE_TYPE}.${FASTA_SUFFIX}
@@ -47,10 +51,12 @@ main(){
     # Remove results of any previous run
     rm -fv $RESULT_SEQ_FASTA $RESULT_SEQ_SQLITE
 
-    # Where do the source fastas live? dnaseq is not on the download site.
+    # Where do the source fastas live? dnaseq is not on the download site, and orthomcl
+    # is on the OrthoMCL one rather than the genomic sites'.
     case $PROG in
-      dnaseqHeader) FIND_SOURCE_FASTAS=findDnaseqFastas ;;
-      *)            FIND_SOURCE_FASTAS=findDownloadSiteFastas ;;
+      dnaseqHeader)   FIND_SOURCE_FASTAS=findDnaseqFastas ;;
+      orthomclHeader) FIND_SOURCE_FASTAS=findOrthomclFastas ;;
+      *)              FIND_SOURCE_FASTAS=findDownloadSiteFastas ;;
     esac
 
     # Find the source fastas and concatenate into one big fasta
@@ -59,6 +65,13 @@ main(){
         echo $(date --iso=seconds) "$PROG >> $RESULT_SEQ_FASTA: $SOURCE_FASTA"
         $PROG $SOURCE_FASTA >> $RESULT_SEQ_FASTA
     done
+
+    # A missing source (wrong config path, staging not ready) would otherwise give an
+    # empty database that the service serves without complaint
+    if ! [ -s "$RESULT_SEQ_FASTA" ] ; then
+      echo "Error: no sequences written to $RESULT_SEQ_FASTA - check the source paths in $STAGING_DIR_PATHS_CONFIG"
+      exit 1
+    fi
 
     # Index the big fasta
     echo $(date --iso=seconds) "Indexing: $RESULT_SEQ_FASTA -> $RESULT_SEQ_SQLITE"
@@ -128,6 +141,21 @@ addReferenceGenomes(){
   done
 }
 
+# orthomcl proteins: the single aa_seqs file on the OrthoMCL staging download site.
+# The config's OrthoMCL row gives the staging dir, as for the genomic sites.
+findOrthomclFastas(){
+  config="$1"
+  awk '$1 == "OrthoMCL" {print $2}' $config \
+  | while read -r ORTHO_STAGING_DIR; do
+      ORTHOMCL_FASTA=${ORTHO_STAGING_DIR%/}/downloadSite/OrthoMCL/release-CURRENT/aa_seqs_OrthoMCL-CURRENT.fasta.gz
+      if [ -f "$ORTHOMCL_FASTA" ]; then
+        echo "$ORTHOMCL_FASTA"
+      else
+        echo "Warning: no orthomcl fasta at $ORTHOMCL_FASTA" >&2
+      fi
+  done
+}
+
 readProjectAndStagingDirForGenomicSitesFromConfig(){
   config="$1"
   grep -v 'MicrobiomeDB\|ClinEpiDB\|OrthoMCL\|^dnaseqWorkflowRoot\|^$' $config
@@ -158,6 +186,12 @@ dnaseqHeader(){
     *.gz) zcat "$@" ;;
     *)    cat  "$@" ;;
   esac | removeAfterSpaceFromHeader
+}
+
+# orthomcl headers are "<protein ID> <group>", e.g. ">13J1.15:mRNA-p1 OG9r1_0161752". faidx
+# keys on the ID before the space, so the group can stay in the header, as it always has.
+orthomclHeader(){
+  zcat "$@"
 }
 
 indexFasta(){
