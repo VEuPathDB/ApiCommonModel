@@ -19,8 +19,8 @@ my $destRootDir = '/export/webServices/UniDB/';
 $destRootDir = $outputDir if ($outputDir);
  my $destDir = "$destRootDir/build-$buildNumber";
 
-# full ReflowPlus  - Apr 2025
-my $stagingDirRoot = "/veupath/data/websiteFilesStaging/GenomicsDB/rebuild01/real/webServices/";
+# full ReflowPlus rebuild staging: rebuild01 = build 71, rebuild02 = build 72
+my $stagingDirRoot = "/veupath/data/websiteFilesStaging/GenomicsDB/rebuild02/real/webServices/";
 
 
 # Sufen's staging dirs  - Dec 2024
@@ -34,7 +34,7 @@ my $orthoDestDir = "$destRootDir/build-$buildNumber";
 
 my @projects;
 if ($buildNumber > 70){
-    @projects  = qw/AmoebaDB CryptoDB FungiDB GiardiaDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TrichDB TriTrypDB VectorBase/;
+    @projects  = qw/AmoebaDB CryptoDB FungiDB GiardiaDB HelminthDB HostDB MicrosporidiaDB PiroplasmaDB PlasmoDB ToxoDB TrichDB TriTrypDB VectorBase/;
 } else {
 #    @projects  = qw/OrthoMCL/;
 }
@@ -77,8 +77,8 @@ print "ORTHO  destDir = $orthoDestDir AND stagingDir = $orthoStagingDirRoot\n";
 system("cp -pr $orthoStagingDirRoot  $orthoDestDir");
 print "Done with ORTHO.\n";
 
-#cellxgene
-system ("cp -pr   /veupath/data/websiteFilesStaging/GenomicsDB/rebuild01/real/webServices/*/release-CURRENT/cellxgene/* $destDir/cellxgene/");
+#cellxgene: from the same staging root as the projects
+system ("cp -pr   ${stagingDirRoot}*/release-CURRENT/cellxgene/* $destDir/cellxgene/");
 print "Done with cellxgene.\n";
 
 
